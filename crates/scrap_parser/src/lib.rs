@@ -233,6 +233,11 @@ mod tests {
             ExprKind::Paren(inner) => {
                 ids.extend(collect_node_ids(inner));
             }
+            ExprKind::Return(maybe_expr) => {
+                if let Some(expr) = maybe_expr {
+                    ids.extend(collect_node_ids(expr));
+                }
+            }
             ExprKind::Lit(_) | ExprKind::Path(_) | ExprKind::Err => {
                 // These don't contain other expressions
             }
@@ -310,6 +315,70 @@ mod tests {
     fn test_ast() -> anyhow::Result<()> {
         let filename = "test.sc";
         let src = TEST_AST;
+        parse(&src, filename)
+    }
+
+    #[test]
+    fn test_return_statements() -> anyhow::Result<()> {
+        let filename = "test_return.sc";
+        let src = r#"
+        fn test_return() -> i32 {
+            return 42;
+        }
+
+        fn test_early_return(x: i32) -> i32 {
+            if x > 10 {
+                return x * 2;
+            }
+            return x + 1;
+        }
+
+        fn test_no_return_type() {
+            return;
+        }
+
+        fn test_optional_return() {
+            let x = 5;
+        }
+        "#;
+        parse(&src, filename)
+    }
+
+    #[test]
+    fn test_simple_return_functionality() -> anyhow::Result<()> {
+        let filename = "simple_return_test.sc";
+        let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
+        parse(&src, filename)
+    }
+
+    #[test]
+    fn test_return_requires_semicolon() {
+        let filename = "test_return_no_semicolon.sc";
+        let src = r#"
+        fn test_return_no_semicolon() -> i32 {
+            return 42
+        }
+        "#;
+        
+        // This should fail because return statement lacks semicolon
+        let result = parse(&src, filename);
+        assert!(result.is_err(), "Expected parse error for return statement without semicolon");
+    }
+
+    #[test]
+    fn test_return_with_semicolon_works() -> anyhow::Result<()> {
+        let filename = "test_return_with_semicolon.sc";
+        let src = r#"
+        fn test_return_with_semicolon() -> i32 {
+            return 42;
+        }
+        
+        fn test_void_return() {
+            return;
+        }
+        "#;
+        
+        // This should pass because return statements have semicolons
         parse(&src, filename)
     }
 }

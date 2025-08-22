@@ -79,6 +79,23 @@ where
         .labelled("parenthesized expression")
 }
 
+/// Parse return expressions
+pub fn return_parser<'tokens, 'src: 'tokens, I>(
+    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    just(Token::Return)
+        .ignore_then(expr_parser.or_not())
+        .map_with(|expr, e| Expr {
+            id: NodeId::new(),
+            kind: ExprKind::Return(expr.map(Box::new)),
+            span: e.span(),
+        })
+        .labelled("return expression")
+}
+
 /// Parse atomic expressions with error recovery
 pub fn atom_with_recovery<'tokens, 'src: 'tokens, I>(
     expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone

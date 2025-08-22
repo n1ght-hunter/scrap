@@ -25,6 +25,8 @@ pub enum Token<'a> {
     If,
     #[token("else")]
     Else,
+    #[token("return")]
+    Return,
 
     // ██╗     ██╗████████╗███████╗██████╗  █████╗ ██╗     ███████╗
     // ██║     ██║╚══██╔══╝██╔════╝██╔══██╗██╔══██╗██║     ██╔════╝
@@ -125,6 +127,10 @@ pub enum Token<'a> {
     // Skip whitespace
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
+
+    // Skip comments
+    #[regex(r"//[^\r\n]*", logos::skip)]
+    Comment,
 }
 
 impl<'a> std::fmt::Display for Token<'a> {
@@ -137,6 +143,7 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::Let => write!(f, "let"),
             Token::If => write!(f, "if"),
             Token::Else => write!(f, "else"),
+            Token::Return => write!(f, "return"),
 
             // Literals and Identifiers that carry their own string slice
             Token::Str(s) => write!(f, "{}", s),
@@ -180,6 +187,7 @@ impl<'a> std::fmt::Display for Token<'a> {
 
             // Whitespace is skipped, but we must handle it for an exhaustive match
             Token::Whitespace => write!(f, "<whitespace>"),
+            Token::Comment => write!(f, "<comment>"),
         }
     }
 }
@@ -190,7 +198,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let file = std::fs::read_to_string("../../example_pg/basic.sc").unwrap();
+        let file = std::fs::read_to_string("../../example/basic.sc").unwrap();
 
         let mut lexer = Token::lexer(&file);
 

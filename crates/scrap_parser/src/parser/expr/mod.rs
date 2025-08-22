@@ -46,7 +46,7 @@ pub mod inline;
 pub mod items;
 
 // Re-export the main parser functions
-pub use atom::{literal_parser, identifier_parser, parenthesized_parser, atom_with_recovery};
+pub use atom::{literal_parser, identifier_parser, parenthesized_parser, return_parser, atom_with_recovery};
 pub use block_expr::block_expr_parser;
 pub use call::call_parser;
 pub use if_expr::if_expr_parser;
@@ -126,6 +126,11 @@ pub enum ExprKind {
     /// No-op: used solely so we can pretty-print faithfully.
     /// Preserves the original parentheses in the source code.
     Paren(Box<Expr>),
+    
+    /// A `return` expression.
+    /// `return` or `return expr` where expr is the optional value to return.
+    /// If no expression is provided, it returns the unit type `()`.
+    Return(Option<Box<Expr>>),
     
     /// Placeholder for expressions that weren't syntactically well formed.
     /// This is used for error recovery during parsing.

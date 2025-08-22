@@ -34,8 +34,7 @@ where
         .ignore_then(parse_ident().labelled("function name"))
         .then(args)
         .map_with(|start, e| (start, e.span()))
-        .then_ignore(just(Token::Arrow))
-        .then(parse_type().or_not().labelled("return type"))
+        .then(just(Token::Arrow).ignore_then(parse_type()).or_not().labelled("return type"))
         .then(block_parser())
         .map_with(|((((name, args), span), ret_type), body), _| FnDef {
             id: NodeId::new(),

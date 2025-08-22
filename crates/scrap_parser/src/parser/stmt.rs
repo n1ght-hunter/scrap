@@ -39,6 +39,7 @@ pub enum StmtKind {
     
     /// An expression with a trailing semicolon.
     /// The expression is evaluated but its value is discarded.
+    /// This includes return statements which must have semicolons.
     Semi(Box<Expr>),
     
     /// Just a trailing semicolon (`;`).
@@ -57,13 +58,37 @@ where
         .then_ignore(just(Token::Semicolon))
         .map(|local| StmtKind::Let(Box::new(local)));
 
-    let expr_stmt = inline_expr_parser()
+    let return_stmt = just(Token::Return)
+        .ignore_then(inline_expr_parser().or_not())
+        .then_ignore(just(Token::Semicolon))
+        .map_with(|expr, e| {
+            let return_expr = crate::parser::expr::Expr::new(
+                crate::parser::expr::ExprKind::Return(expr.map(Box::new)),
+                e.span()
+            );
+            StmtKind::Semi(Box::new(return_expr))
+        });
+
+    let expr_with_semi = inline_expr_parser()
+        .then_ignore(just(Token::Semicolon))
+        .map(|expr| StmtKind::Semi(Box::new(expr)));
+
+    let expr_without_semi = inline_expr_parser()
         .map(|expr| StmtKind::Expr(Box::new(expr)));
 
-    let_stmt.or(expr_stmt)
-        .map_with(|kind, e| Stmt {
-            id: NodeId::new(),
-            kind,
-            span: e.span(),
-        })
+    let empty_stmt = just(Token::Semicolon)
+        .map(|_| StmtKind::Empty);
+
+    choice((
+        let_stmt,
+        return_stmt,
+        expr_with_semi,
+        empty_stmt,
+        expr_without_semi,
+    ))
+    .map_with(|kind, e| Stmt {
+        id: NodeId::new(),
+        kind,
+        span: e.span(),
+    })
 }
