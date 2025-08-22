@@ -1,7 +1,7 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::Span;
+use crate::{Span, ast::NodeId};
 
 use super::{capital_ident, field::Field, ident::Ident, typedef::parse_type};
 
@@ -13,6 +13,7 @@ pub enum EnumVariant {
 
 #[derive(Debug, Clone)]
 pub struct EnumDef {
+    pub id: NodeId,
     pub ident: Ident,
     pub variants: Vec<EnumVariant>,
 }
@@ -32,7 +33,11 @@ where
         )
         .map(|(ident, ty)| {
             if let Some(ty) = ty {
-                EnumVariant::Full(Field { ident, ty })
+                EnumVariant::Full(Field { 
+                    id: NodeId::new(),
+                    ident, 
+                    ty 
+                })
             } else {
                 EnumVariant::Unit(ident)
             }
@@ -47,6 +52,7 @@ where
         )
         .then(variant.delimited_by(just(Token::LBrace), just(Token::RBrace)))
         .map(|(name, variants)| EnumDef {
+            id: NodeId::new(),
             ident: name,
             variants,
         })

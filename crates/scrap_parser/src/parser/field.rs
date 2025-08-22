@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::Span;
+use crate::{Span, ast::NodeId};
 
 use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}};
 use chumsky::{input::ValueInput, prelude::*};
@@ -10,6 +10,7 @@ use scrap_lexer::Token;
 
 #[derive(Debug, Clone)]
 pub struct Field {
+    pub id: NodeId,
     pub ident: Ident,
     pub ty: Type,
 }
@@ -23,7 +24,11 @@ where
     parse_ident()
         .then_ignore(just(Token::Colon))
         .then(parse_type())
-        .map(|(ident, ty)| Field { ident, ty })
+        .map(|(ident, ty)| Field { 
+            id: NodeId::new(),
+            ident, 
+            ty 
+        })
         .separated_by(just(Token::Comma))
         .allow_trailing()
         .collect::<Vec<_>>()

@@ -1,7 +1,7 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::Span;
+use crate::{Span, ast::NodeId};
 
 use super::{
     field::{Field, fields},
@@ -11,6 +11,7 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct StructDef {
+    pub id: NodeId,
     pub ident: Ident,
     pub fields: Vec<Field>,
 }
@@ -28,6 +29,7 @@ where
         .ignore_then(parse_ident().labelled("struct name"))
         .then(fields)
         .map(|(name, fields)| StructDef {
+            id: NodeId::new(),
             ident: name,
             fields,
         })

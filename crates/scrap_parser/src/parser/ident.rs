@@ -1,10 +1,11 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::Span;
+use crate::{Span, ast::NodeId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident {
+    pub id: NodeId,
     pub name: String,
     pub span: Span,
 }
@@ -18,6 +19,7 @@ where
         Token::Ident(s) => s,
     }
     .map_with(|s, e| Ident {
+        id: NodeId::new(),
         name: s.to_string(),
         span: e.span(),
     })

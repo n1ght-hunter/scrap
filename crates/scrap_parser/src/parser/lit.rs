@@ -6,12 +6,14 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::Span;
+use crate::{Span, ast::NodeId};
 
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
 #[derive(Debug, Clone)]
 pub struct Lit {
+    /// Unique identifier for this literal node
+    pub id: NodeId,
     /// The kind of literal (determines how it should be interpreted)
     pub kind: LitKind,
     /// The actual literal data (simplified representation for our language)
@@ -72,18 +74,22 @@ where
 {
     select! {
         Token::Bool(value) => Lit {
+            id: NodeId::new(),
             kind: LitKind::Bool,
             temp_lit: TempLit::Bool(value),
         },
         Token::Int(value) => Lit {
+            id: NodeId::new(),
             kind: LitKind::Integer,
             temp_lit: TempLit::Int(value),
         },
         Token::Float(value) => Lit {
+            id: NodeId::new(),
             kind: LitKind::Float,
             temp_lit: TempLit::Float(value),
         },
         Token::Str(value) => Lit {
+            id: NodeId::new(),
             kind: LitKind::Str,
             temp_lit: TempLit::Str(value.to_string()),
         },

@@ -14,12 +14,18 @@ pub struct Ty {
 pub enum TyKind {}
 
 #[derive(Debug, Clone)]
-pub struct Type(pub Ident);
+pub struct Type {
+    pub id: NodeId,
+    pub ident: Ident,
+}
 
 pub fn parse_type<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Type, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    parse_ident().map_with(|ident, _| Type(ident))
+    parse_ident().map_with(|ident, _| Type { 
+        id: NodeId::new(),
+        ident 
+    })
 }
