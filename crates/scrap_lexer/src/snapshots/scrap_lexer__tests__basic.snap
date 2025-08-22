@@ -1,10 +1,9 @@
 ---
 source: crates/scrap_lexer/src/lib.rs
-assertion_line: 112
 expression: tokens
 ---
 [
-    KwFn,
+    Fn,
     Ident(
         "foo",
     ),
@@ -30,36 +29,32 @@ expression: tokens
         "f64",
     ),
     LBrace,
-    KwLet,
+    Let,
     Ident(
         "c",
     ),
     Assign,
-    KwIf,
+    If,
     Ident(
         "a",
     ),
+    Gt,
+    Float(
+        1.0,
+    ),
     LBrace,
-    KwIf,
+    Ident(
+        "a",
+    ),
+    Plus,
     Ident(
         "b",
     ),
+    RBrace,
+    Else,
     LBrace,
     Float(
-        "30.0",
-    ),
-    RBrace,
-    KwElse,
-    LBrace,
-    Float(
-        "40.0",
-    ),
-    RBrace,
-    RBrace,
-    KwElse,
-    LBrace,
-    Float(
-        "50.0",
+        50.0,
     ),
     RBrace,
     Semicolon,
@@ -68,10 +63,10 @@ expression: tokens
     ),
     Plus,
     Float(
-        "2.0",
+        2.0,
     ),
     RBrace,
-    KwFn,
+    Fn,
     Ident(
         "bar",
     ),
@@ -86,7 +81,7 @@ expression: tokens
         "\"Hello, \\\\world!\"",
     ),
     RBrace,
-    KwEnum,
+    Enum,
     Ident(
         "MyEnum",
     ),
@@ -105,7 +100,7 @@ expression: tokens
     RParen,
     Comma,
     RBrace,
-    KwStruct,
+    Struct,
     Ident(
         "MyStruct",
     ),
