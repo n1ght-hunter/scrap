@@ -102,11 +102,7 @@ where
             kind: ExprKind::If(
                 Box::new(cond), 
                 Box::new(then), 
-                else_block_opt.map(|_block| Box::new(Expr {
-                    id: NodeId::new(),
-                    kind: ExprKind::Dummy,
-                    span: e.span(),
-                }))
+                else_block_opt.map(Box::new)
             ),
             span: e.span(),
         });
