@@ -73,7 +73,6 @@ pub mod utils;
 
 pub type Span = SimpleSpan;
 
-
 #[derive(Debug, Clone, Copy)]
 pub struct Spanned<T> {
     pub node: T,
@@ -113,23 +112,19 @@ mod tests {
     }
     "#;
 
-
-    
-
-
     #[test]
     fn test_unique_node_ids() -> anyhow::Result<()> {
-        use std::collections::HashSet;
         use crate::parser::expr::inline_expr_parser;
-        
+        use std::collections::HashSet;
+
         let test_expressions = vec![
-            "42",              // Simple literal  
-            "foo",             // Simple identifier
-            "x + 1",           // Simple binary expression
-            "a * 3",           // Another binary expression
-            "b + 5",           // Addition
-            "123",             // Another literal
-            "hello",           // Another identifier
+            "42",    // Simple literal
+            "foo",   // Simple identifier
+            "x + 1", // Simple binary expression
+            "a * 3", // Another binary expression
+            "b + 5", // Addition
+            "123",   // Another literal
+            "hello", // Another identifier
         ];
 
         let mut all_node_ids = HashSet::new();
@@ -137,7 +132,7 @@ mod tests {
 
         for expr_src in test_expressions {
             println!("Testing expression: {}", expr_src);
-            
+
             let (token_iter, _) = scrap_lexer::Token::lexer(expr_src).spanned().fold(
                 (Vec::new(), Vec::new()),
                 |(mut tokens, mut token_errors), (new_tok, new_span)| {
@@ -158,18 +153,25 @@ mod tests {
                     println!("  Successfully parsed: {:?}", expr);
                     let node_ids = collect_node_ids(&expr);
                     println!("  Found {} nodes with IDs: {:?}", node_ids.len(), node_ids);
-                    
+
                     total_nodes += node_ids.len();
-                    
+
                     // Check that all IDs in this expression are unique
                     let unique_ids: HashSet<_> = node_ids.iter().cloned().collect();
-                    assert_eq!(unique_ids.len(), node_ids.len(), 
-                        "Duplicate NodeIds found within expression: {}", expr_src);
-                    
+                    assert_eq!(
+                        unique_ids.len(),
+                        node_ids.len(),
+                        "Duplicate NodeIds found within expression: {}",
+                        expr_src
+                    );
+
                     // Add to global set to check across expressions
                     for id in node_ids {
-                        assert!(all_node_ids.insert(id), 
-                            "NodeId {:?} was reused across different expressions!", id);
+                        assert!(
+                            all_node_ids.insert(id),
+                            "NodeId {:?} was reused across different expressions!",
+                            id
+                        );
                     }
                 }
                 Err(parse_errors) => {
@@ -178,18 +180,26 @@ mod tests {
             }
         }
 
-        println!("Total nodes created: {}, All unique: {}", total_nodes, all_node_ids.len());
-        assert_eq!(total_nodes, all_node_ids.len(), "Some NodeIds were duplicated!");
-        
+        println!(
+            "Total nodes created: {}, All unique: {}",
+            total_nodes,
+            all_node_ids.len()
+        );
+        assert_eq!(
+            total_nodes,
+            all_node_ids.len(),
+            "Some NodeIds were duplicated!"
+        );
+
         Ok(())
     }
 
     /// Helper function to collect all NodeIds from an expression recursively
     fn collect_node_ids(expr: &crate::parser::expr::Expr) -> Vec<crate::ast::NodeId> {
         use crate::parser::expr::ExprKind;
-        
+
         let mut ids = vec![expr.id];
-        
+
         match &expr.kind {
             ExprKind::Array(exprs) => {
                 for expr in exprs.iter() {
@@ -227,14 +237,11 @@ mod tests {
                 // These don't contain other expressions
             }
         }
-        
+
         ids
     }
 
-    #[test]
-    fn test_ast() -> anyhow::Result<()> {
-        let filename = "test.scrap";
-        let src = TEST_AST;
+    fn parse(src: &str, filename: &str) -> anyhow::Result<()> {
         let (token_iter, lex_errs) = scrap_lexer::Token::lexer(src).spanned().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens, mut token_errors), (new_tok, new_span)| {
@@ -250,8 +257,6 @@ mod tests {
             },
         );
 
-        println!("token_iter {:#?}", token_iter);
-
         // Turn the token iterator into a stream that chumsky can use for things like backtracking
         let token_stream = Stream::from_iter(token_iter)
             // Tell chumsky to split the (Token, SimpleSpan) stream into its parts so that it can handle the spans for us
@@ -259,10 +264,6 @@ mod tests {
             .map((0..src.len()).into(), |(t, s): (_, _)| (t, s));
 
         let (ast, parse_errs) = file_parser().parse(token_stream).into_output_errors();
-
-        if let Some(sexpr) = ast {
-            println!("ast {:?}", sexpr);
-        }
 
         if parse_errs.is_empty() && lex_errs.is_empty() {
             return Ok(());
@@ -291,10 +292,24 @@ mod tests {
                             .with_color(Color::Yellow)
                     }))
                     .finish()
-                    .print(sources([(filename, src)]))
+                    .print((filename, ariadne::Source::from(src)))
                     .unwrap()
             });
 
         return Err(anyhow::anyhow!("parse error"));
+    }
+
+    #[test]
+    fn parse_basic_function() -> anyhow::Result<()> {
+        let filename = "basic.sc";
+        let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
+        parse(&src, filename)
+    }
+
+    #[test]
+    fn test_ast() -> anyhow::Result<()> {
+        let filename = "test.sc";
+        let src = TEST_AST;
+        parse(&src, filename)
     }
 }
