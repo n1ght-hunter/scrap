@@ -1,0 +1,23 @@
+[package]
+name = "scrap_codegen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Local crates
+scrap_parser.workspace = true
+scrap_lexer.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Cranelift backend dependencies
+cranelift.workspace = true
+cranelift-module.workspace = true
+cranelift-jit.workspace = true
+cranelift-native.workspace = true
+cranelift-object.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
