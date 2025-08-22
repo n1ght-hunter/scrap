@@ -1,0 +1,64 @@
+[package]
+name = "scrap"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+
+[workspace.dependencies]
+# Local crates
+scrap_parser = { path = "crates/scrap_parser" }
+scrap_lexer = { path = "crates/scrap_lexer" }
+
+
+thiserror = "2"
+anyhow = "1"
+either = "1"
+rayon = "1"
+insta = "1"
+
+# backend
+cranelift = "0.123"
+cranelift-module = "0.123"
+cranelift-jit = "0.123"
+cranelift-native = "0.123"
+
+# Parser
+chumsky = "0.10.1"
+ariadne = "0.5.1"
+
+# Lexer 
+logos = "0.15.1"
+
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+missing_docs = "allow"
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+default_trait_access = "deny"
+filter_map_next = "deny"
+from_over_into = "deny"
+manual_let_else = "deny"
+match-wildcard-for-single-variants = "deny"
+needless_borrow = "deny"
+new_without_default = "deny"
+redundant-closure-for-method-calls = "deny"
+semicolon_if_nothing_returned = "deny"
+trivially-copy-pass-by-ref = "deny"
+type-complexity = "allow"
+unused_async = "deny"
+useless_conversion = "deny"
+upper_case_acronyms = "allow"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "forbid"
