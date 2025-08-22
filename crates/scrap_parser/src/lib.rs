@@ -246,7 +246,7 @@ mod tests {
         ids
     }
 
-    fn parse(src: &str, filename: &str) -> anyhow::Result<()> {
+    fn parse(src: &str, filename: &str, skip_output: bool) -> anyhow::Result<()> {
         let (token_iter, lex_errs) = scrap_lexer::Token::lexer(src).spanned().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens, mut token_errors), (new_tok, new_span)| {
@@ -271,6 +271,10 @@ mod tests {
         let (ast, parse_errs) = file_parser().parse(token_stream).into_output_errors();
 
         if parse_errs.is_empty() && lex_errs.is_empty() {
+            return Ok(());
+        }
+
+        if skip_output {
             return Ok(());
         }
 
@@ -308,14 +312,14 @@ mod tests {
     fn parse_basic_function() -> anyhow::Result<()> {
         let filename = "basic.sc";
         let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
-        parse(&src, filename)
+        parse(&src, filename, false)
     }
 
     #[test]
     fn test_ast() -> anyhow::Result<()> {
         let filename = "test.sc";
         let src = TEST_AST;
-        parse(&src, filename)
+        parse(&src, filename, false)
     }
 
     #[test]
@@ -341,14 +345,14 @@ mod tests {
             let x = 5;
         }
         "#;
-        parse(&src, filename)
+        parse(&src, filename, false)
     }
 
     #[test]
     fn test_simple_return_functionality() -> anyhow::Result<()> {
         let filename = "simple_return_test.sc";
         let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
-        parse(&src, filename)
+        parse(&src, filename, false)
     }
 
     #[test]
@@ -361,7 +365,7 @@ mod tests {
         "#;
         
         // This should fail because return statement lacks semicolon
-        let result = parse(&src, filename);
+        let result = parse(&src, filename, true);
         assert!(result.is_err(), "Expected parse error for return statement without semicolon");
     }
 
@@ -379,6 +383,6 @@ mod tests {
         "#;
         
         // This should pass because return statements have semicolons
-        parse(&src, filename)
+        parse(&src, filename, false)
     }
 }
