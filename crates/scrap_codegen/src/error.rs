@@ -8,7 +8,7 @@ use thiserror::Error;
 pub enum CodegenError {
     /// Cranelift module error
     #[error("Cranelift module error: {0}")]
-    Module(#[from] cranelift_module::ModuleError),
+    Module(Box<cranelift_module::ModuleError>),
 
     /// Cranelift codegen error
     #[error("Cranelift codegen error: {0}")]
@@ -80,3 +80,9 @@ impl CodegenError {
 
 /// A result type that uses `CodegenError` as the error type.
 pub type CodegenResult<T> = Result<T, CodegenError>;
+
+impl From<cranelift_module::ModuleError> for CodegenError {
+    fn from(err: cranelift_module::ModuleError) -> Self {
+        CodegenError::Module(Box::new(err))
+    }
+}

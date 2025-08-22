@@ -146,11 +146,11 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::Return => write!(f, "return"),
 
             // Literals and Identifiers that carry their own string slice
-            Token::Str(s) => write!(f, "{}", s),
-            Token::Int(s) => write!(f, "{}", s),
-            Token::Float(s) => write!(f, "{}", s),
-            Token::Ident(s) => write!(f, "{}", s),
-            Token::Bool(b) => write!(f, "{}", b),
+            Token::Str(s) => write!(f, "{s}"),
+            Token::Int(s) => write!(f, "{s}"),
+            Token::Float(s) => write!(f, "{s}"),
+            Token::Ident(s) => write!(f, "{s}"),
+            Token::Bool(b) => write!(f, "{b}"),
 
             // Operators
             Token::Arrow => write!(f, "->"),

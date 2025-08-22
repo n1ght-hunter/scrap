@@ -118,9 +118,11 @@ where
     // ===== SIMPLE IF EXPRESSIONS =====
     // If expressions with simple blocks
     
+    let simple_condition = simple_binary.clone().or(lit.clone()).or(ident.clone());
+    
     let simple_if = just(Token::If)
-        .ignore_then(simple_binary.clone())
-        .then(simple_block.clone())
+        .ignore_then(simple_condition)
+        .then(simple_block)
         .then(
             just(Token::Else)
                 .ignore_then(simple_block)
@@ -131,9 +133,9 @@ where
             kind: ExprKind::If(
                 Box::new(cond), 
                 Box::new(then), 
-                else_block_opt.map(|_block| Box::new(Expr {
+                else_block_opt.map(|block| Box::new(Expr {
                     id: NodeId::new(),
-                    kind: ExprKind::Err,
+                    kind: ExprKind::Block(Box::new(block)),
                     span: e.span(),
                 }))
             ),

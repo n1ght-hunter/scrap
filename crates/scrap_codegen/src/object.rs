@@ -48,8 +48,7 @@ impl ObjectCompiler {
         // For now, assume no parameters and return i64
         sig.returns.push(AbiParam::new(types::I64));
 
-        let func_id = self.module.declare_function(&func.ident.name, Linkage::Export, &sig)
-            .map_err(CodegenError::Module)?;
+        let func_id = self.module.declare_function(&func.ident.name, Linkage::Export, &sig)?;
 
         // Create function context and builder
         let mut ctx = codegen::Context::new();
@@ -71,8 +70,7 @@ impl ObjectCompiler {
         }
 
         // Define the function in the module
-        self.module.define_function(func_id, &mut ctx)
-            .map_err(CodegenError::Module)?;
+        self.module.define_function(func_id, &mut ctx)?;
 
         self.functions.insert(func.ident.name.clone(), func_id);
         Ok(func_id)
@@ -99,15 +97,15 @@ impl ObjectCompiler {
     /// Finalizes the object file and returns the compiled bytes.
     pub fn finalize(self) -> CodegenResult<Vec<u8>> {
         let object_product = self.module.finish();
-        Ok(object_product.emit()
-            .map_err(|e| CodegenError::generic(format!("Failed to emit object file: {}", e)))?)
+        object_product.emit()
+            .map_err(|e| CodegenError::generic(format!("Failed to emit object file: {e}")))
     }
 
     /// Writes the compiled object file to disk.
     pub fn write_object_file(self, path: &std::path::Path) -> CodegenResult<()> {
         let bytes = self.finalize()?;
         std::fs::write(path, bytes)
-            .map_err(|e| CodegenError::generic(format!("Failed to write object file: {}", e)))?;
+            .map_err(|e| CodegenError::generic(format!("Failed to write object file: {e}")))?;
         Ok(())
     }
 }

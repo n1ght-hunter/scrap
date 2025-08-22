@@ -44,7 +44,7 @@ where
             id: NodeId::new(),
             super_: None,
             pat: Box::new(pat),
-            ty: ty,
+            ty,
             kind: LocalKind::Init(expr),
             span: e.span(),
             colon_sp: None,

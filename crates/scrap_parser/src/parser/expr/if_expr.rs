@@ -22,17 +22,23 @@ where
             .then(block_parser())
             .then(
                 just(Token::Else)
-                    .ignore_then(block_parser().map_with(|_block, e| Expr {
-                        id: NodeId::new(),
-                        kind: ExprKind::Err, // Placeholder - blocks need to be converted to expressions
-                        span: e.span(),
-                    }))
-                    .or(if_)
+                    .ignore_then(
+                        block_parser().map_with(|block, e| Expr {
+                            id: NodeId::new(),
+                            kind: ExprKind::Block(Box::new(block)),
+                            span: e.span(),
+                        })
+                        .or(if_)
+                    )
                     .or_not(),
             )
-            .map_with(|((cond, then), else_opt), e| Expr {
+            .map_with(|((cond, then_block), else_opt), e| Expr {
                 id: NodeId::new(),
-                kind: ExprKind::If(Box::new(cond), Box::new(then), else_opt.map(Box::new)),
+                kind: ExprKind::If(
+                    Box::new(cond), 
+                    Box::new(then_block), 
+                    else_opt.map(Box::new)
+                ),
                 span: e.span(),
             })
     })

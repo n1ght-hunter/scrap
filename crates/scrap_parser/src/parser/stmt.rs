@@ -1,4 +1,4 @@
-use crate::{Span, ast::NodeId};
+use crate::{Span, ast::NodeId, utils::LocalVec};
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
@@ -49,41 +49,100 @@ pub enum StmtKind {
     // Note: We could add MacCall(Box<MacCallStmt>) here for macro calls in statements
 }
 
+/// Helper parser for better error messages when semicolons are expected
+fn expect_semicolon<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, (), extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    just(Token::Semicolon)
+        .ignored()
+        .labelled("semicolon")
+        .as_context()
+}
+
 pub fn parse_stmt<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Stmt, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
+    // Let statements MUST have semicolons
     let let_stmt = parse_local()
-        .then_ignore(just(Token::Semicolon))
-        .map(|local| StmtKind::Let(Box::new(local)));
+        .then_ignore(expect_semicolon())
+        .map(|local| StmtKind::Let(Box::new(local)))
+        .labelled("let statement")
+        .as_context();
 
+    // Return statements MUST have semicolons
     let return_stmt = just(Token::Return)
         .ignore_then(inline_expr_parser().or_not())
-        .then_ignore(just(Token::Semicolon))
+        .then_ignore(expect_semicolon())
         .map_with(|expr, e| {
             let return_expr = crate::parser::expr::Expr::new(
                 crate::parser::expr::ExprKind::Return(expr.map(Box::new)),
                 e.span()
             );
             StmtKind::Semi(Box::new(return_expr))
-        });
+        })
+        .labelled("return statement")
+        .as_context();
 
-    let expr_with_semi = inline_expr_parser()
-        .then_ignore(just(Token::Semicolon))
-        .map(|expr| StmtKind::Semi(Box::new(expr)));
-
-    let expr_without_semi = inline_expr_parser()
-        .map(|expr| StmtKind::Expr(Box::new(expr)));
-
+    // Empty statements (just semicolons)
     let empty_stmt = just(Token::Semicolon)
-        .map(|_| StmtKind::Empty);
+        .map(|_| StmtKind::Empty)
+        .labelled("empty statement");
 
+    // Expressions with semicolons (discarded values)
+    let expr_with_semi = {
+        // Create a parser that includes function calls for semicolon-terminated expressions
+        let expr_parser = recursive(|_expr| {
+            let basic_expr = inline_expr_parser();
+            
+            // Add function call support for semicolon-terminated statements
+            let atom = basic_expr.clone();
+            let call_expr = atom.clone()
+                .then(
+                    atom.clone()
+                        .map(Box::new)
+                        .separated_by(just(Token::Comma))
+                        .allow_trailing()
+                        .collect::<LocalVec<_>>()
+                        .delimited_by(just(Token::LParen), just(Token::RParen))
+                        .or_not()
+                )
+                .map_with(|(f, args_opt), e| {
+                    match args_opt {
+                        Some(args) => crate::parser::expr::Expr {
+                            id: NodeId::new(),
+                            kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
+                            span: e.span(),
+                        },
+                        None => f,
+                    }
+                });
+            
+            call_expr.or(basic_expr)
+        });
+        
+        expr_parser
+            .then_ignore(expect_semicolon())
+            .map(|expr| StmtKind::Semi(Box::new(expr)))
+            .labelled("expression statement")
+            .as_context()
+    };
+
+    // Expressions without semicolons - only valid as last statement in a block
+    // This should have lowest priority to avoid consuming let statements
+    let expr_without_semi = inline_expr_parser()
+        .map(|expr| StmtKind::Expr(Box::new(expr)))
+        .labelled("tail expression");
+
+    // Try statements in order - put let_stmt first so it doesn't get consumed as expr_without_semi
     choice((
         let_stmt,
         return_stmt,
-        expr_with_semi,
         empty_stmt,
+        expr_with_semi,
         expr_without_semi,
     ))
     .map_with(|kind, e| Stmt {
@@ -91,4 +150,9 @@ where
         kind,
         span: e.span(),
     })
+    .labelled("statement")
+    .recover_with(skip_then_retry_until(
+        any().ignored(),
+        one_of([Token::Semicolon, Token::RBrace, Token::LBrace]).ignored(),
+    ))
 }

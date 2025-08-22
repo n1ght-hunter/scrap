@@ -19,14 +19,26 @@ where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
     recursive(|_block| {
-        parse_stmt()
+        // Parse statements with better structure:
+        // - All statements except the last must have semicolons
+        // - The last statement can be an expression without semicolon (becomes block value)
+        
+        let statements_with_semicolons = parse_stmt()
             .repeated()
             .collect::<LocalVec<_>>()
-            .delimited_by(just(Token::LBrace), just(Token::RBrace))
+            .labelled("block contents");
+            
+        statements_with_semicolons
+            .delimited_by(
+                just(Token::LBrace).labelled("opening brace"), 
+                just(Token::RBrace).labelled("closing brace")
+            )
             .map_with(|stmts, e| Block {
                 stmts,
                 id: NodeId::new(),
                 span: e.span(),
             })
+            .labelled("block")
+            .as_context()
     })
 }

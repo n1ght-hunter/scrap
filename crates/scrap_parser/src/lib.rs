@@ -70,6 +70,7 @@ use chumsky::span::SimpleSpan;
 pub mod ast;
 pub mod parser;
 pub mod utils;
+pub mod error;
 
 pub type Span = SimpleSpan;
 
@@ -81,7 +82,6 @@ pub struct Spanned<T> {
 
 #[cfg(test)]
 mod tests {
-    use ariadne::{Color, Label, Report, ReportKind, sources};
     use chumsky::{input::Stream, prelude::*};
     use scrap_lexer::{Logos, Token};
 
@@ -268,42 +268,18 @@ mod tests {
             // This involves giving chumsky an 'end of input' span: we just use a zero-width span at the end of the string
             .map((0..src.len()).into(), |(t, s): (_, _)| (t, s));
 
-        let (ast, parse_errs) = file_parser().parse(token_stream).into_output_errors();
+        let (_ast, parse_errs) = file_parser().parse(token_stream).into_output_errors();
 
         if parse_errs.is_empty() && lex_errs.is_empty() {
             return Ok(());
         }
 
         if skip_output {
-            return Ok(());
+            return Err(anyhow::anyhow!("parse error"));
         }
 
-        parse_errs
-            .into_iter()
-            .map(|e| e.map_token(|c| c.to_string()))
-            .chain(
-                lex_errs
-                    .into_iter()
-                    .map(|e| e.map_token(|tok| tok.to_string())),
-            )
-            .for_each(|e| {
-                Report::build(ReportKind::Error, (filename, e.span().into_range()))
-                    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-                    .with_message(e.to_string())
-                    .with_label(
-                        Label::new((filename, e.span().into_range()))
-                            .with_message(e.reason().to_string())
-                            .with_color(Color::Red),
-                    )
-                    .with_labels(e.contexts().map(|(label, span)| {
-                        Label::new((filename, span.into_range()))
-                            .with_message(format!("while parsing this {label}"))
-                            .with_color(Color::Yellow)
-                    }))
-                    .finish()
-                    .print((filename, ariadne::Source::from(src)))
-                    .unwrap()
-            });
+        // Use the enhanced error reporting system
+        crate::error::report_parse_errors(parse_errs, lex_errs, filename, src);
 
         return Err(anyhow::anyhow!("parse error"));
     }
@@ -384,5 +360,99 @@ mod tests {
         
         // This should pass because return statements have semicolons
         parse(&src, filename, false)
+    }
+
+    #[test]
+    fn test_missing_semicolon_error_quality() {
+        let filename = "test_missing_semicolon.sc";
+        let src = r#"
+        fn foo(a: f64, b: f64) -> f64 {
+            let c = if a > 1.0 {
+                a + b
+            } else {
+                50.0
+            }  // Missing semicolon here - should give helpful error
+            c + 2.0
+        }
+        "#;
+        
+        println!("Testing this source code:");
+        println!("{}", src);
+        
+        // Let's see what happens when we parse this
+        let result = parse(&src, filename, false);
+        
+        if result.is_err() {
+            println!("✓ Parse correctly failed with error");
+        } else {
+            println!("✗ Parse unexpectedly succeeded - this should be an error!");
+            panic!("Expected parse error for missing semicolon");
+        }
+    }
+
+    #[test]
+    fn test_various_missing_semicolon_cases() {
+        // Test case 1: Missing semicolon after simple let statement
+        let test1 = r#"
+        fn test() {
+            let x = 5  // Missing semicolon
+            let y = 10;
+        }
+        "#;
+        
+        let result1 = parse(&test1, "test1.sc", false);
+        assert!(result1.is_err(), "Expected error for missing semicolon after simple let");
+
+        // Test case 2: Missing semicolon after function call
+        let test2 = r#"
+        fn test() {
+            foo()  // Missing semicolon
+            bar();
+        }
+        "#;
+        
+        let result2 = parse(&test2, "test2.sc", false);
+        assert!(result2.is_err(), "Expected error for missing semicolon after function call");
+
+        // Test case 3: Missing semicolon after return statement  
+        let test3 = r#"
+        fn test() -> i32 {
+            return 42  // Missing semicolon
+        }
+        "#;
+        
+        let result3 = parse(&test3, "test3.sc", false);
+        assert!(result3.is_err(), "Expected error for missing semicolon after return");
+    }
+
+    #[test]  
+    fn test_correct_semicolon_usage() {
+        // These should all parse successfully
+        let correct_cases = vec![
+            r#"
+            fn test() -> i32 {
+                let x = 5;
+                return x;
+            }
+            "#,
+            r#"
+            fn test() -> i32 {
+                let x = if true { 1 } else { 2 };
+                x + 1
+            }
+            "#,
+            r#"
+            fn test() {
+                let x = 5;
+                foo();
+                bar();
+            }
+            "#,
+        ];
+
+        for (i, test_case) in correct_cases.iter().enumerate() {
+            let result = parse(test_case, &format!("correct_{}.sc", i), true);
+            assert!(result.is_ok(), "Expected successful parse for correct case {}", i);
+        }
     }
 }

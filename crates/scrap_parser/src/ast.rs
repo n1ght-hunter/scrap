@@ -21,6 +21,12 @@ pub struct Symbol(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId(pub u32);
 
+impl Default for NodeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NodeId {
     /// Create a new unique NodeId. Each call to this function returns a different ID,
     /// ensuring that every AST node has a unique identifier across the entire program.
