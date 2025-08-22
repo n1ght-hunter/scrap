@@ -1,57 +1,53 @@
-use chumsky::{
-    input::{Stream, ValueInput},
-    prelude::*,
-};
-use scrap_lexer::Token;
-
-use crate::{
-    ast::{Expr, Item, Literal},
-    parser::{enum_parser, function_parser, struct_parser},
-};
+use chumsky::span::SimpleSpan;
 
 pub mod ast;
 pub mod parser;
+pub mod utils;
 
 pub type Span = SimpleSpan;
 
-fn file_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Item<'src>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-{
-    let expr = function_parser().or(enum_parser()).or(struct_parser());
 
-    expr.repeated().collect()
+#[derive(Debug, Clone, Copy)]
+pub struct Spanned<T> {
+    pub node: T,
+    pub span: Span,
 }
 
 #[cfg(test)]
 mod tests {
-    use ariadne::{Color, Label, Report, ReportKind, Source, sources};
-    use chumsky::input::Stream;
+    use ariadne::{Color, Label, Report, ReportKind, sources};
+    use chumsky::{input::Stream, prelude::*};
     use scrap_lexer::{Logos, Token};
 
-    use super::*;
+    use crate::parser::file_parser;
 
     const TEST_AST: &str = r#"
     fn foo(a: f64, b: f64) -> f64 {
-       
+        let c = if a > 10.0 {
+            a + b
+        } else {
+            50.0
+        };
         c + 2.0
     }
 
-    fn bar() -> String {
-        "Hello, \\world!"
-    }
-
-    enum MyEnum {
-        Variant1,
-        Variant2(MyStruct),
-    }
-
-    struct MyStruct {
-        field1: i32,
-        field2: String,
-    }
     "#;
+
+
+    
+    // fn bar() -> String {
+    //     "Hello, \\world!"
+    // }
+
+    // enum MyEnum {
+    //     Variant1,
+    //     Variant2(MyStruct),
+    // }
+
+    // struct MyStruct {
+    //     field1: i32,
+    //     field2: String,
+    // }
 
     #[test]
     fn test_ast() -> anyhow::Result<()> {
@@ -71,6 +67,8 @@ mod tests {
                 (tokens, token_errors)
             },
         );
+
+        println!("token_iter {:#?}", token_iter);
 
         // Turn the token iterator into a stream that chumsky can use for things like backtracking
         let token_stream = Stream::from_iter(token_iter)

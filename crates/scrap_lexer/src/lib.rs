@@ -34,11 +34,18 @@ pub enum Token<'a> {
     // ╚══════╝╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝
     #[regex(r#""(\\.|[^"\\])*""#)]
     Str(&'a str),
-    #[regex(r"[0-9]+")]
-    Int(&'a str),
+
     // Floating-point literals (must contain a decimal point)
-    #[regex(r"[0-9]+\.[0-9]*")]
-    Float(&'a str),
+    #[regex(r"[0-9]+\.[0-9]*", |lex| lex.slice().parse::<f64>().unwrap())]
+    Float(f64),
+
+    #[regex(r"[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
+    Int(i64),
+
+    #[token("false", |_| false)]
+    #[token("true", |_| true)]
+    Bool(bool),
+
     // Identifiers (captures variable names, type names, etc.)
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'a str),
@@ -55,6 +62,40 @@ pub enum Token<'a> {
     Assign,
     #[token("+")]
     Plus,
+    #[token("-")]
+    Minus,
+    #[token("*")]
+    Star,
+    #[token("/")]
+    Slash,
+    #[token("%")]
+    Percent,
+    #[token("&&")]
+    And,
+    #[token("||")]
+    Or,
+    #[token("^")]
+    BitXor,
+    #[token("&")]
+    BitAnd,
+    #[token("|")]
+    BitOr,
+    #[token("<<")]
+    Shl,
+    #[token(">>")]
+    Shr,
+    #[token("==")]
+    Eq,
+    #[token("<")]
+    Lt,
+    #[token("<=")]
+    Le,
+    #[token("!=")]
+    Ne,
+    #[token(">=")]
+    Ge,
+    #[token(">")]
+    Gt,
 
     // ██████╗ ██╗   ██╗███╗   ██╗ ██████╗████████╗██╗   ██╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
     // ██╔══██╗██║   ██║████╗  ██║██╔════╝╚══██╔══╝██║   ██║██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
@@ -102,11 +143,29 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::Int(s) => write!(f, "{}", s),
             Token::Float(s) => write!(f, "{}", s),
             Token::Ident(s) => write!(f, "{}", s),
+            Token::Bool(b) => write!(f, "{}", b),
 
             // Operators
             Token::Arrow => write!(f, "->"),
             Token::Assign => write!(f, "="),
             Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Star => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Percent => write!(f, "%"),
+            Token::And => write!(f, "&&"),
+            Token::Or => write!(f, "||"),
+            Token::BitXor => write!(f, "^"),
+            Token::BitAnd => write!(f, "&"),
+            Token::BitOr => write!(f, "|"),
+            Token::Shl => write!(f, "<<"),
+            Token::Shr => write!(f, ">>"),
+            Token::Eq => write!(f, "=="),
+            Token::Lt => write!(f, "<"),
+            Token::Le => write!(f, "<="),
+            Token::Ne => write!(f, "!="),
+            Token::Ge => write!(f, ">="),
+            Token::Gt => write!(f, ">"),
 
             // Punctuation
             Token::LParen => write!(f, "("),

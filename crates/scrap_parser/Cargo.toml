@@ -7,6 +7,7 @@ edition.workspace = true
 chumsky.workspace = true
 scrap_lexer.workspace = true
 ariadne.workspace = true
+thin-vec.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

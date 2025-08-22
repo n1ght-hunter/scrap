@@ -25,6 +25,7 @@ anyhow = "1"
 either = "1"
 rayon = "1"
 insta = "1"
+thin-vec = "0.2"
 
 # backend
 cranelift = "0.123"

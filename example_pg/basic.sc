@@ -1,10 +1,6 @@
 fn foo(a: f64, b: f64) -> f64 {
-    let c = if a {
-        if b {
-            30.0
-        } else {
-            40.0
-        }
+    let c = if a > 1.0 {
+        a + b
     } else {
         50.0
     };
