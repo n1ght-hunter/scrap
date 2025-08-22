@@ -19,15 +19,18 @@ where
 {
     base_parser.foldl_with(
         arg_parser
+            .map(Box::new)
             .separated_by(just(Token::Comma))
             .allow_trailing()
             .collect::<LocalVec<_>>()
             .delimited_by(just(Token::LParen), just(Token::RParen))
             .repeated(),
-        |f, args, e| Expr {
-            id: NodeId::new(),
-            kind: ExprKind::Call(Box::new(f), args),
-            span: e.span(),
+        |f, args, e| {
+            Expr {
+                id: NodeId::new(),
+                kind: ExprKind::Call(Box::new(f), args),
+                span: e.span(),
+            }
         },
     )
 }

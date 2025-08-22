@@ -7,9 +7,9 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId, parser::lit::lit_parser};
+use crate::{Span, ast::NodeId, utils::LocalVec};
 use super::{Expr, ExprKind};
-use crate::parser::parse_ident;
+use crate::parser::{lit::lit_parser, parse_ident};
 
 /// Parse atomic literals
 pub fn literal_parser<'tokens, 'src: 'tokens, I>()
@@ -41,7 +41,28 @@ where
         .labelled("identifier")
 }
 
-/// Parse parenthesized expressions
+/// Parse array expressions
+pub fn array_parser<'tokens, 'src: 'tokens, I>(
+    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    expr_parser
+        .map(Box::new)
+        .separated_by(just(Token::Comma))
+        .allow_trailing()
+        .collect::<LocalVec<_>>()
+        .delimited_by(just(Token::LBracket), just(Token::RBracket))
+        .map_with(|elements, e| Expr {
+            id: NodeId::new(),
+            kind: ExprKind::Array(elements),
+            span: e.span(),
+        })
+        .labelled("array")
+}
+
+/// Parse parenthesized expressions (creates Paren variant)
 pub fn parenthesized_parser<'tokens, 'src: 'tokens, I>(
     expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 ) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
@@ -50,30 +71,38 @@ where
 {
     expr_parser
         .delimited_by(just(Token::LParen), just(Token::RParen))
+        .map_with(|expr, e| Expr {
+            id: NodeId::new(), 
+            kind: ExprKind::Paren(Box::new(expr)),
+            span: e.span(),
+        })
         .labelled("parenthesized expression")
 }
 
 /// Parse atomic expressions with error recovery
 pub fn atom_with_recovery<'tokens, 'src: 'tokens, I>(
-    paren_expr: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 ) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    literal_parser()
-        .or(identifier_parser())
-        .or(paren_expr)
-        .recover_with(via_parser(nested_delimiters(
-            Token::LParen,
-            Token::RParen,
-            [
-                (Token::LBrace, Token::RBrace),
-                (Token::LBracket, Token::RBracket),
-            ],
-            |span| Expr {
-                id: NodeId::new(),
-                kind: ExprKind::Error,
-                span,
-            },
-        )))
+    choice((
+        literal_parser(),
+        identifier_parser(),
+        array_parser(expr_parser.clone()),
+        parenthesized_parser(expr_parser),
+    ))
+    .recover_with(via_parser(nested_delimiters(
+        Token::LParen,
+        Token::RParen,
+        [
+            (Token::LBrace, Token::RBrace),
+            (Token::LBracket, Token::RBracket),
+        ],
+        |span| Expr {
+            id: NodeId::new(),
+            kind: ExprKind::Err,
+            span,
+        },
+    )))
 }

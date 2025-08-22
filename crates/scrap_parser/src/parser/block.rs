@@ -5,6 +5,7 @@ use crate::{Span, ast::NodeId, utils::LocalVec};
 
 use super::stmt::{Stmt, parse_stmt};
 
+/// A block expression. Following Rust AST structure.
 #[derive(Debug, Clone)]
 pub struct Block {
     pub stmts: LocalVec<Stmt>,

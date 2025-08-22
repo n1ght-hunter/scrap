@@ -24,7 +24,7 @@ where
                 just(Token::Else)
                     .ignore_then(block_parser().map_with(|_block, e| Expr {
                         id: NodeId::new(),
-                        kind: ExprKind::Error, // Placeholder - blocks need to be converted to expressions
+                        kind: ExprKind::Err, // Placeholder - blocks need to be converted to expressions
                         span: e.span(),
                     }))
                     .or(if_)

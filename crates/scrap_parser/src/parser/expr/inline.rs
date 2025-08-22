@@ -24,7 +24,7 @@ pub fn expr_parser<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    recursive(|expr| {
+    recursive(|_expr| {
         let inline_expr = recursive(|inline_expr| {
             // ===== ATOMIC EXPRESSIONS =====
             let paren_expr = parenthesized_parser::<I>(inline_expr.clone());
@@ -45,7 +45,7 @@ where
         });
 
         // ===== CONTROL FLOW EXPRESSIONS =====
-        let block = block_expr_parser(expr.clone());
+        let block = block_expr_parser();
         let if_expr = if_expr_parser(inline_expr.clone());
 
         // Combine all expression types
@@ -133,7 +133,7 @@ where
                 Box::new(then), 
                 else_block_opt.map(|_block| Box::new(Expr {
                     id: NodeId::new(),
-                    kind: ExprKind::Error,
+                    kind: ExprKind::Err,
                     span: e.span(),
                 }))
             ),
