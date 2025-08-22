@@ -31,23 +31,24 @@ mod tests {
         c + 2.0
     }
 
+    fn bar() -> String {
+        "Hello, \\world!"
+    }
+
+    enum MyEnum {
+        Variant1,
+        Variant2(MyStruct),
+    }
+
+    struct MyStruct {
+        field1: i32,
+        field2: String,
+    }
     "#;
 
 
     
-    // fn bar() -> String {
-    //     "Hello, \\world!"
-    // }
 
-    // enum MyEnum {
-    //     Variant1,
-    //     Variant2(MyStruct),
-    // }
-
-    // struct MyStruct {
-    //     field1: i32,
-    //     field2: String,
-    // }
 
     #[test]
     fn test_ast() -> anyhow::Result<()> {

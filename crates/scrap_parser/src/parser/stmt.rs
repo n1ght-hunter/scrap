@@ -3,8 +3,8 @@ use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
 use super::{
-    expr::{Expr, expr_parser},
-    item::{Item, item_parser},
+    expr::{Expr, inline_expr_parser},
+    item::Item,
     local::{Local, parse_local},
 };
 
@@ -34,23 +34,17 @@ pub fn parse_stmt<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    parse_local().map(StmtKind::Let).map_with(|t, e| {
-        println!("parse_stmt called with token: {:?}", t);
-        Stmt {
-            id: NodeId::new(),
-            kind: StmtKind::Empty,
-            span: e.span(),
-        }
-    })
+    let let_stmt = parse_local()
+        .then_ignore(just(Token::Semicolon))
+        .map(StmtKind::Let);
 
-    //         .or(item_parser().map(StmtKind::Item))
-    //         .or(expr_parser()
-    //             .then_ignore(just(Token::Semicolon))
-    //             .map(StmtKind::Semi))
-    //         .or(expr_parser().map(StmtKind::Expr))
-    //         .map_with(|k, e| Stmt {
-    //             id: NodeId::new(),
-    //             kind: k,
-    //             span: e.span(),
-    //         })
+    let expr_stmt = inline_expr_parser()
+        .map(StmtKind::Expr);
+
+    let_stmt.or(expr_stmt)
+        .map_with(|kind, e| Stmt {
+            id: NodeId::new(),
+            kind,
+            span: e.span(),
+        })
 }

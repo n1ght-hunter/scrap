@@ -17,10 +17,8 @@ pub fn block_parser<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    recursive(|_| {
-        // An item inside the block is one of two things:
-
-        let any_other_token = parse_stmt()
+    recursive(|_block| {
+        parse_stmt()
             .repeated()
             .collect::<LocalVec<_>>()
             .delimited_by(just(Token::LBrace), just(Token::RBrace))
@@ -29,20 +27,5 @@ where
                 id: NodeId::new(),
                 span: e.span(),
             })
-            .recover_with(via_parser(nested_delimiters(
-                Token::LBracket,
-                Token::RBracket,
-                [
-                    (Token::LParen, Token::RParen),
-                    (Token::LBracket, Token::RBracket),
-                ],
-                |span| Block {
-                    stmts: LocalVec::new(),
-                    id: NodeId::new(),
-                    span,
-                },
-            )));
-        // An item is either a nested block or any other token.
-        any_other_token
     })
 }
