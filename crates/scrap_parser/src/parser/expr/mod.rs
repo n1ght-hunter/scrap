@@ -56,11 +56,18 @@ pub use items::items_parser;
 // Re-export binary operations from parent module
 pub use super::binary::{bin_op_parser, product_parser, sum_parser, comparison_parser};
 
-/// An expression. Following Rust AST structure.
+/// An expression. Following Rust AST structure exactly.
+/// 
+/// An expression is a piece of code that evaluates to a value.
+/// In Rust, almost everything is an expression, including blocks,
+/// if statements, function calls, and more.
 #[derive(Debug, Clone)]
 pub struct Expr {
+    /// Unique identifier for this expression node
     pub id: NodeId,
+    /// The specific kind of expression
     pub kind: ExprKind,
+    /// Source location span for this expression
     pub span: Span,
 }
 
@@ -76,34 +83,52 @@ impl Expr {
 }
 
 /// Expression kinds, following Rust AST enum structure exactly.
-/// This is a subset of the full Rust ExprKind enum.
+/// This is a subset of the full Rust ExprKind enum, containing
+/// only the most essential expression types for our language.
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    /// Array(ThinVec<Box<Expr>>) - simplified as Array
+    /// An array literal (e.g., `[a, b, c, d]`).
+    /// Contains a list of expressions that make up the array elements.
     Array(LocalVec<Box<Expr>>),
     
-    /// Call(Box<Expr>, ThinVec<Box<Expr>>) - function call
+    /// A function call.
+    /// The first field resolves to the function itself,
+    /// and the second field is the list of arguments.
+    /// This also represents calling the constructor of
+    /// tuple-like ADTs such as tuple structs and enum variants.
     Call(Box<Expr>, LocalVec<Box<Expr>>),
     
-    /// Binary(BinOp, Box<Expr>, Box<Expr>) - binary operation
+    /// A binary operation (e.g., `a + b`, `a * b`).
+    /// Contains the operator and the left and right operands.
     Binary(BinOp, Box<Expr>, Box<Expr>),
     
-    /// Lit(Lit) - literal
+    /// A literal value (e.g., `1`, `"foo"`).
+    /// This includes numbers, strings, booleans, etc.
     Lit(Lit),
     
-    /// If(Box<Expr>, Box<Block>, Option<Box<Expr>>) - if expression
+    /// An `if` block, with an optional `else` block.
+    /// `if expr { block } else { expr }`
+    /// If present, the "else" expr is always `ExprKind::Block` (for `else`) or
+    /// `ExprKind::If` (for `else if`).
     If(Box<Expr>, Box<Block>, Option<Box<Expr>>),
     
-    /// Block(Box<Block>, Option<Label>) - simplified to Block(Box<Block>)
+    /// A block (`{ ... }`).
+    /// Blocks are expressions that contain a sequence of statements
+    /// and optionally evaluate to the value of their final expression.
     Block(Box<Block>),
     
-    /// Path(Option<Box<QSelf>>, Path) - simplified to Path(String)
+    /// Variable reference, possibly containing `::` and/or type
+    /// parameters (e.g., `foo::bar::<baz>`).
+    /// Simplified from the full Rust Path type for our needs.
     Path(String),
     
-    /// Paren(Box<Expr>) - parenthesized expression
+    /// A parenthesized expression.
+    /// No-op: used solely so we can pretty-print faithfully.
+    /// Preserves the original parentheses in the source code.
     Paren(Box<Expr>),
     
-    /// Placeholder for expressions that weren't syntactically well formed
+    /// Placeholder for expressions that weren't syntactically well formed.
+    /// This is used for error recovery during parsing.
     Err,
 }
 

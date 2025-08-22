@@ -2,14 +2,19 @@
 //! 
 //! This module contains binary operator definitions and parsers that handle
 //! proper operator precedence according to mathematical conventions.
+//! The definitions follow the Rust AST structure exactly.
 
 use crate::{Span, Spanned, ast::NodeId};
 
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
+/// A binary operator with its source location span.
+/// This matches the Rust AST pattern of wrapping operator kinds with span information.
 pub type BinOp = Spanned<BinOpKind>;
 
+/// Binary operator kinds, following Rust AST enum structure exactly.
+/// These represent the different types of binary operations available in the language.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BinOpKind {
     /// The `+` operator (addition)

@@ -8,30 +8,44 @@ use super::{
     local::{Local, parse_local},
 };
 
-/// A statement. Following Rust AST structure.
+/// A statement. Following Rust AST structure exactly.
+/// 
+/// No `attrs` or `tokens` fields because each `StmtKind` variant
+/// contains an AST node with those fields. (Except for `StmtKind::Empty`,
+/// which never has attrs or tokens)
 #[derive(Debug, Clone)]
 pub struct Stmt {
+    /// Unique identifier for this statement node
     pub id: NodeId,
+    /// The specific kind of statement
     pub kind: StmtKind,
+    /// Source location span for this statement
     pub span: Span,
-    // Note: In Rust AST, attrs and tokens are in the StmtKind variants, not here
-    // but we could add them here if needed for our simplified version
 }
 
-/// Statement kinds, following Rust AST enum structure
+/// Statement kinds, following Rust AST enum structure exactly.
+/// This is a subset of the full Rust StmtKind enum.
 #[derive(Debug, Clone)]
 pub enum StmtKind {
-    /// A local (let) binding.
+    /// A local (let) binding (e.g., `let x = 5;`).
     Let(Box<Local>),
-    /// An item definition.
+    
+    /// An item definition (e.g., function, struct, etc.).
     Item(Box<Item>),
-    /// Expr without trailing semi-colon.
+    
+    /// An expression without trailing semicolon.
+    /// The expression is evaluated and its value is used.
     Expr(Box<Expr>),
-    /// Expr with a trailing semi-colon.
+    
+    /// An expression with a trailing semicolon.
+    /// The expression is evaluated but its value is discarded.
     Semi(Box<Expr>),
-    /// Just a trailing semi-colon.
+    
+    /// Just a trailing semicolon (`;`).
+    /// This is a no-op statement.
     Empty,
-    // Note: We could add MacCall(Box<MacCallStmt>) here in the future
+    
+    // Note: We could add MacCall(Box<MacCallStmt>) here for macro calls in statements
 }
 
 pub fn parse_stmt<'tokens, 'src: 'tokens, I>()
