@@ -46,10 +46,10 @@ pub mod inline;
 pub mod items;
 
 // Re-export the main parser functions
-pub use atom::{atom_parser, literal_parser, identifier_parser, parenthesized_parser, atom_with_recovery, path_expr_parser, lit_or_path_parser};
+pub use atom::{literal_parser, identifier_parser, parenthesized_parser, atom_with_recovery};
 pub use block_expr::block_expr_parser;
-pub use call::{call_parser, call_parser_recursive};
-pub use if_expr::{if_expr_parser, if_expr_parser_with_inline};
+pub use call::call_parser;
+pub use if_expr::if_expr_parser;
 pub use inline::{expr_parser, inline_expr_parser};
 pub use items::items_parser;
 

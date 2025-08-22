@@ -9,9 +9,9 @@ use crate::{Span, ast::NodeId, utils::LocalVec};
 use super::{
     Expr, ExprKind,
     atom::{parenthesized_parser, atom_with_recovery},
-    call::call_parser_recursive,
+    call::call_parser,
     block_expr::block_expr_parser,
-    if_expr::if_expr_parser_with_inline,
+    if_expr::if_expr_parser,
 };
 use crate::parser::binary::{product_parser, sum_parser, comparison_parser, bin_op_parser};
 use crate::parser::{lit::lit_parser, parse_ident};
@@ -33,7 +33,7 @@ where
             let atom = atom_with_recovery(paren_expr);
 
             // ===== FUNCTION CALLS =====
-            let call = call_parser_recursive(atom, inline_expr.clone());
+            let call = call_parser(atom, inline_expr.clone());
 
             // ===== BINARY OPERATIONS WITH PRECEDENCE =====
             // Apply operator precedence: multiplication/division -> addition/subtraction -> comparison
@@ -46,7 +46,7 @@ where
 
         // ===== CONTROL FLOW EXPRESSIONS =====
         let block = block_expr_parser(expr.clone());
-        let if_expr = if_expr_parser_with_inline(inline_expr.clone());
+        let if_expr = if_expr_parser(inline_expr.clone());
 
         // Combine all expression types
         let block_expr = block.or(if_expr);

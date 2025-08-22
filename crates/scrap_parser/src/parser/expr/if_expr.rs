@@ -9,7 +9,6 @@ use crate::{Span, ast::NodeId, parser::block::block_parser};
 use super::{Expr, ExprKind};
 
 /// Parse if expressions with optional else branches
-/// The condition parser is passed as a parameter to break circular dependencies
 pub fn if_expr_parser<'tokens, 'src: 'tokens, I, P>(
     condition_parser: P,
 ) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
@@ -20,37 +19,6 @@ where
     recursive(|if_| {
         just(Token::If)
             .ignore_then(condition_parser)
-            .then(block_parser())
-            .then(
-                just(Token::Else)
-                    .ignore_then(block_parser().map_with(|_block, e| Expr {
-                        id: NodeId::new(),
-                        kind: ExprKind::Error, // Placeholder - blocks need to be converted to expressions
-                        span: e.span(),
-                    }))
-                    .or(if_)
-                    .or_not(),
-            )
-            .map_with(|((cond, then), else_opt), e| Expr {
-                id: NodeId::new(),
-                kind: ExprKind::If(Box::new(cond), Box::new(then), else_opt.map(Box::new)),
-                span: e.span(),
-            })
-    })
-}
-
-/// Parse if expressions with recursive inline expressions
-/// This version handles the inline expression parsing directly
-pub fn if_expr_parser_with_inline<'tokens, 'src: 'tokens, I, P>(
-    inline_expr_parser: P
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-    P: Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone + 'tokens,
-{
-    recursive(|if_| {
-        just(Token::If)
-            .ignore_then(inline_expr_parser.clone())
             .then(block_parser())
             .then(
                 just(Token::Else)
