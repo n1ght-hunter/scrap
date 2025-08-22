@@ -1,4 +1,9 @@
-use crate::{Span, Spanned};
+//! Binary operations and precedence handling
+//! 
+//! This module contains binary operator definitions and parsers that handle
+//! proper operator precedence according to mathematical conventions.
+
+use crate::{Span, Spanned, ast::NodeId};
 
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
@@ -45,6 +50,7 @@ pub enum BinOpKind {
     Gt,
 }
 
+/// Basic binary operator parser
 pub fn bin_op_parser<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, BinOp, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
@@ -75,4 +81,103 @@ where
         node: kind,
         span: e.span(),
     })
+}
+
+// Forward declaration - we'll import Expr where needed
+use crate::parser::expr::{Expr, ExprKind};
+
+/// Parse multiplication and division operations (highest precedence binary ops)
+pub fn product_parser<'tokens, 'src: 'tokens, I>(
+    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    let mul_div_ops = just(Token::Star).or(just(Token::Slash));
+    
+    base_parser.clone().foldl_with(
+        mul_div_ops.then(base_parser).repeated(),
+        |lhs, (op_token, rhs), e| {
+            let op = Spanned {
+                node: match op_token {
+                    Token::Star => BinOpKind::Mul,
+                    Token::Slash => BinOpKind::Div,
+                    _ => unreachable!(),
+                },
+                span: e.span(),
+            };
+            Expr {
+                id: NodeId::new(),
+                kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
+                span: e.span(),
+            }
+        },
+    )
+}
+
+/// Parse addition and subtraction operations (medium precedence)
+pub fn sum_parser<'tokens, 'src: 'tokens, I>(
+    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    let add_sub_ops = just(Token::Plus).or(just(Token::Minus));
+    
+    base_parser.clone().foldl_with(
+        add_sub_ops.then(base_parser).repeated(),
+        |lhs, (op_token, rhs), e| {
+            let op = Spanned {
+                node: match op_token {
+                    Token::Plus => BinOpKind::Add,
+                    Token::Minus => BinOpKind::Sub,
+                    _ => unreachable!(),
+                },
+                span: e.span(),
+            };
+            Expr {
+                id: NodeId::new(),
+                kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
+                span: e.span(),
+            }
+        },
+    )
+}
+
+/// Parse comparison operations (lowest precedence)
+pub fn comparison_parser<'tokens, 'src: 'tokens, I>(
+    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+{
+    let comparison_ops = just(Token::Gt)
+        .or(just(Token::Lt))
+        .or(just(Token::Ge))
+        .or(just(Token::Le))
+        .or(just(Token::Eq))
+        .or(just(Token::Ne));
+        
+    base_parser.clone().foldl_with(
+        comparison_ops.then(base_parser).repeated(),
+        |lhs, (op_token, rhs), e| {
+            let op = Spanned {
+                node: match op_token {
+                    Token::Gt => BinOpKind::Gt,
+                    Token::Lt => BinOpKind::Lt,
+                    Token::Ge => BinOpKind::Ge,
+                    Token::Le => BinOpKind::Le,
+                    Token::Eq => BinOpKind::Eq,
+                    Token::Ne => BinOpKind::Ne,
+                    _ => unreachable!(),
+                },
+                span: e.span(),
+            };
+            Expr {
+                id: NodeId::new(),
+                kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
+                span: e.span(),
+            }
+        },
+    )
 }

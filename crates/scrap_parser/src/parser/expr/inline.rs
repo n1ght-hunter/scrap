@@ -1,54 +1,77 @@
+//! Inline expression parsing coordination
+//! 
+//! This module coordinates all the different expression parsers from their respective modules.
+
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::{
-    Span,
-    ast::NodeId,
-    parser::{binary::bin_op_parser, lit::lit_parser, parse_ident, block::Block},
-    utils::LocalVec,
+use crate::{Span, ast::NodeId, utils::LocalVec};
+use super::{
+    Expr, ExprKind,
+    atom::{parenthesized_parser, atom_with_recovery},
+    call::call_parser_recursive,
+    block_expr::block_expr_parser,
+    if_expr::if_expr_parser_with_inline,
 };
-use super::{Expr, ExprKind};
+use crate::parser::binary::{product_parser, sum_parser, comparison_parser, bin_op_parser};
+use crate::parser::{lit::lit_parser, parse_ident};
 
+/// Main expression parser with full precedence handling
+/// 
+/// This parser coordinates all the modular expression parsers with proper operator precedence.
 pub fn expr_parser<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    recursive(|_expr| {
-        // Atomic expressions: literals and identifiers
-        let atom = lit_parser()
-            .map_with(|lit, e| Expr {
-                id: NodeId::new(),
-                kind: ExprKind::Lit(lit),
-                span: e.span(),
-            })
-            .or(parse_ident()
-                .map_with(|ident, e| Expr {
-                    id: NodeId::new(),
-                    kind: ExprKind::Path(ident.name),
-                    span: e.span(),
-                }));
+    recursive(|expr| {
+        let inline_expr = recursive(|inline_expr| {
+            // ===== ATOMIC EXPRESSIONS =====
+            let paren_expr = parenthesized_parser::<I>(inline_expr.clone());
+            
+            // Combine atoms with error recovery
+            let atom = atom_with_recovery(paren_expr);
 
-        // Binary expressions: left op right
-        let binary_expr = atom.clone()
-            .then(bin_op_parser())
-            .then(atom.clone())
-            .map_with(|((left, op), right), e| Expr {
-                id: NodeId::new(),
-                kind: ExprKind::Binary(op, Box::new(left), Box::new(right)),
-                span: e.span(),
-            });
+            // ===== FUNCTION CALLS =====
+            let call = call_parser_recursive(atom, inline_expr.clone());
 
-        // For now, we keep a simple structure to avoid recursion issues
-        binary_expr.or(atom)
+            // ===== BINARY OPERATIONS WITH PRECEDENCE =====
+            // Apply operator precedence: multiplication/division -> addition/subtraction -> comparison
+            let product = product_parser(call);
+            let sum = sum_parser(product);
+            let compare = comparison_parser(sum);
+
+            compare.labelled("expression").as_context()
+        });
+
+        // ===== CONTROL FLOW EXPRESSIONS =====
+        let block = block_expr_parser(expr.clone());
+        let if_expr = if_expr_parser_with_inline(inline_expr.clone());
+
+        // Combine all expression types
+        let block_expr = block.or(if_expr);
+
+        block_expr
+            .or(inline_expr.clone())
+            .recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of([Token::Semicolon, Token::RBrace]).ignored(),
+            ))
     })
 }
 
+/// Simplified inline expression parser for simple cases
+/// 
+/// This is a non-recursive parser for simple expressions that don't require
+/// the full complexity of the main parser. Used in contexts where we need
+/// basic expression parsing without deep nesting.
 pub fn inline_expr_parser<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
+    // ===== SIMPLE ATOMIC EXPRESSIONS =====
+    
     let lit = lit_parser()
         .map_with(|lit, e| Expr {
             id: NodeId::new(),
@@ -63,7 +86,9 @@ where
             span: e.span(),
         });
 
-    // Simple binary expression: ident op lit
+    // ===== SIMPLE BINARY EXPRESSIONS =====
+    // Pattern: identifier operator literal
+    
     let simple_binary = ident.clone()
         .then(bin_op_parser())
         .then(lit.clone())
@@ -73,7 +98,9 @@ where
             span: e.span(),
         });
 
-    // Create a simple block parser that just skips contents
+    // ===== SIMPLE BLOCK HANDLING =====
+    // Basic block parser that skips block contents
+    
     let simple_block = any()
         .filter(|t| matches!(t, Token::LBrace))
         .ignore_then(
@@ -82,13 +109,15 @@ where
                 .repeated()
         )
         .then_ignore(any().filter(|t| matches!(t, Token::RBrace)))
-        .map_with(|_, e| Block {
+        .map_with(|_, e| crate::parser::block::Block {
             stmts: LocalVec::new(),
             id: NodeId::new(), 
             span: e.span(),
         });
 
-    // Simple if expression with simple blocks
+    // ===== SIMPLE IF EXPRESSIONS =====
+    // If expressions with simple blocks
+    
     let simple_if = just(Token::If)
         .ignore_then(simple_binary.clone())
         .then(simple_block.clone())
@@ -102,7 +131,11 @@ where
             kind: ExprKind::If(
                 Box::new(cond), 
                 Box::new(then), 
-                else_block_opt.map(Box::new)
+                else_block_opt.map(|_block| Box::new(Expr {
+                    id: NodeId::new(),
+                    kind: ExprKind::Error,
+                    span: e.span(),
+                }))
             ),
             span: e.span(),
         });

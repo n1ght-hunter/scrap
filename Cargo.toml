@@ -32,6 +32,7 @@ cranelift = "0.123"
 cranelift-module = "0.123"
 cranelift-jit = "0.123"
 cranelift-native = "0.123"
+cranelift-object = "0.123"
 
 # Parser
 chumsky = "0.10.1"
