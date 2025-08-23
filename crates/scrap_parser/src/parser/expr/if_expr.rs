@@ -7,7 +7,7 @@ use scrap_lexer::Token;
 
 use super::{Expr, ExprKind};
 use crate::parser::{ScrapInput, ScrapParser};
-use crate::{ast::NodeId, parser::block::block_parser};
+use crate::parser::block::block_parser;
 
 /// Parse if expressions with optional else branches
 pub fn if_expr_parser<'tokens, 'src: 'tokens, I, P>(
@@ -26,7 +26,7 @@ where
                     .ignore_then(
                         block_parser()
                             .map_with(|block, e| Expr {
-                                id: NodeId::from_u32(0), // TODO: use state
+                                id: e.state().new_node_id(),
                                 kind: ExprKind::Block(Box::new(block)),
                                 span: e.span(),
                             })
@@ -35,7 +35,7 @@ where
                     .or_not(),
             )
             .map_with(|((cond, then_block), else_opt), e| Expr {
-                id: NodeId::from_u32(0), // TODO: use state
+                id: e.state().new_node_id(),
                 kind: ExprKind::If(Box::new(cond), Box::new(then_block), else_opt.map(Box::new)),
                 span: e.span(),
             })

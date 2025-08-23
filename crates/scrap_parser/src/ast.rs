@@ -28,11 +28,9 @@ impl NodeId {
     pub fn new(id: u32, file_hash: u64) -> Self {
         NodeId { id, file_hash }
     }
-}
 
-// #[derive(Debug, Clone)]
-// pub enum Literal {
-//     Int(&str),
-//     Float(&str),
-//     Str(&str),
-// }
+    /// Create a special invalid NodeId for error recovery cases
+    pub fn invalid() -> Self {
+        NodeId { id: u32::MAX, file_hash: 0 }
+    }
+}

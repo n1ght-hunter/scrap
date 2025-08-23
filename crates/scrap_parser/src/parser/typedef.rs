@@ -22,8 +22,8 @@ pub fn parse_type<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    parse_ident().map_with(|ident, _| Type {
-        id: NodeId::from_u32(0), // TODO: use state
+    parse_ident().map_with(|ident, e| Type {
+        id: e.state().new_node_id(),
         ident,
     })
 }

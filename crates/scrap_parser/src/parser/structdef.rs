@@ -29,8 +29,8 @@ where
     just(Token::Struct)
         .ignore_then(parse_ident().labelled("struct name"))
         .then(fields)
-        .map(|(name, fields)| StructDef {
-            id: NodeId::from_u32(0), // TODO: use state
+        .map_with(|(name, fields), e| StructDef {
+            id: e.state().new_node_id(),
             ident: name,
             fields,
         })

@@ -18,7 +18,7 @@ where
 {
     lit_parser()
         .map_with(|lit, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Lit(lit),
             span: e.span(),
         })
@@ -32,7 +32,7 @@ where
 {
     parse_ident()
         .map_with(|ident, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Path(ident.name),
             span: e.span(),
         })
@@ -53,7 +53,7 @@ where
         .collect::<LocalVec<_>>()
         .delimited_by(just(Token::LBracket), just(Token::RBracket))
         .map_with(|elements, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Array(elements),
             span: e.span(),
         })
@@ -70,7 +70,7 @@ where
     expr_parser
         .delimited_by(just(Token::LParen), just(Token::RParen))
         .map_with(|expr, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Paren(Box::new(expr)),
             span: e.span(),
         })
@@ -87,7 +87,7 @@ where
     just(Token::Return)
         .ignore_then(expr_parser.or_not())
         .map_with(|expr, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Return(expr.map(Box::new)),
             span: e.span(),
         })
@@ -115,7 +115,7 @@ where
             (Token::LBracket, Token::RBracket),
         ],
         |span| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: NodeId::invalid(), // Error recovery case
             kind: ExprKind::Err,
             span,
         },

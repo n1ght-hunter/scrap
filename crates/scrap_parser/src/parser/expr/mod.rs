@@ -74,14 +74,7 @@ pub struct Expr {
 }
 
 impl Expr {
-    /// Create a new expression with the given kind and span
-    pub fn new(kind: ExprKind, span: Span) -> Self {
-        Self {
-            id: NodeId::from_u32(0), // TODO: use state
-            kind,
-            span,
-        }
-    }
+    // Constructor removed - use direct construction with e.state().new_node_id()
 }
 
 /// Expression kinds, following Rust AST enum structure exactly.

@@ -32,10 +32,10 @@ where
                 .delimited_by(just(Token::LParen), just(Token::RParen))
                 .or_not(),
         )
-        .map(|(ident, ty)| {
+        .map_with(|(ident, ty), e| {
             if let Some(ty) = ty {
                 EnumVariant::Full(Field {
-                    id: NodeId::from_u32(0), // TODO: use state
+                    id: e.state().new_node_id(),
                     ident,
                     ty,
                 })
@@ -52,8 +52,8 @@ where
             capital_ident("Enum name must start with an uppercase letter").labelled("enum name"),
         )
         .then(variant.delimited_by(just(Token::LBrace), just(Token::RBrace)))
-        .map(|(name, variants)| EnumDef {
-            id: NodeId::from_u32(0), // TODO: use state
+        .map_with(|(name, variants), e| EnumDef {
+            id: e.state().new_node_id(),
             ident: name,
             variants,
         })

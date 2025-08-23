@@ -4,7 +4,7 @@
 //! proper operator precedence according to mathematical conventions.
 //! The definitions follow the Rust AST structure exactly.
 
-use crate::{Spanned, ast::NodeId};
+use crate::Spanned;
 
 use chumsky::prelude::*;
 use scrap_lexer::Token;
@@ -113,7 +113,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::from_u32(0), // TODO: use state
+                id: e.state().new_node_id(),
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }
@@ -142,7 +142,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::from_u32(0), // TODO: use state
+                id: e.state().new_node_id(),
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }
@@ -180,7 +180,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::from_u32(0), // TODO: use state
+                id: e.state().new_node_id(),
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }

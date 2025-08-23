@@ -71,13 +71,13 @@ where
     // ===== SIMPLE ATOMIC EXPRESSIONS =====
 
     let lit = lit_parser().map_with(|lit, e| Expr {
-        id: NodeId::from_u32(0), // TODO: use state
+        id: e.state().new_node_id(),
         kind: ExprKind::Lit(lit),
         span: e.span(),
     });
 
     let ident = parse_ident().map_with(|ident, e| Expr {
-        id: NodeId::from_u32(0), // TODO: use state
+        id: e.state().new_node_id(),
         kind: ExprKind::Path(ident.name),
         span: e.span(),
     });
@@ -90,7 +90,7 @@ where
         .then(bin_op_parser())
         .then(lit.clone())
         .map_with(|((left, op), right), e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Binary(op, Box::new(left), Box::new(right)),
             span: e.span(),
         });
@@ -104,7 +104,7 @@ where
         .then_ignore(any().filter(|t| matches!(t, Token::RBrace)))
         .map_with(|_, e| crate::parser::block::Block {
             stmts: LocalVec::new(),
-            id: NodeId::from_u32(0), // TODO: use state
+            id: NodeId::invalid(), // Temporary workaround for type inference issue
             span: e.span(),
         });
 
@@ -118,13 +118,13 @@ where
         .then(simple_block)
         .then(just(Token::Else).ignore_then(simple_block).or_not())
         .map_with(|((cond, then), else_block_opt), e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::If(
                 Box::new(cond),
                 Box::new(then),
                 else_block_opt.map(|block| {
                     Box::new(Expr {
-                        id: NodeId::from_u32(0), // TODO: use state
+                        id: e.state().new_node_id(),
                         kind: ExprKind::Block(Box::new(block)),
                         span: e.span(),
                     })

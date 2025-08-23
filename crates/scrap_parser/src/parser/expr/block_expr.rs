@@ -5,7 +5,6 @@
 use chumsky::prelude::*;
 
 use super::{Expr, ExprKind};
-use crate::ast::NodeId;
 use crate::parser::block::block_parser;
 use crate::parser::{ScrapInput, ScrapParser};
 

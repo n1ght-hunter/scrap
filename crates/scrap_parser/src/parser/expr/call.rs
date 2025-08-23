@@ -8,7 +8,7 @@ use scrap_lexer::Token;
 
 use super::{Expr, ExprKind};
 use crate::parser::{ScrapInput, ScrapParser};
-use crate::{ast::NodeId, utils::LocalVec};
+use crate::utils::LocalVec;
 
 /// Parse function call expressions
 pub fn call_parser<'tokens, 'src: 'tokens, I>(
@@ -27,7 +27,7 @@ where
             .delimited_by(just(Token::LParen), just(Token::RParen))
             .repeated(),
         |f, args, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Call(Box::new(f), args),
             span: e.span(),
         },

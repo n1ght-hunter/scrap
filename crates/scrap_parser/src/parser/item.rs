@@ -37,6 +37,6 @@ where
     .map_with(|kind, e| Item {
         kind,
         span: e.span(),
-        id: NodeId::from_u32(0), // TODO: use state
+        id: e.state().new_node_id(),
     })
 }

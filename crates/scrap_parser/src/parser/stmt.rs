@@ -67,10 +67,11 @@ where
         .ignore_then(inline_expr_parser().or_not())
         .then_ignore(expect_semicolon())
         .map_with(|expr, e| {
-            let return_expr = crate::parser::expr::Expr::new(
-                crate::parser::expr::ExprKind::Return(expr.map(Box::new)),
-                e.span(),
-            );
+            let return_expr = crate::parser::expr::Expr {
+                id: e.state().new_node_id(),
+                kind: crate::parser::expr::ExprKind::Return(expr.map(Box::new)),
+                span: e.span(),
+            };
             StmtKind::Semi(Box::new(return_expr))
         })
         .labelled("return statement")
@@ -102,7 +103,7 @@ where
                 )
                 .map_with(|(f, args_opt), e| match args_opt {
                     Some(args) => crate::parser::expr::Expr {
-                        id: NodeId::from_u32(0), // TODO: use state
+                        id: e.state().new_node_id(),
                         kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
                         span: e.span(),
                     },
@@ -134,7 +135,7 @@ where
         expr_without_semi,
     ))
     .map_with(|kind, e| Stmt {
-        id: NodeId::from_u32(0), // TODO: use state
+        id: e.state().new_node_id(),
         kind,
         span: e.span(),
     })
