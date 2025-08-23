@@ -74,25 +74,22 @@ where
     I: ScrapInput<'tokens, 'src>,
 {
     select! {
-        Token::Bool(value) => Lit {
-            id: NodeId::new(),
-            kind: LitKind::Bool,
-            temp_lit: TempLit::Bool(value),
-        },
-        Token::Int(value) => Lit {
-            id: NodeId::new(),
-            kind: LitKind::Integer,
-            temp_lit: TempLit::Int(value),
-        },
-        Token::Float(value) => Lit {
-            id: NodeId::new(),
-            kind: LitKind::Float,
-            temp_lit: TempLit::Float(value),
-        },
-        Token::Str(value) => Lit {
-            id: NodeId::new(),
-            kind: LitKind::Str,
-            temp_lit: TempLit::Str(value.to_string()),
-        },
+        Token::Bool(value) => (LitKind::Bool, TempLit::Bool(value)),
+        Token::Int(value) => (LitKind::Integer, TempLit::Int(value)),
+        Token::Float(value) => (LitKind::Float, TempLit::Float(value)),
+        Token::Str(value) => (LitKind::Str, TempLit::Str(value.to_string())),
     }
+    .map_with(
+        |(kind, temp_lit),
+         e: &mut chumsky::input::MapExtra<
+            '_,
+            '_,
+            I,
+            extra::Full<Rich<'tokens, Token<'src>>, crate::parser::State, ()>,
+        >| Lit {
+            id: e.state().new_node_id(),
+            kind,
+            temp_lit,
+        },
+    )
 }

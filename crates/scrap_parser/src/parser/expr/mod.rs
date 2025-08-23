@@ -77,7 +77,7 @@ impl Expr {
     /// Create a new expression with the given kind and span
     pub fn new(kind: ExprKind, span: Span) -> Self {
         Self {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             kind,
             span,
         }

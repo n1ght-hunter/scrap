@@ -35,7 +35,7 @@ where
         .map(|(ident, ty)| {
             if let Some(ty) = ty {
                 EnumVariant::Full(Field {
-                    id: NodeId::new(),
+                    id: NodeId::from_u32(0), // TODO: use state
                     ident,
                     ty,
                 })
@@ -53,7 +53,7 @@ where
         )
         .then(variant.delimited_by(just(Token::LBrace), just(Token::RBrace)))
         .map(|(name, variants)| EnumDef {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             ident: name,
             variants,
         })

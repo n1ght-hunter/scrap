@@ -26,7 +26,7 @@ where
                     .ignore_then(
                         block_parser()
                             .map_with(|block, e| Expr {
-                                id: NodeId::new(),
+                                id: NodeId::from_u32(0), // TODO: use state
                                 kind: ExprKind::Block(Box::new(block)),
                                 span: e.span(),
                             })
@@ -35,7 +35,7 @@ where
                     .or_not(),
             )
             .map_with(|((cond, then_block), else_opt), e| Expr {
-                id: NodeId::new(),
+                id: NodeId::from_u32(0), // TODO: use state
                 kind: ExprKind::If(Box::new(cond), Box::new(then_block), else_opt.map(Box::new)),
                 span: e.span(),
             })

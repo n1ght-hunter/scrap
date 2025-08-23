@@ -6,8 +6,6 @@ use scrap_lexer::Token;
 
 pub use ident::{capital_ident, parse_ident};
 
-type Error<'tokens, 'src> = extra::Err<Rich<'tokens, Token<'src>, Span>>;
-
 struct Ctx {}
 
 #[derive(Debug, Clone)]
@@ -40,7 +38,11 @@ impl<'src, I: Input<'src>> chumsky::inspector::Inspector<'src, I> for State {
 
     #[inline(always)]
 
-    fn on_rewind<'parse>(&mut self, _: &chumsky::input::Checkpoint<'src, 'parse, I, Self::Checkpoint>) {}
+    fn on_rewind<'parse>(
+        &mut self,
+        _: &chumsky::input::Checkpoint<'src, 'parse, I, Self::Checkpoint>,
+    ) {
+    }
 }
 
 type Extra<'tokens, 'src> = extra::Full<Rich<'tokens, Token<'src>, Span>, State, ()>;
@@ -95,8 +97,8 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
-use crate::ast::NodeId;
 use crate::Span;
+use crate::ast::NodeId;
 
 /// Parse a sc file into ast
 pub fn file_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Vec<Item>>

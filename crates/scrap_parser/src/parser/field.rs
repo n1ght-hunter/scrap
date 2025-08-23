@@ -25,8 +25,8 @@ where
     parse_ident()
         .then_ignore(just(Token::Colon))
         .then(parse_type())
-        .map(|(ident, ty)| Field {
-            id: NodeId::new(),
+        .map_with(|(ident, ty), e| Field {
+            id: e.state().new_node_id(),
             ident,
             ty,
         })

@@ -37,7 +37,7 @@ where
             )
             .map_with(|stmts, e| Block {
                 stmts,
-                id: NodeId::new(),
+                id: NodeId::from_u32(0), // TODO: use state
                 span: e.span(),
             })
             .labelled("block")

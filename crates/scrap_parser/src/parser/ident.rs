@@ -19,11 +19,19 @@ where
     select! {
         Token::Ident(s) => s,
     }
-    .map_with(|s, e| Ident {
-        id: NodeId::new(),
-        name: s.to_string(),
-        span: e.span(),
-    })
+    .map_with(
+        |s,
+         e: &mut chumsky::input::MapExtra<
+            '_,
+            '_,
+            I,
+            extra::Full<Rich<'tokens, Token<'src>>, crate::parser::State, ()>,
+        >| Ident {
+            id: e.state().new_node_id(),
+            name: s.to_string(),
+            span: e.span(),
+        },
+    )
 }
 
 pub fn capital_ident<'tokens, 'src: 'tokens, I>(

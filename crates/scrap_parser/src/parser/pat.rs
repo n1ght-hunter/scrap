@@ -42,7 +42,7 @@ where
 {
     recursive(|_| {
         parse_ident().map_with(|ident, e| Pat {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             kind: PatKind::Ident(BindingMode(ByRef::No, Mutability::Not), ident, None),
             span: e.span(),
         })

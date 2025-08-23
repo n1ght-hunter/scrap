@@ -23,7 +23,7 @@ where
     I: ScrapInput<'tokens, 'src>,
 {
     parse_ident().map_with(|ident, _| Type {
-        id: NodeId::new(),
+        id: NodeId::from_u32(0), // TODO: use state
         ident,
     })
 }

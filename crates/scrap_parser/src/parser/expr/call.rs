@@ -27,7 +27,7 @@ where
             .delimited_by(just(Token::LParen), just(Token::RParen))
             .repeated(),
         |f, args, e| Expr {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             kind: ExprKind::Call(Box::new(f), args),
             span: e.span(),
         },

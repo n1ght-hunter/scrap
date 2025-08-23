@@ -113,7 +113,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::new(),
+                id: NodeId::from_u32(0), // TODO: use state
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }
@@ -142,7 +142,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::new(),
+                id: NodeId::from_u32(0), // TODO: use state
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }
@@ -180,7 +180,7 @@ where
                 span: e.span(),
             };
             Expr {
-                id: NodeId::new(),
+                id: NodeId::from_u32(0), // TODO: use state
                 kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
                 span: e.span(),
             }

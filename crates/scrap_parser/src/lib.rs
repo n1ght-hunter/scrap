@@ -184,7 +184,7 @@ pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<Ric
     let token_stream =
         Stream::from_iter(token_iter).map((0..content.len()).into(), |(t, s): (_, _)| (t, s));
 
-    let mut state = parser::State {};
+    let mut state = parser::State::new();
 
     let (ast, mut parse_errs) = file_parser()
         .parse_with_state(token_stream, &mut state)

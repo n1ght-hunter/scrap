@@ -30,7 +30,7 @@ where
         .then_ignore(just(Token::Assign))
         .then(inline_expr_parser())
         .map_with(|((pat, ty), expr), e| Local {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             super_: None,
             pat: Box::new(pat),
             ty,

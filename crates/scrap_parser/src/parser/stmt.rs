@@ -102,7 +102,7 @@ where
                 )
                 .map_with(|(f, args_opt), e| match args_opt {
                     Some(args) => crate::parser::expr::Expr {
-                        id: NodeId::new(),
+                        id: NodeId::from_u32(0), // TODO: use state
                         kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
                         span: e.span(),
                     },
@@ -134,7 +134,7 @@ where
         expr_without_semi,
     ))
     .map_with(|kind, e| Stmt {
-        id: NodeId::new(),
+        id: NodeId::from_u32(0), // TODO: use state
         kind,
         span: e.span(),
     })

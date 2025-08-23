@@ -30,7 +30,7 @@ where
         .ignore_then(parse_ident().labelled("struct name"))
         .then(fields)
         .map(|(name, fields)| StructDef {
-            id: NodeId::new(),
+            id: NodeId::from_u32(0), // TODO: use state
             ident: name,
             fields,
         })
