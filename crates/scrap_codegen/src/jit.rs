@@ -35,12 +35,14 @@ impl JitCompiler {
     pub fn compile_function(&mut self, func: &FnDef) -> CodegenResult<FuncId> {
         // Create the function signature
         let mut sig = self.module.make_signature();
-        
+
         // TODO: Add parameters based on function signature
         // For now, assume no parameters and return i64
         sig.returns.push(AbiParam::new(types::I64));
 
-        let func_id = self.module.declare_function(&func.ident.name, Linkage::Export, &sig)?;
+        let func_id = self
+            .module
+            .declare_function(&func.ident.name, Linkage::Export, &sig)?;
 
         // Create function context and builder
         let mut ctx = codegen::Context::new();
@@ -75,7 +77,9 @@ impl JitCompiler {
 
     /// Gets a function pointer for the given function name.
     pub fn get_function<T>(&self, name: &str) -> CodegenResult<*const T> {
-        let func_id = self.functions.get(name)
+        let func_id = self
+            .functions
+            .get(name)
             .ok_or_else(|| CodegenError::function_not_found(name))?;
 
         let ptr = self.module.get_finalized_function(*func_id);
@@ -85,7 +89,7 @@ impl JitCompiler {
     /// Executes a function with no parameters that returns an i64.
     pub fn execute_function_i64(&self, name: &str) -> CodegenResult<i64> {
         let func_ptr: *const fn() -> i64 = self.get_function(name)?;
-        
+
         // SAFETY: We trust that the function was compiled correctly
         let result = unsafe { (*func_ptr)() };
         Ok(result)

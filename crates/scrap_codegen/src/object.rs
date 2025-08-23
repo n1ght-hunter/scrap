@@ -5,7 +5,10 @@ use anyhow::Result;
 use cranelift::prelude::*;
 use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use scrap_parser::parser::{fndef::FnDef, item::{Item, ItemKind}};
+use scrap_parser::parser::{
+    fndef::FnDef,
+    item::{Item, ItemKind},
+};
 use std::collections::HashMap;
 
 /// A compiler that generates object files from Scrap programs.
@@ -43,12 +46,14 @@ impl ObjectCompiler {
     pub fn compile_function(&mut self, func: &FnDef) -> CodegenResult<FuncId> {
         // Create the function signature
         let mut sig = self.module.make_signature();
-        
+
         // TODO: Add parameters based on function signature
         // For now, assume no parameters and return i64
         sig.returns.push(AbiParam::new(types::I64));
 
-        let func_id = self.module.declare_function(&func.ident.name, Linkage::Export, &sig)?;
+        let func_id = self
+            .module
+            .declare_function(&func.ident.name, Linkage::Export, &sig)?;
 
         // Create function context and builder
         let mut ctx = codegen::Context::new();
@@ -97,7 +102,8 @@ impl ObjectCompiler {
     /// Finalizes the object file and returns the compiled bytes.
     pub fn finalize(self) -> CodegenResult<Vec<u8>> {
         let object_product = self.module.finish();
-        object_product.emit()
+        object_product
+            .emit()
             .map_err(|e| CodegenError::generic(format!("Failed to emit object file: {e}")))
     }
 

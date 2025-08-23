@@ -3,14 +3,14 @@ use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
+    ScrapInput, ScrapParser,
     expr::{Expr, inline_expr_parser},
     item::Item,
     local::{Local, parse_local},
-    ScrapParser, ScrapInput,
 };
 
 /// A statement. Following Rust AST structure exactly.
-/// 
+///
 /// No `attrs` or `tokens` fields because each `StmtKind` variant
 /// contains an AST node with those fields. (Except for `StmtKind::Empty`,
 /// which never has attrs or tokens)
@@ -69,7 +69,7 @@ where
         .map_with(|expr, e| {
             let return_expr = crate::parser::expr::Expr::new(
                 crate::parser::expr::ExprKind::Return(expr.map(Box::new)),
-                e.span()
+                e.span(),
             );
             StmtKind::Semi(Box::new(return_expr))
         })
@@ -86,10 +86,11 @@ where
         // Create a parser that includes function calls for semicolon-terminated expressions
         let expr_parser = recursive(|_expr| {
             let basic_expr = inline_expr_parser();
-            
+
             // Add function call support for semicolon-terminated statements
             let atom = basic_expr.clone();
-            let call_expr = atom.clone()
+            let call_expr = atom
+                .clone()
                 .then(
                     atom.clone()
                         .map(Box::new)
@@ -97,22 +98,20 @@ where
                         .allow_trailing()
                         .collect::<LocalVec<_>>()
                         .delimited_by(just(Token::LParen), just(Token::RParen))
-                        .or_not()
+                        .or_not(),
                 )
-                .map_with(|(f, args_opt), e| {
-                    match args_opt {
-                        Some(args) => crate::parser::expr::Expr {
-                            id: NodeId::new(),
-                            kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
-                            span: e.span(),
-                        },
-                        None => f,
-                    }
+                .map_with(|(f, args_opt), e| match args_opt {
+                    Some(args) => crate::parser::expr::Expr {
+                        id: NodeId::new(),
+                        kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
+                        span: e.span(),
+                    },
+                    None => f,
                 });
-            
+
             call_expr.or(basic_expr)
         });
-        
+
         expr_parser
             .then_ignore(expect_semicolon())
             .map(|expr| StmtKind::Semi(Box::new(expr)))

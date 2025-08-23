@@ -4,10 +4,11 @@ use scrap_lexer::Token;
 use crate::{ast::NodeId, utils::LocalVec};
 
 use super::{
+    ScrapInput, // Import our new traits
+    ScrapParser,
     field::{Field, fields},
     ident::Ident,
     parse_ident,
-    ScrapParser, ScrapInput, // Import our new traits
 };
 
 #[derive(Debug, Clone)]

@@ -1,23 +1,23 @@
 //! Inline expression parsing coordination
-//! 
+//!
 //! This module coordinates all the different expression parsers from their respective modules.
 
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{ast::NodeId, utils::LocalVec};
 use super::{
     Expr, ExprKind,
-    atom::{parenthesized_parser, atom_with_recovery},
-    call::call_parser,
+    atom::{atom_with_recovery, parenthesized_parser},
     block_expr::block_expr_parser,
+    call::call_parser,
     if_expr::if_expr_parser,
 };
-use crate::parser::binary::{product_parser, sum_parser, comparison_parser, bin_op_parser};
-use crate::parser::{lit::lit_parser, parse_ident, ScrapParser, ScrapInput};
+use crate::parser::binary::{bin_op_parser, comparison_parser, product_parser, sum_parser};
+use crate::parser::{ScrapInput, ScrapParser, lit::lit_parser, parse_ident};
+use crate::{ast::NodeId, utils::LocalVec};
 
 /// Main expression parser with full precedence handling
-/// 
+///
 /// This parser coordinates all the modular expression parsers with proper operator precedence.
 pub fn expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
@@ -27,7 +27,7 @@ where
         let inline_expr = recursive(|inline_expr| {
             // ===== ATOMIC EXPRESSIONS =====
             let paren_expr = parenthesized_parser::<I>(inline_expr.clone());
-            
+
             // Combine atoms with error recovery
             let atom = atom_with_recovery(paren_expr);
 
@@ -60,7 +60,7 @@ where
 }
 
 /// Simplified inline expression parser for simple cases
-/// 
+///
 /// This is a non-recursive parser for simple expressions that don't require
 /// the full complexity of the main parser. Used in contexts where we need
 /// basic expression parsing without deep nesting.
@@ -69,25 +69,24 @@ where
     I: ScrapInput<'tokens, 'src>,
 {
     // ===== SIMPLE ATOMIC EXPRESSIONS =====
-    
-    let lit = lit_parser()
-        .map_with(|lit, e| Expr {
-            id: NodeId::new(),
-            kind: ExprKind::Lit(lit),
-            span: e.span(),
-        });
 
-    let ident = parse_ident()
-        .map_with(|ident, e| Expr {
-            id: NodeId::new(),
-            kind: ExprKind::Path(ident.name),
-            span: e.span(),
-        });
+    let lit = lit_parser().map_with(|lit, e| Expr {
+        id: NodeId::new(),
+        kind: ExprKind::Lit(lit),
+        span: e.span(),
+    });
+
+    let ident = parse_ident().map_with(|ident, e| Expr {
+        id: NodeId::new(),
+        kind: ExprKind::Path(ident.name),
+        span: e.span(),
+    });
 
     // ===== SIMPLE BINARY EXPRESSIONS =====
     // Pattern: identifier operator literal
-    
-    let simple_binary = ident.clone()
+
+    let simple_binary = ident
+        .clone()
         .then(bin_op_parser())
         .then(lit.clone())
         .map_with(|((left, op), right), e| Expr {
@@ -98,44 +97,38 @@ where
 
     // ===== SIMPLE BLOCK HANDLING =====
     // Basic block parser that skips block contents
-    
+
     let simple_block = any()
         .filter(|t| matches!(t, Token::LBrace))
-        .ignore_then(
-            any()
-                .filter(|t| !matches!(t, Token::RBrace))
-                .repeated()
-        )
+        .ignore_then(any().filter(|t| !matches!(t, Token::RBrace)).repeated())
         .then_ignore(any().filter(|t| matches!(t, Token::RBrace)))
         .map_with(|_, e| crate::parser::block::Block {
             stmts: LocalVec::new(),
-            id: NodeId::new(), 
+            id: NodeId::new(),
             span: e.span(),
         });
 
     // ===== SIMPLE IF EXPRESSIONS =====
     // If expressions with simple blocks
-    
+
     let simple_condition = simple_binary.clone().or(lit.clone()).or(ident.clone());
-    
+
     let simple_if = just(Token::If)
         .ignore_then(simple_condition)
         .then(simple_block)
-        .then(
-            just(Token::Else)
-                .ignore_then(simple_block)
-                .or_not(),
-        )
+        .then(just(Token::Else).ignore_then(simple_block).or_not())
         .map_with(|((cond, then), else_block_opt), e| Expr {
             id: NodeId::new(),
             kind: ExprKind::If(
-                Box::new(cond), 
-                Box::new(then), 
-                else_block_opt.map(|block| Box::new(Expr {
-                    id: NodeId::new(),
-                    kind: ExprKind::Block(Box::new(block)),
-                    span: e.span(),
-                }))
+                Box::new(cond),
+                Box::new(then),
+                else_block_opt.map(|block| {
+                    Box::new(Expr {
+                        id: NodeId::new(),
+                        kind: ExprKind::Block(Box::new(block)),
+                        span: e.span(),
+                    })
+                }),
             ),
             span: e.span(),
         });

@@ -3,7 +3,7 @@ use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId};
 
-use super::{ScrapParser, ScrapInput};
+use super::{ScrapInput, ScrapParser};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident {

@@ -1,13 +1,13 @@
 //! If expressions
-//! 
+//!
 //! This module handles parsing of if-else expressions with optional else branches.
 
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{ast::NodeId, parser::block::block_parser};
 use super::{Expr, ExprKind};
-use crate::parser::{ScrapParser, ScrapInput};
+use crate::parser::{ScrapInput, ScrapParser};
+use crate::{ast::NodeId, parser::block::block_parser};
 
 /// Parse if expressions with optional else branches
 pub fn if_expr_parser<'tokens, 'src: 'tokens, I, P>(
@@ -24,22 +24,19 @@ where
             .then(
                 just(Token::Else)
                     .ignore_then(
-                        block_parser().map_with(|block, e| Expr {
-                            id: NodeId::new(),
-                            kind: ExprKind::Block(Box::new(block)),
-                            span: e.span(),
-                        })
-                        .or(if_)
+                        block_parser()
+                            .map_with(|block, e| Expr {
+                                id: NodeId::new(),
+                                kind: ExprKind::Block(Box::new(block)),
+                                span: e.span(),
+                            })
+                            .or(if_),
                     )
                     .or_not(),
             )
             .map_with(|((cond, then_block), else_opt), e| Expr {
                 id: NodeId::new(),
-                kind: ExprKind::If(
-                    Box::new(cond), 
-                    Box::new(then_block), 
-                    else_opt.map(Box::new)
-                ),
+                kind: ExprKind::If(Box::new(cond), Box::new(then_block), else_opt.map(Box::new)),
                 span: e.span(),
             })
     })

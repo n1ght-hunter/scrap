@@ -2,10 +2,11 @@ use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
 
 use super::{
+    ScrapInput, // Import our new traits
+    ScrapParser,
     enumdef::{EnumDef, enum_parser},
     fndef::{FnDef, function_parser},
     structdef::{StructDef, struct_parser},
-    ScrapParser, ScrapInput, // Import our new traits
 };
 
 #[derive(Debug, Clone)]

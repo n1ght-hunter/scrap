@@ -1,7 +1,7 @@
 use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
 
-use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
+use super::{ScrapInput, ScrapParser, ident::Ident, parse_ident};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ByRef {

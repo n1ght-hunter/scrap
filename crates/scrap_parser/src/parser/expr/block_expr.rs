@@ -1,13 +1,13 @@
 //! Block expressions
-//! 
+//!
 //! This module handles parsing of block expressions enclosed in braces.
 
 use chumsky::prelude::*;
 
-use crate::ast::NodeId;
 use super::{Expr, ExprKind};
+use crate::ast::NodeId;
 use crate::parser::block::block_parser;
-use crate::parser::{ScrapParser, ScrapInput};
+use crate::parser::{ScrapInput, ScrapParser};
 
 /// Parse block expressions
 pub fn block_expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>

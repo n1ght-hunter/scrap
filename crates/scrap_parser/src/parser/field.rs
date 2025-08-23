@@ -2,11 +2,14 @@ use std::collections::HashSet;
 
 use crate::{ast::NodeId, utils::LocalVec};
 
-use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}, ScrapParser, ScrapInput};
+use super::{
+    ScrapInput, ScrapParser,
+    ident::Ident,
+    parse_ident,
+    typedef::{Type, parse_type},
+};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
-
-
 
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -15,7 +18,6 @@ pub struct Field {
     pub ty: Type,
 }
 
-
 pub fn fields<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, LocalVec<Field>>
 where
     I: ScrapInput<'tokens, 'src>,
@@ -23,10 +25,10 @@ where
     parse_ident()
         .then_ignore(just(Token::Colon))
         .then(parse_type())
-        .map(|(ident, ty)| Field { 
+        .map(|(ident, ty)| Field {
             id: NodeId::new(),
-            ident, 
-            ty 
+            ident,
+            ty,
         })
         .separated_by(just(Token::Comma))
         .allow_trailing()

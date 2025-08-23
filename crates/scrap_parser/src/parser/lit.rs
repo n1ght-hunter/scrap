@@ -8,7 +8,7 @@ use scrap_lexer::Token;
 
 use crate::ast::NodeId;
 
-use super::{ScrapParser, ScrapInput};
+use super::{ScrapInput, ScrapParser};
 
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
@@ -41,7 +41,7 @@ pub enum TempLit {
 
 /// Literal kinds, following Rust AST enum structure.
 /// This is a simplified subset of the full Rust LitKind enum.
-/// 
+///
 /// Note that the entire literal (including the suffix) is considered when
 /// deciding the `LitKind`. This means that float literals like `1f32` are
 /// classified by this type as `Float`. This is different to `token::LitKind`
@@ -60,7 +60,7 @@ pub enum LitKind {
 }
 
 /// Parse literal values from tokens into AST nodes.
-/// 
+///
 /// This parser handles all supported literal types in our language:
 /// - Boolean literals (`true`, `false`)
 /// - Integer literals (`1`, `42`, `-5`)

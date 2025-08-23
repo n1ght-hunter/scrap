@@ -1,15 +1,16 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{ast::NodeId, utils::LocalVec, Span};
+use crate::{Span, ast::NodeId, utils::LocalVec};
 
 use super::{
+    ScrapInput, // Import our new traits
+    ScrapParser,
     block::{Block, block_parser},
     field::{Field, fields},
     ident::Ident,
     parse_ident,
     typedef::{Type, parse_type},
-    ScrapParser, ScrapInput, // Import our new traits
 };
 
 #[derive(Debug, Clone)]
@@ -34,10 +35,15 @@ where
         .ignore_then(parse_ident().labelled("function name"))
         .then(args)
         .map_with(|start, e| (start, e.span()))
-        .then(just(Token::Arrow).ignore_then(parse_type()).or_not().labelled("return type"))
+        .then(
+            just(Token::Arrow)
+                .ignore_then(parse_type())
+                .or_not()
+                .labelled("return type"),
+        )
         .then(block_parser())
-        .map_with(|((((name, args), span), ret_type), body), _| FnDef {
-            id: NodeId::new(),
+        .map_with(|((((name, args), span), ret_type), body), s| FnDef {
+            id: s.state().new_node_id(),
             ident: name,
             args,
             ret_type,

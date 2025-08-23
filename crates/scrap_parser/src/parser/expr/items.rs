@@ -1,9 +1,9 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::utils::LocalVec;
 use super::{Expr, inline::expr_parser};
-use crate::parser::{ScrapParser, ScrapInput};
+use crate::parser::{ScrapInput, ScrapParser};
+use crate::utils::LocalVec;
 
 pub fn items_parser<'tokens, 'src: 'tokens, I>()
 -> impl ScrapParser<'tokens, 'src, I, LocalVec<Expr>>

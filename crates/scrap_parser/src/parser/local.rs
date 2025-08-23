@@ -3,10 +3,10 @@ use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
+    ScrapInput, ScrapParser,
     expr::{Expr, inline_expr_parser},
     pat::{Pat, pat_parser},
     typedef::{Type, parse_type},
-    ScrapParser, ScrapInput,
 };
 
 /// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.

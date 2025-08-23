@@ -6,11 +6,50 @@ use scrap_lexer::Token;
 
 pub use ident::{capital_ident, parse_ident};
 
+type Error<'tokens, 'src> = extra::Err<Rich<'tokens, Token<'src>, Span>>;
+
+struct Ctx {}
+
+#[derive(Debug, Clone)]
+pub struct State {
+    id: u32,
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self { id: 0 }
+    }
+
+    pub fn new_node_id(&mut self) -> NodeId {
+        let id = self.id;
+        self.id += 1;
+        NodeId::from_u32(id)
+    }
+}
+
+impl<'src, I: Input<'src>> chumsky::inspector::Inspector<'src, I> for State {
+    type Checkpoint = ();
+
+    #[inline(always)]
+
+    fn on_token(&mut self, _: &<I as Input<'src>>::Token) {}
+
+    #[inline(always)]
+
+    fn on_save<'parse>(&self, _: &chumsky::input::Cursor<'src, 'parse, I>) -> Self::Checkpoint {}
+
+    #[inline(always)]
+
+    fn on_rewind<'parse>(&mut self, _: &chumsky::input::Checkpoint<'src, 'parse, I, Self::Checkpoint>) {}
+}
+
+type Extra<'tokens, 'src> = extra::Full<Rich<'tokens, Token<'src>, Span>, State, ()>;
+
 /// A trait alias to simplify the common parser signature used throughout the codebase.
 /// This encapsulates the complex return type:
 /// `Parser<'tokens, I, Output, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone`
 pub trait ScrapParser<'tokens, 'src, I, Output>:
-    Parser<'tokens, I, Output, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    Parser<'tokens, I, Output, Extra<'tokens, 'src>> + Clone
 where
     'src: 'tokens,
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
@@ -22,7 +61,7 @@ impl<'tokens, 'src, I, Output, P> ScrapParser<'tokens, 'src, I, Output> for P
 where
     'src: 'tokens,
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-    P: Parser<'tokens, I, Output, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone,
+    P: Parser<'tokens, I, Output, Extra<'tokens, 'src>> + Clone,
 {
 }
 
@@ -56,9 +95,8 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
+use crate::ast::NodeId;
 use crate::Span;
-
-
 
 /// Parse a sc file into ast
 pub fn file_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Vec<Item>>

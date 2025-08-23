@@ -3,7 +3,10 @@ use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, utils::LocalVec};
 
-use super::{stmt::{Stmt, parse_stmt}, ScrapParser, ScrapInput};
+use super::{
+    ScrapInput, ScrapParser,
+    stmt::{Stmt, parse_stmt},
+};
 
 /// A block expression. Following Rust AST structure.
 #[derive(Debug, Clone)]
@@ -21,16 +24,16 @@ where
         // Parse statements with better structure:
         // - All statements except the last must have semicolons
         // - The last statement can be an expression without semicolon (becomes block value)
-        
+
         let statements_with_semicolons = parse_stmt()
             .repeated()
             .collect::<LocalVec<_>>()
             .labelled("block contents");
-            
+
         statements_with_semicolons
             .delimited_by(
-                just(Token::LBrace).labelled("opening brace"), 
-                just(Token::RBrace).labelled("closing brace")
+                just(Token::LBrace).labelled("opening brace"),
+                just(Token::RBrace).labelled("closing brace"),
             )
             .map_with(|stmts, e| Block {
                 stmts,

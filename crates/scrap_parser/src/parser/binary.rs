@@ -1,5 +1,5 @@
 //! Binary operations and precedence handling
-//! 
+//!
 //! This module contains binary operator definitions and parsers that handle
 //! proper operator precedence according to mathematical conventions.
 //! The definitions follow the Rust AST structure exactly.
@@ -9,7 +9,7 @@ use crate::{Spanned, ast::NodeId};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use super::{ScrapParser, ScrapInput};
+use super::{ScrapInput, ScrapParser};
 
 /// A binary operator with its source location span.
 /// This matches the Rust AST pattern of wrapping operator kinds with span information.
@@ -94,13 +94,13 @@ use crate::parser::expr::{Expr, ExprKind};
 
 /// Parse multiplication and division operations (highest precedence binary ops)
 pub fn product_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
 ) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
     I: ScrapInput<'tokens, 'src>,
 {
     let mul_div_ops = just(Token::Star).or(just(Token::Slash));
-    
+
     base_parser.clone().foldl_with(
         mul_div_ops.then(base_parser).repeated(),
         |lhs, (op_token, rhs), e| {
@@ -123,13 +123,13 @@ where
 
 /// Parse addition and subtraction operations (medium precedence)
 pub fn sum_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
 ) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
     I: ScrapInput<'tokens, 'src>,
 {
     let add_sub_ops = just(Token::Plus).or(just(Token::Minus));
-    
+
     base_parser.clone().foldl_with(
         add_sub_ops.then(base_parser).repeated(),
         |lhs, (op_token, rhs), e| {
@@ -152,7 +152,7 @@ where
 
 /// Parse comparison operations (lowest precedence)
 pub fn comparison_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
 ) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
     I: ScrapInput<'tokens, 'src>,
@@ -163,7 +163,7 @@ where
         .or(just(Token::Le))
         .or(just(Token::Eq))
         .or(just(Token::Ne));
-        
+
     base_parser.clone().foldl_with(
         comparison_ops.then(base_parser).repeated(),
         |lhs, (op_token, rhs), e| {

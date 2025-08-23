@@ -1,4 +1,4 @@
-use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
+use super::{ScrapInput, ScrapParser, ident::Ident, parse_ident};
 use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
 
@@ -22,8 +22,8 @@ pub fn parse_type<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    parse_ident().map_with(|ident, _| Type { 
+    parse_ident().map_with(|ident, _| Type {
         id: NodeId::new(),
-        ident 
+        ident,
     })
 }
