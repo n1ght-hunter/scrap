@@ -1,7 +1,7 @@
 use chumsky::{input::ValueInput, prelude::*};
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId};
+use crate::{ast::NodeId, utils::LocalVec, Span};
 
 use super::{
     block::{Block, block_parser},
@@ -15,7 +15,7 @@ use super::{
 pub struct FnDef {
     pub id: NodeId,
     pub ident: Ident,
-    pub args: Vec<Field>,
+    pub args: LocalVec<Field>,
     pub ret_type: Option<Type>,
     pub body: Block,
     pub span: Span,
@@ -39,7 +39,7 @@ where
         .map_with(|((((name, args), span), ret_type), body), _| FnDef {
             id: NodeId::new(),
             ident: name,
-            args: args.into_iter().collect(),
+            args,
             ret_type,
             body,
             span,

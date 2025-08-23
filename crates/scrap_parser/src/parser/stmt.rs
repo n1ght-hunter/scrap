@@ -33,20 +33,12 @@ pub enum StmtKind {
     /// An item definition (e.g., function, struct, etc.).
     Item(Box<Item>),
     
-    /// An expression without trailing semicolon.
-    /// The expression is evaluated and its value is used.
     Expr(Box<Expr>),
     
-    /// An expression with a trailing semicolon.
-    /// The expression is evaluated but its value is discarded.
-    /// This includes return statements which must have semicolons.
+
     Semi(Box<Expr>),
-    
-    /// Just a trailing semicolon (`;`).
-    /// This is a no-op statement.
+
     Empty,
-    
-    // Note: We could add MacCall(Box<MacCallStmt>) here for macro calls in statements
 }
 
 /// Helper parser for better error messages when semicolons are expected
@@ -70,8 +62,7 @@ where
     let let_stmt = parse_local()
         .then_ignore(expect_semicolon())
         .map(|local| StmtKind::Let(Box::new(local)))
-        .labelled("let statement")
-        .as_context();
+        .labelled("let statement");
 
     // Return statements MUST have semicolons
     let return_stmt = just(Token::Return)

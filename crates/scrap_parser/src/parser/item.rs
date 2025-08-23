@@ -29,14 +29,14 @@ pub fn item_parser<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    function_parser()
-        .map(ItemKind::Fn)
-        .or(enum_parser().map(ItemKind::Enum))
-        .or(struct_parser().map(ItemKind::Struct))
-        .map_with(|kind, e| Item {
-            kind,
-            span: e.span(),
-            id: NodeId::new(),
-            // vis: Visibility::Public, // Default visibility, can be changed later
-        })
+    choice((
+        function_parser().map(ItemKind::Fn),
+        enum_parser().map(ItemKind::Enum),
+        struct_parser().map(ItemKind::Struct),
+    ))
+    .map_with(|kind, e| Item {
+        kind,
+        span: e.span(),
+        id: NodeId::new(),
+    })
 }

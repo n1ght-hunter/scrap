@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{Span, ast::NodeId};
+use crate::{ast::NodeId, utils::LocalVec, Span};
 
 use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}};
 use chumsky::{input::ValueInput, prelude::*};
@@ -17,7 +17,7 @@ pub struct Field {
 
 
 pub fn fields<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Field>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+-> impl Parser<'tokens, I, LocalVec<Field>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
@@ -31,7 +31,7 @@ where
         })
         .separated_by(just(Token::Comma))
         .allow_trailing()
-        .collect::<Vec<_>>()
+        .collect::<LocalVec<_>>()
         .validate(|args, _, emitter| {
             let mut field_name = HashSet::new();
 
