@@ -8,10 +8,13 @@ chumsky.workspace = true
 scrap_lexer.workspace = true
 ariadne.workspace = true
 thin-vec.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+rayon.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-anyhow.workspace = true
 
 [lints]
 workspace = true

@@ -65,7 +65,14 @@
 //! at <https://doc.rust-lang.org/nightly/nightly-rustc/rustc_ast/ast/index.html>, ensuring
 //! consistency and accuracy with the reference implementation.
 
-use chumsky::span::SimpleSpan;
+use std::path::Path;
+
+use anyhow::Context;
+use ariadne::{Color, Label, Report, ReportKind};
+use chumsky::{input::Stream, prelude::*};
+use parser::{file_parser, item::Item};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use scrap_lexer::{Logos, Token};
 
 pub mod ast;
 pub mod parser;
@@ -79,10 +86,118 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error<'a> {
+    #[error("IO error: {0}")]
+    Io(std::io::Error),
+    #[error("Parse error: {0}")]
+    Parse(anyhow::Error),
+    #[error("Parser errors found")]
+    Parser(Vec<Rich<'a, Token<'a>>>),
+}
+
+pub fn parse_files(
+    files: impl IntoParallelIterator<Item = impl AsRef<Path>>,
+) -> anyhow::Result<Vec<(String, Vec<Item>)>> {
+    let res = files
+        .into_par_iter()
+        .map(|file| {
+            let file = file.as_ref();
+            if !file.exists() {
+                anyhow::bail!("File does not exist: {}", file.display());
+            }
+            let content = std::fs::read_to_string(file)
+                .with_context(|| format!("Failed to read file: {}", file.display()))?;
+            let filename = file
+                .file_name()
+                .context("Failed to get file name")?
+                .to_string_lossy()
+                .into_owned();
+
+            match parse_file_str(&content) {
+                Ok(ast) => {
+                    if ast.is_none() {
+                        anyhow::bail!("No items found in file: {}", file.display());
+                    }
+
+                    Ok((filename, ast.unwrap()))
+                }
+                Err(parse_errs) => {
+                    let source = ariadne::Source::from(&content);
+                    parse_errs
+                        .into_iter()
+                        .map(|e| {
+                            Report::build(ReportKind::Error, (&filename, e.span().into_range()))
+                                .with_config(
+                                    ariadne::Config::new()
+                                        .with_index_type(ariadne::IndexType::Byte),
+                                )
+                                .with_message(e.to_string())
+                                .with_label(
+                                    Label::new((&filename, e.span().into_range()))
+                                        .with_message(e.reason().to_string())
+                                        .with_color(Color::Red),
+                                )
+                                .with_labels(e.contexts().map(|(label, span)| {
+                                    Label::new((&filename, span.into_range()))
+                                        .with_message(format!("while parsing this {label}"))
+                                        .with_color(Color::Yellow)
+                                }))
+                                .finish()
+                                .print((&filename, &source))
+                        })
+                        .inspect(|res| {
+                            if let Err(e) = res {
+                                tracing::error!("Failed to report parse errors: {}", e);
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .context("Failed to report parse errors")?;
+
+                    anyhow::bail!("Failed to parse file: {}", file.display());
+                }
+            }
+        })
+        .inspect(|res| {
+            if let Err(e) = res {
+                tracing::error!("Failed to parse file: {}", e);
+            }
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(res)
+}
+
+pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<Rich<'a, Token<'a>>>> {
+    let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
+        (Vec::new(), Vec::new()),
+        |(mut tokens, mut token_errors), (new_tok, new_span)| {
+            let span = SimpleSpan::from(new_span);
+            match new_tok {
+                Ok(new_tok) => tokens.push((new_tok, span)),
+                Err(e) => token_errors.push(Rich::<Token, _>::custom(span, e.to_string())),
+            }
+            (tokens, token_errors)
+        },
+    );
+
+    let token_stream =
+        Stream::from_iter(token_iter).map((0..content.len()).into(), |(t, s): (_, _)| (t, s));
+
+    let (ast, mut parse_errs) = file_parser().parse(token_stream).into_output_errors();
+
+    if parse_errs.is_empty() && lex_errs.is_empty() {
+        return Ok(ast);
+    }
+
+    parse_errs.append(&mut lex_errs);
+
+    Err(parse_errs)
+}
+
 #[cfg(test)]
 mod tests {
-    use ariadne::{Color, Label, Report, ReportKind};
-    use chumsky::{input::Stream, prelude::*};
+    use super::*;
     use scrap_lexer::{Logos, Token};
 
     use crate::parser::file_parser;
@@ -246,85 +361,21 @@ mod tests {
         ids
     }
 
-    fn parse(src: &str, filename: &str, skip_output: bool) -> anyhow::Result<()> {
-        let (token_iter, lex_errs) = scrap_lexer::Token::lexer(src).spanned().fold(
-            (Vec::new(), Vec::new()),
-            |(mut tokens, mut token_errors), (new_tok, new_span)| {
-                let span = SimpleSpan::from(new_span);
-                match new_tok {
-                    // Turn the `Range<usize>` spans logos gives us into chumsky's `SimpleSpan` via `Into`, because it's easier
-                    // to work with
-                    Ok(new_tok) => tokens.push((new_tok, span)),
-                    Err(e) => token_errors.push(Rich::<Token, _>::custom(span, e.to_string())),
-                }
-
-                (tokens, token_errors)
-            },
-        );
-
-        // Turn the token iterator into a stream that chumsky can use for things like backtracking
-        let token_stream = Stream::from_iter(token_iter)
-            // Tell chumsky to split the (Token, SimpleSpan) stream into its parts so that it can handle the spans for us
-            // This involves giving chumsky an 'end of input' span: we just use a zero-width span at the end of the string
-            .map((0..src.len()).into(), |(t, s): (_, _)| (t, s));
-
-        let (_ast, parse_errs) = file_parser().parse(token_stream).into_output_errors();
-
-        if parse_errs.is_empty() && lex_errs.is_empty() {
-            return Ok(());
-        }
-
-        if skip_output {
-            return Ok(());
-        }
-
-        parse_errs
-            .into_iter()
-            .map(|e| e.map_token(|c| c.to_string()))
-            .chain(
-                lex_errs
-                    .into_iter()
-                    .map(|e| e.map_token(|tok| tok.to_string())),
-            )
-            .for_each(|e| {
-                Report::build(ReportKind::Error, (filename, e.span().into_range()))
-                    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-                    .with_message(e.to_string())
-                    .with_label(
-                        Label::new((filename, e.span().into_range()))
-                            .with_message(e.reason().to_string())
-                            .with_color(Color::Red),
-                    )
-                    .with_labels(e.contexts().map(|(label, span)| {
-                        Label::new((filename, span.into_range()))
-                            .with_message(format!("while parsing this {label}"))
-                            .with_color(Color::Yellow)
-                    }))
-                    .finish()
-                    .print((filename, ariadne::Source::from(src)))
-                    .unwrap()
-            });
-
-        return Err(anyhow::anyhow!("parse error"));
-    }
-
     #[test]
     fn parse_basic_function() -> anyhow::Result<()> {
         let filename = "basic.sc";
-        let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
-        parse(&src, filename, false)
+        parse_files([format!("../../example/{}", filename)])?;
+        Ok(())
     }
 
     #[test]
-    fn test_ast() -> anyhow::Result<()> {
-        let filename = "test.sc";
+    fn test_ast() {
         let src = TEST_AST;
-        parse(&src, filename, false)
+        parse_file_str(&src).unwrap();
     }
 
     #[test]
-    fn test_return_statements() -> anyhow::Result<()> {
-        let filename = "test_return.sc";
+    fn test_return_statements() {
         let src = r#"
         fn test_return() -> i32 {
             return 42;
@@ -345,36 +396,30 @@ mod tests {
             let x = 5;
         }
         "#;
-        parse(&src, filename, false)
+        parse_file_str(&src).unwrap();
     }
 
     #[test]
     fn test_simple_return_functionality() -> anyhow::Result<()> {
         let filename = "simple_return_test.sc";
         let src = std::fs::read_to_string(format!("../../example/{}", filename))?;
-        parse(&src, filename, false)
+        parse_file_str(&src).unwrap();
+        Ok(())
     }
 
     #[test]
     fn test_return_requires_semicolon() {
-        let filename = "test_return_no_semicolon.sc";
         let src = r#"
         fn test_return_no_semicolon() -> i32 {
             return 42
         }
         "#;
 
-        // This should fail because return statement lacks semicolon
-        let result = parse(&src, filename, true);
-        assert!(
-            result.is_err(),
-            "Expected parse error for return statement without semicolon"
-        );
+        parse_file_str(&src).unwrap_err();
     }
 
     #[test]
-    fn test_return_with_semicolon_works() -> anyhow::Result<()> {
-        let filename = "test_return_with_semicolon.sc";
+    fn test_return_with_semicolon_works() {
         let src = r#"
         fn test_return_with_semicolon() -> i32 {
             return 42;
@@ -385,13 +430,11 @@ mod tests {
         }
         "#;
 
-        // This should pass because return statements have semicolons
-        parse(&src, filename, false)
+        parse_file_str(&src).unwrap();
     }
 
     #[test]
     fn test_missing_semicolon_error_quality() {
-        let filename = "test_missing_semicolon.sc";
         let src = r#"
         fn foo(a: f64, b: f64) -> f64 {
             let c = if a > 1.0 {
@@ -403,18 +446,7 @@ mod tests {
         }
         "#;
 
-        println!("Testing this source code:");
-        println!("{}", src);
-
-        // Let's see what happens when we parse this
-        let result = parse(&src, filename, false);
-
-        if result.is_err() {
-            println!("✓ Parse correctly failed with error");
-        } else {
-            println!("✗ Parse unexpectedly succeeded - this should be an error!");
-            panic!("Expected parse error for missing semicolon");
-        }
+        parse_file_str(&src).unwrap_err();
     }
 
     #[test]
@@ -427,7 +459,7 @@ mod tests {
         }
         "#;
 
-        let result1 = parse(&test1, "test1.sc", false);
+        let result1 = parse_file_str(&test1);
         assert!(
             result1.is_err(),
             "Expected error for missing semicolon after simple let"
@@ -441,7 +473,7 @@ mod tests {
         }
         "#;
 
-        let result2 = parse(&test2, "test2.sc", false);
+        let result2 = parse_file_str(&test2);
         assert!(
             result2.is_err(),
             "Expected error for missing semicolon after function call"
@@ -454,7 +486,7 @@ mod tests {
         }
         "#;
 
-        let result3 = parse(&test3, "test3.sc", false);
+        let result3 = parse_file_str(&test3);
         assert!(
             result3.is_err(),
             "Expected error for missing semicolon after return"
@@ -487,7 +519,7 @@ mod tests {
         ];
 
         for (i, test_case) in correct_cases.iter().enumerate() {
-            let result = parse(test_case, &format!("correct_{}.sc", i), true);
+            let result = parse_file_str(test_case);
             assert!(
                 result.is_ok(),
                 "Expected successful parse for correct case {}",
