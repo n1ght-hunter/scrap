@@ -4,8 +4,6 @@
 //! following the structure and patterns of the official Rust AST.
 //! These types serve as the foundation for all other AST nodes.
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
 /// A symbol is an interned string. Symbols are cheap to compare and copy.
 /// In a full implementation, this would be backed by an interner for performance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,17 +13,20 @@ pub struct Symbol(pub u32);
 /// to track and reference specific nodes during analysis and compilation.
 /// Every AST node that can be referenced has a unique NodeId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeId(pub u32);
+pub struct NodeId {
+    id: u32,
+    file_hash: u64,
+}
 
 impl NodeId {
     /// Get the raw ID value (useful for debugging and serialization)
     pub fn as_u32(self) -> u32 {
-        self.0
+        self.id
     }
 
     /// Create a NodeId from a raw u32 value (should only be used for deserialization)
-    pub fn from_u32(id: u32) -> Self {
-        NodeId(id)
+    pub fn new(id: u32, file_hash: u64) -> Self {
+        NodeId { id, file_hash }
     }
 }
 

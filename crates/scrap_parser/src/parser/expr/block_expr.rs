@@ -16,7 +16,7 @@ where
 {
     block_parser()
         .map_with(|block, e| Expr {
-            id: NodeId::from_u32(0), // TODO: use state
+            id: e.state().new_node_id(),
             kind: ExprKind::Block(Box::new(block)),
             span: e.span(),
         })

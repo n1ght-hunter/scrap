@@ -11,17 +11,19 @@ struct Ctx {}
 #[derive(Debug, Clone)]
 pub struct State {
     id: u32,
+    file_hash: u64,
 }
 
 impl State {
-    pub fn new() -> Self {
-        Self { id: 0 }
+    pub fn new(file_name: &str) -> Self {
+        let file_hash = wyhash::wyhash(file_name.as_bytes(), 0);
+        Self { id: 0, file_hash }
     }
 
     pub fn new_node_id(&mut self) -> NodeId {
         let id = self.id;
         self.id += 1;
-        NodeId::from_u32(id)
+        NodeId::new(id, self.file_hash)
     }
 }
 
