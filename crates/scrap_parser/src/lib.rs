@@ -71,7 +71,7 @@ use anyhow::Context;
 use ariadne::{Color, Label, Report, ReportKind};
 use chumsky::{input::Stream, prelude::*};
 use parser::{file_parser, item::Item};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use scrap_lexer::{Logos, Token};
 
 pub mod ast;
@@ -200,7 +200,7 @@ mod tests {
     use super::*;
     use scrap_lexer::{Logos, Token};
 
-    use crate::parser::file_parser;
+    
 
     const TEST_AST: &str = r#"
     fn foo(a: f64, b: f64) -> f64 {

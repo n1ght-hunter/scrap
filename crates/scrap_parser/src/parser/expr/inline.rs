@@ -5,7 +5,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId, utils::LocalVec};
+use crate::{ast::NodeId, utils::LocalVec};
 use super::{
     Expr, ExprKind,
     atom::{parenthesized_parser, atom_with_recovery},

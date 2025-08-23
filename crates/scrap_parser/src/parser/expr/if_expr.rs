@@ -5,7 +5,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId, parser::block::block_parser};
+use crate::{ast::NodeId, parser::block::block_parser};
 use super::{Expr, ExprKind};
 use crate::parser::{ScrapParser, ScrapInput};
 

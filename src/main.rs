@@ -1,4 +1,3 @@
-use scrap_codegen::{jit::JitCompiler, object::ObjectCompiler};
 
 fn setup_logging() {
     tracing_subscriber::fmt()

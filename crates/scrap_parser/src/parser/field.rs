@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{ast::NodeId, utils::LocalVec, Span};
+use crate::{ast::NodeId, utils::LocalVec};
 
 use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}, ScrapParser, ScrapInput};
 use chumsky::prelude::*;

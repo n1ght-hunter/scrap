@@ -1,6 +1,5 @@
 use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
-use scrap_lexer::Token;
 
 use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
 

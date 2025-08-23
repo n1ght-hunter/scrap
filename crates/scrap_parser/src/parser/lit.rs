@@ -6,7 +6,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId};
+use crate::ast::NodeId;
 
 use super::{ScrapParser, ScrapInput};
 

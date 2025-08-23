@@ -1,7 +1,6 @@
 use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
 use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
-use scrap_lexer::Token;
 
 #[derive(Debug, Clone)]
 pub struct Ty {

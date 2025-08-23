@@ -4,7 +4,7 @@
 //! proper operator precedence according to mathematical conventions.
 //! The definitions follow the Rust AST structure exactly.
 
-use crate::{Span, Spanned, ast::NodeId};
+use crate::{Spanned, ast::NodeId};
 
 use chumsky::prelude::*;
 use scrap_lexer::Token;

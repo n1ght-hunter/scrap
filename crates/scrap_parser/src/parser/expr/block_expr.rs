@@ -3,7 +3,6 @@
 //! This module handles parsing of block expressions enclosed in braces.
 
 use chumsky::prelude::*;
-use scrap_lexer::Token;
 
 use crate::ast::NodeId;
 use super::{Expr, ExprKind};
