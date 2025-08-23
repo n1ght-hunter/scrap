@@ -1,0 +1,8 @@
+[jobs.nextest]
+command = [
+    "cargo", "nextest", "run",
+    "--hide-progress-bar", "--failure-output", "final"
+]
+need_stdout = true
+analyzer = "nextest"
+watch = ["tests/**/*.sc"]
