@@ -3,10 +3,12 @@
 //! This module handles the parsing and representation of literal values in the language.
 //! The types follow the Rust AST structure for representing literals.
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId};
+
+use super::{ScrapParser, ScrapInput};
 
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
@@ -67,10 +69,9 @@ pub enum LitKind {
 ///
 /// The parser extracts the value from the token and creates the appropriate
 /// `Lit` node with the correct `LitKind` and `TempLit` representation.
-pub fn lit_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Lit, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn lit_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Lit>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     select! {
         Token::Bool(value) => Lit {

@@ -1,13 +1,14 @@
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, utils::LocalVec};
+use crate::utils::LocalVec;
 use super::{Expr, inline::expr_parser};
+use crate::parser::{ScrapParser, ScrapInput};
 
 pub fn items_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, LocalVec<Expr>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+-> impl ScrapParser<'tokens, 'src, I, LocalVec<Expr>>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     expr_parser()
         .separated_by(just(Token::Comma))

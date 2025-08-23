@@ -2,7 +2,7 @@
 //! 
 //! This module coordinates all the different expression parsers from their respective modules.
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, utils::LocalVec};
@@ -14,15 +14,14 @@ use super::{
     if_expr::if_expr_parser,
 };
 use crate::parser::binary::{product_parser, sum_parser, comparison_parser, bin_op_parser};
-use crate::parser::{lit::lit_parser, parse_ident};
+use crate::parser::{lit::lit_parser, parse_ident, ScrapParser, ScrapInput};
 
 /// Main expression parser with full precedence handling
 /// 
 /// This parser coordinates all the modular expression parsers with proper operator precedence.
-pub fn expr_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     recursive(|_expr| {
         let inline_expr = recursive(|inline_expr| {
@@ -65,10 +64,9 @@ where
 /// This is a non-recursive parser for simple expressions that don't require
 /// the full complexity of the main parser. Used in contexts where we need
 /// basic expression parsing without deep nesting.
-pub fn inline_expr_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn inline_expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     // ===== SIMPLE ATOMIC EXPRESSIONS =====
     

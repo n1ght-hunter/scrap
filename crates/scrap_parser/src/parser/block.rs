@@ -1,9 +1,9 @@
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, utils::LocalVec};
 
-use super::stmt::{Stmt, parse_stmt};
+use super::{stmt::{Stmt, parse_stmt}, ScrapParser, ScrapInput};
 
 /// A block expression. Following Rust AST structure.
 #[derive(Debug, Clone)]
@@ -13,10 +13,9 @@ pub struct Block {
     pub span: Span,
 }
 
-pub fn block_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Block, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn block_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Block>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     recursive(|_block| {
         // Parse statements with better structure:

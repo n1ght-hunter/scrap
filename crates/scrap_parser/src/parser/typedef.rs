@@ -1,6 +1,6 @@
-use super::{ident::Ident, parse_ident};
+use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
 use crate::{Span, ast::NodeId};
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 #[derive(Debug, Clone)]
@@ -19,10 +19,9 @@ pub struct Type {
     pub ident: Ident,
 }
 
-pub fn parse_type<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Type, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn parse_type<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Type>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     parse_ident().map_with(|ident, _| Type { 
         id: NodeId::new(),

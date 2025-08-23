@@ -1,11 +1,12 @@
 use crate::{Span, ast::NodeId, utils::LocalVec};
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
     expr::{Expr, inline_expr_parser},
     item::Item,
     local::{Local, parse_local},
+    ScrapParser, ScrapInput,
 };
 
 /// A statement. Following Rust AST structure exactly.
@@ -27,25 +28,23 @@ pub struct Stmt {
 /// This is a subset of the full Rust StmtKind enum.
 #[derive(Debug, Clone)]
 pub enum StmtKind {
-    /// A local (let) binding (e.g., `let x = 5;`).
+    /// A local (let) binding (e.g., `let <pat>:<ty> = <expr>;`).
     Let(Box<Local>),
-    
+
     /// An item definition (e.g., function, struct, etc.).
     Item(Box<Item>),
-    
+    /// Expr without trailing semi-colon.
     Expr(Box<Expr>),
-    
-
+    /// Expr with a trailing semi-colon.
     Semi(Box<Expr>),
-
+    /// Just a trailing semi-colon.
     Empty,
 }
 
 /// Helper parser for better error messages when semicolons are expected
-fn expect_semicolon<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, (), extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+fn expect_semicolon<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, ()>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     just(Token::Semicolon)
         .ignored()
@@ -53,10 +52,9 @@ where
         .as_context()
 }
 
-pub fn parse_stmt<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Stmt, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn parse_stmt<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Stmt>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     // Let statements MUST have semicolons
     let let_stmt = parse_local()

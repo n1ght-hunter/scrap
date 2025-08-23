@@ -6,8 +6,10 @@
 
 use crate::{Span, Spanned, ast::NodeId};
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
+
+use super::{ScrapParser, ScrapInput};
 
 /// A binary operator with its source location span.
 /// This matches the Rust AST pattern of wrapping operator kinds with span information.
@@ -56,10 +58,9 @@ pub enum BinOpKind {
 }
 
 /// Basic binary operator parser
-pub fn bin_op_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, BinOp, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn bin_op_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, BinOp>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let op = choice((
         just(Token::Plus).to(BinOpKind::Add),
@@ -93,10 +94,10 @@ use crate::parser::expr::{Expr, ExprKind};
 
 /// Parse multiplication and division operations (highest precedence binary ops)
 pub fn product_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let mul_div_ops = just(Token::Star).or(just(Token::Slash));
     
@@ -122,10 +123,10 @@ where
 
 /// Parse addition and subtraction operations (medium precedence)
 pub fn sum_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let add_sub_ops = just(Token::Plus).or(just(Token::Minus));
     
@@ -151,10 +152,10 @@ where
 
 /// Parse comparison operations (lowest precedence)
 pub fn comparison_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let comparison_ops = just(Token::Gt)
         .or(just(Token::Lt))

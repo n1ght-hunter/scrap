@@ -3,19 +3,20 @@
 //! This module handles parsing of function calls with arguments.
 //! Function calls have the highest precedence among binary operations.
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId, utils::LocalVec};
+use crate::{ast::NodeId, utils::LocalVec};
 use super::{Expr, ExprKind};
+use crate::parser::{ScrapParser, ScrapInput};
 
 /// Parse function call expressions
 pub fn call_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone,
-    arg_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
+    arg_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     base_parser.foldl_with(
         arg_parser

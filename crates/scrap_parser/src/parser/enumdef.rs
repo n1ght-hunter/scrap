@@ -1,9 +1,9 @@
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId};
 
-use super::{capital_ident, field::Field, ident::Ident, typedef::parse_type};
+use super::{capital_ident, field::Field, ident::Ident, typedef::parse_type, ScrapParser, ScrapInput};
 
 #[derive(Debug, Clone)]
 pub enum EnumVariant {
@@ -18,10 +18,9 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariant>,
 }
 
-pub fn enum_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, EnumDef, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn enum_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, EnumDef>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let err_msg = "Enum variant name must start with an uppercase letter";
 

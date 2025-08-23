@@ -1,11 +1,12 @@
 use crate::{Span, ast::NodeId};
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
     expr::{Expr, inline_expr_parser},
     pat::{Pat, pat_parser},
     typedef::{Type, parse_type},
+    ScrapParser, ScrapInput,
 };
 
 /// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.
@@ -15,25 +16,13 @@ pub struct Local {
     pub super_: Option<Span>,
     pub pat: Box<Pat>,
     pub ty: Option<Type>,
-    pub kind: LocalKind,
+    pub expr: Box<Expr>,
     pub span: Span,
-    pub colon_sp: Option<Span>,
 }
 
-#[derive(Debug, Clone)]
-pub enum LocalKind {
-    /// Local declaration.
-    /// Example: `let x;`
-    Decl,
-    /// Local declaration with an initializer.
-    /// Example: `let x = y;`
-    Init(Expr),
-}
-
-pub fn parse_local<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Local, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn parse_local<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Local>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     just(Token::Let)
         .ignore_then(pat_parser())
@@ -45,8 +34,7 @@ where
             super_: None,
             pat: Box::new(pat),
             ty,
-            kind: LocalKind::Init(expr),
+            expr: Box::new(expr),
             span: e.span(),
-            colon_sp: None,
         })
 }

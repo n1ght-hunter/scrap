@@ -1,4 +1,4 @@
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{ast::NodeId, utils::LocalVec, Span};
@@ -9,6 +9,7 @@ use super::{
     ident::Ident,
     parse_ident,
     typedef::{Type, parse_type},
+    ScrapParser, ScrapInput, // Import our new traits
 };
 
 #[derive(Debug, Clone)]
@@ -21,10 +22,9 @@ pub struct FnDef {
     pub span: Span,
 }
 
-pub fn function_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, FnDef, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn function_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, FnDef>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     let args = fields()
         .delimited_by(just(Token::LParen), just(Token::RParen))

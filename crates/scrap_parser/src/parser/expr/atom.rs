@@ -4,18 +4,17 @@
 //! literals, identifiers, paths, and parenthesized expressions.
 //! These are the fundamental atomic units that cannot be decomposed further.
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, utils::LocalVec};
 use super::{Expr, ExprKind};
-use crate::parser::{lit::lit_parser, parse_ident};
+use crate::parser::{lit::lit_parser, parse_ident, ScrapParser, ScrapInput};
 
 /// Parse atomic literals
-pub fn literal_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn literal_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     lit_parser()
         .map_with(|lit, e| Expr {
@@ -27,10 +26,9 @@ where
 }
 
 /// Parse identifier expressions
-pub fn identifier_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn identifier_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     parse_ident()
         .map_with(|ident, e| Expr {
@@ -43,10 +41,10 @@ where
 
 /// Parse array expressions
 pub fn array_parser<'tokens, 'src: 'tokens, I>(
-    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    expr_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     expr_parser
         .map(Box::new)
@@ -64,10 +62,10 @@ where
 
 /// Parse parenthesized expressions (creates Paren variant)
 pub fn parenthesized_parser<'tokens, 'src: 'tokens, I>(
-    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    expr_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     expr_parser
         .delimited_by(just(Token::LParen), just(Token::RParen))
@@ -81,10 +79,10 @@ where
 
 /// Parse return expressions
 pub fn return_parser<'tokens, 'src: 'tokens, I>(
-    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    expr_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     just(Token::Return)
         .ignore_then(expr_parser.or_not())
@@ -98,10 +96,10 @@ where
 
 /// Parse atomic expressions with error recovery
 pub fn atom_with_recovery<'tokens, 'src: 'tokens, I>(
-    expr_parser: impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+    expr_parser: impl ScrapParser<'tokens, 'src, I, Expr>
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     choice((
         literal_parser(),

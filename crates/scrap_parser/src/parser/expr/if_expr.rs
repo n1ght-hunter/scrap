@@ -2,19 +2,20 @@
 //! 
 //! This module handles parsing of if-else expressions with optional else branches.
 
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, parser::block::block_parser};
 use super::{Expr, ExprKind};
+use crate::parser::{ScrapParser, ScrapInput};
 
 /// Parse if expressions with optional else branches
 pub fn if_expr_parser<'tokens, 'src: 'tokens, I, P>(
     condition_parser: P,
-) -> impl Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-    P: Parser<'tokens, I, Expr, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone + 'tokens,
+    I: ScrapInput<'tokens, 'src>,
+    P: ScrapParser<'tokens, 'src, I, Expr> + 'tokens,
 {
     recursive(|if_| {
         just(Token::If)

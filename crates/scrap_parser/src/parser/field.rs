@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use crate::{ast::NodeId, utils::LocalVec, Span};
 
-use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}};
-use chumsky::{input::ValueInput, prelude::*};
+use super::{ident::Ident, parse_ident, typedef::{parse_type, Type}, ScrapParser, ScrapInput};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 
@@ -16,10 +16,9 @@ pub struct Field {
 }
 
 
-pub fn fields<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, LocalVec<Field>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn fields<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, LocalVec<Field>>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     parse_ident()
         .then_ignore(just(Token::Colon))

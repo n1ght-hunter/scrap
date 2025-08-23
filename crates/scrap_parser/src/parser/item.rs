@@ -1,11 +1,11 @@
 use crate::{Span, ast::NodeId};
-use chumsky::{input::ValueInput, prelude::*};
-use scrap_lexer::Token;
+use chumsky::prelude::*;
 
 use super::{
     enumdef::{EnumDef, enum_parser},
     fndef::{FnDef, function_parser},
     structdef::{StructDef, struct_parser},
+    ScrapParser, ScrapInput, // Import our new traits
 };
 
 #[derive(Debug, Clone)]
@@ -24,10 +24,9 @@ pub enum ItemKind {
 }
 
 /// Parse a sc file into ast
-pub fn item_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Item, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn item_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Item>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     choice((
         function_parser().map(ItemKind::Fn),

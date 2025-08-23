@@ -1,8 +1,8 @@
 use crate::{Span, ast::NodeId};
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use super::{ident::Ident, parse_ident};
+use super::{ident::Ident, parse_ident, ScrapParser, ScrapInput};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ByRef {
@@ -37,10 +37,9 @@ pub struct Pat {
     pub span: Span,
 }
 
-pub fn pat_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Pat, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn pat_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Pat>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     recursive(|_| {
         parse_ident().map_with(|ident, e| Pat {

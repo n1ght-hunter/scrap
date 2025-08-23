@@ -1,7 +1,9 @@
-use chumsky::{input::ValueInput, prelude::*};
+use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId};
+
+use super::{ScrapParser, ScrapInput};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident {
@@ -10,10 +12,9 @@ pub struct Ident {
     pub span: Span,
 }
 
-pub fn parse_ident<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Ident, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+pub fn parse_ident<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Ident>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     select! {
         Token::Ident(s) => s,
@@ -27,9 +28,9 @@ where
 
 pub fn capital_ident<'tokens, 'src: 'tokens, I>(
     err_msg: &'static str,
-) -> impl Parser<'tokens, I, Ident, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+) -> impl ScrapParser<'tokens, 'src, I, Ident>
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ScrapInput<'tokens, 'src>,
 {
     parse_ident().validate(move |id, _, emitter| {
         if !id.name.chars().next().unwrap().is_uppercase() {
