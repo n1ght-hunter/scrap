@@ -41,31 +41,18 @@ pub enum StmtKind {
     Empty,
 }
 
-/// Helper parser for better error messages when semicolons are expected
-fn expect_semicolon<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, ()>
-where
-    I: ScrapInput<'tokens, 'src>,
-{
-    just(Token::Semicolon)
-        .ignored()
-        .labelled("semicolon")
-        .as_context()
-}
-
 pub fn parse_stmt<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Stmt>
 where
     I: ScrapInput<'tokens, 'src>,
 {
     // Let statements MUST have semicolons
     let let_stmt = parse_local()
-        .then_ignore(expect_semicolon())
         .map(|local| StmtKind::Let(Box::new(local)))
         .labelled("let statement");
 
     // Return statements MUST have semicolons
     let return_stmt = just(Token::Return)
         .ignore_then(inline_expr_parser().or_not())
-        .then_ignore(expect_semicolon())
         .map_with(|expr, e| {
             let return_expr = crate::parser::expr::Expr {
                 id: e.state().new_node_id(),
@@ -76,11 +63,6 @@ where
         })
         .labelled("return statement")
         .as_context();
-
-    // Empty statements (just semicolons)
-    let empty_stmt = just(Token::Semicolon)
-        .map(|_| StmtKind::Empty)
-        .labelled("empty statement");
 
     // Expressions with semicolons (discarded values)
     let expr_with_semi = {
@@ -114,25 +96,17 @@ where
         });
 
         expr_parser
-            .then_ignore(expect_semicolon())
             .map(|expr| StmtKind::Semi(Box::new(expr)))
             .labelled("expression statement")
             .as_context()
     };
 
-    // Expressions without semicolons - only valid as last statement in a block
-    // This should have lowest priority to avoid consuming let statements
-    let expr_without_semi = inline_expr_parser()
-        .map(|expr| StmtKind::Expr(Box::new(expr)))
-        .labelled("tail expression");
-
     // Try statements in order - put let_stmt first so it doesn't get consumed as expr_without_semi
     choice((
         let_stmt,
         return_stmt,
-        empty_stmt,
         expr_with_semi,
-        expr_without_semi,
+        inline_expr_parser().map(|expr| StmtKind::Expr(Box::new(expr))),
     ))
     .map_with(|kind, e| Stmt {
         id: e.state().new_node_id(),

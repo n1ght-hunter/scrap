@@ -4,8 +4,7 @@ use scrap_lexer::Token;
 use crate::{ast::NodeId, utils::LocalVec};
 
 use super::{
-    ScrapInput, // Import our new traits
-    ScrapParser,
+    ScrapInput, ScrapParser, capital_ident,
     field::{Field, fields},
     ident::Ident,
     parse_ident,
@@ -22,12 +21,15 @@ pub fn struct_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, '
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let fields = fields()
+    let fields = fields(true)
         .delimited_by(just(Token::LBrace), just(Token::RBrace))
         .labelled("struct fields");
 
     just(Token::Struct)
-        .ignore_then(parse_ident().labelled("struct name"))
+        .ignore_then(
+            capital_ident("Struct name must start with an uppercase letter")
+                .labelled("struct name"),
+        )
         .then(fields)
         .map_with(|(name, fields), e| StructDef {
             id: e.state().new_node_id(),

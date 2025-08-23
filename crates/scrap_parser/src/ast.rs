@@ -31,6 +31,9 @@ impl NodeId {
 
     /// Create a special invalid NodeId for error recovery cases
     pub fn invalid() -> Self {
-        NodeId { id: u32::MAX, file_hash: 0 }
+        NodeId {
+            id: u32::MAX,
+            file_hash: 0,
+        }
     }
 }

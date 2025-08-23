@@ -27,7 +27,7 @@ pub fn function_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens,
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let args = fields()
+    let args = fields(false)
         .delimited_by(just(Token::LParen), just(Token::RParen))
         .labelled("function args");
 

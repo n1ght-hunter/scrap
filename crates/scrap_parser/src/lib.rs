@@ -146,8 +146,9 @@ pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<Ric
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
-    use scrap_lexer::{Logos, Token};
 
     const TEST_AST: &str = r#"
     fn foo(a: f64, b: f64) -> f64 {
@@ -178,6 +179,21 @@ mod tests {
     fn parse_basic_function() -> anyhow::Result<()> {
         let filename = "basic.sc";
         parse_files([format!("../../example/{}", filename)])?;
+        Ok(())
+    }
+
+    #[test]
+    fn allfiles() -> anyhow::Result<()> {
+        let dir = PathBuf::from("../../tests");
+        let mut files = Vec::new();
+        for entry in dir.read_dir()? {
+            let entry = entry?;
+            if entry.path().is_file() {
+                files.push(entry.path());
+            }
+        }
+        let _adsf = parse_files(files)?;
+
         Ok(())
     }
 

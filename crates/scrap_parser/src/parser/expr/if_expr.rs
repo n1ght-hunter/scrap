@@ -6,8 +6,8 @@ use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{Expr, ExprKind};
-use crate::parser::{ScrapInput, ScrapParser};
 use crate::parser::block::block_parser;
+use crate::parser::{ScrapInput, ScrapParser};
 
 /// Parse if expressions with optional else branches
 pub fn if_expr_parser<'tokens, 'src: 'tokens, I, P>(

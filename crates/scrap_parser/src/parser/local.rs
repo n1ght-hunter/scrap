@@ -29,6 +29,8 @@ where
         .then(just(Token::Colon).ignore_then(parse_type()).or_not())
         .then_ignore(just(Token::Assign))
         .then(inline_expr_parser())
+        .map(|(s, expr)| (s, expr))
+        .then_ignore(just(Token::Semicolon))
         .map_with(|((pat, ty), expr), e| Local {
             id: e.state().new_node_id(),
             super_: None,

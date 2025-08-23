@@ -40,11 +40,9 @@ pub fn pat_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    recursive(|_| {
-        parse_ident().map_with(|ident, e| Pat {
-            id: e.state().new_node_id(),
-            kind: PatKind::Ident(BindingMode(ByRef::No, Mutability::Not), ident, None),
-            span: e.span(),
-        })
+    parse_ident().map_with(|ident, e| Pat {
+        id: e.state().new_node_id(),
+        kind: PatKind::Ident(BindingMode(ByRef::No, Mutability::Not), ident, None),
+        span: e.span(),
     })
 }

@@ -6,7 +6,6 @@ use scrap_lexer::Token;
 
 pub use ident::{capital_ident, parse_ident};
 
-
 #[derive(Debug, Clone)]
 pub struct State {
     id: u32,
