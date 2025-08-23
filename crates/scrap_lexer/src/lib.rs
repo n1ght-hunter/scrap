@@ -1,19 +1,15 @@
 pub use logos::Logos;
+use scrap_macros::expand_tokens;
 
 use crate::error::LexingError;
 
 pub mod error;
 
-#[derive(Logos, Debug, PartialEq, Clone)]
-#[logos(error(LexingError, LexingError::from_lexer))]
-pub enum Token<'a> {
-    // ██╗  ██╗███████╗██╗   ██╗    ██╗    ██╗ ██████╗ ██████╗ ██████╗ ███████╗
-    // ██║ ██╔╝██╔════╝╚██╗ ██╔╝    ██║    ██║██╔═══██╗██╔══██╗██╔══██╗██╔════╝
-    // █████╔╝ █████╗   ╚████╔╝     ██║ █╗ ██║██║   ██║██████╔╝██║  ██║███████╗
-    // ██╔═██╗ ██╔══╝    ╚██╔╝      ██║███╗██║██║   ██║██╔══██╗██║  ██║╚════██║
-    // ██║  ██╗███████╗   ██║       ╚███╔███╔╝╚██████╔╝██║  ██║██████╔╝███████║
-    // ╚═╝  ╚═╝╚══════╝   ╚═╝        ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝
-    #[token("enum")]
+expand_tokens! {
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum KeyWords {
+   #[token("enum")]
     Enum,
     #[token("struct")]
     Struct,
@@ -27,17 +23,13 @@ pub enum Token<'a> {
     Else,
     #[token("return")]
     Return,
+}
 
-    // ██╗     ██╗████████╗███████╗██████╗  █████╗ ██╗     ███████╗
-    // ██║     ██║╚══██╔══╝██╔════╝██╔══██╗██╔══██╗██║     ██╔════╝
-    // ██║     ██║   ██║   █████╗  ██████╔╝███████║██║     ███████╗
-    // ██║     ██║   ██║   ██╔══╝  ██╔══██╗██╔══██║██║     ╚════██║
-    // ███████╗██║   ██║   ███████╗██║  ██║██║  ██║███████╗███████║
-    // ╚══════╝╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝
+#[derive(Debug, PartialEq, Clone)]
+pub enum Literals<'a> {
     #[regex(r#""(\\.|[^"\\])*""#)]
     Str(&'a str),
 
-    // Floating-point literals (must contain a decimal point)
     #[regex(r"[0-9]+\.[0-9]*", |lex| lex.slice().parse::<f64>().unwrap())]
     Float(f64),
 
@@ -48,16 +40,13 @@ pub enum Token<'a> {
     #[token("true", |_| true)]
     Bool(bool),
 
-    // Identifiers (captures variable names, type names, etc.)
+
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'a str),
+}
 
-    // ██████╗ ██████╗ ███████╗██████╗  █████╗ ████████╗ ██████╗ ██████╗ ███████╗
-    // ██╔═══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
-    // ██║   ██║██████╔╝█████╗  ██████╔╝███████║   ██║   ██║   ██║██████╔╝███████╗
-    // ██║   ██║██╔═══╝ ██╔══╝  ██╔══██╗██╔══██║   ██║   ██║   ██║██╔══██╗╚════██║
-    // ╚██████╔╝██║     ███████╗██║  ██║██║  ██║   ██║   ╚██████╔╝██║  ██║███████║
-    //  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+#[derive(Debug, PartialEq, Clone)]
+pub enum Operators {
     #[token("->")]
     Arrow,
     #[token("=")]
@@ -98,13 +87,10 @@ pub enum Token<'a> {
     Ge,
     #[token(">")]
     Gt,
+}
 
-    // ██████╗ ██╗   ██╗███╗   ██╗ ██████╗████████╗██╗   ██╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
-    // ██╔══██╗██║   ██║████╗  ██║██╔════╝╚══██╔══╝██║   ██║██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
-    // ██████╔╝██║   ██║██╔██╗ ██║██║        ██║   ██║   ██║███████║   ██║   ██║██║   ██║██╔██╗ ██║
-    // ██╔═══╝ ██║   ██║██║╚██╗██║██║        ██║   ██║   ██║██╔══██║   ██║   ██║██║   ██║██║╚██╗██║
-    // ██║     ╚██████╔╝██║ ╚████║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   ██║╚██████╔╝██║ ╚████║
-    // ╚═╝      ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
+#[derive(Debug, PartialEq, Clone)]
+pub enum Delimiters {
     #[token("(")]
     LParen,
     #[token(")")]
@@ -123,7 +109,11 @@ pub enum Token<'a> {
     Colon,
     #[token(";")]
     Semicolon,
+}
 
+#[derive(Logos, Debug, PartialEq, Clone)]
+#[logos(error(LexingError, LexingError::from_lexer))]
+pub enum Token<'a> {
     // Skip whitespace
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
@@ -131,6 +121,8 @@ pub enum Token<'a> {
     // Skip comments
     #[regex(r"//[^\r\n]*", logos::skip)]
     Comment,
+}
+
 }
 
 impl<'a> std::fmt::Display for Token<'a> {

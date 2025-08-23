@@ -8,8 +8,7 @@ scrap_codegen.workspace = true
 scrap_parser.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
-tracing-subscriber = {workspace = true, features = ["env-filter"] }
-
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 
 [workspace]
@@ -25,6 +24,7 @@ edition = "2024"
 scrap_parser = { path = "crates/scrap_parser" }
 scrap_lexer = { path = "crates/scrap_lexer" }
 scrap_codegen = { path = "crates/scrap_codegen" }
+scrap_macros = { path = "crates/scrap_macros" }
 
 
 thiserror = "2"
@@ -50,6 +50,11 @@ ariadne = "0.5.1"
 
 # Lexer 
 logos = "0.15.1"
+
+# macros
+syn = "2.0.106"
+proc-macro2 = "1.0.101"
+quote = "1.0.40"
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
