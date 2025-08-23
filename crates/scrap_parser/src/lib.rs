@@ -2,68 +2,13 @@
 //!
 //! A parser for the Scrap programming language that generates an Abstract Syntax Tree (AST)
 //! following the exact structure and patterns of the official Rust AST.
-//!
-//! ## Design Philosophy
-//!
-//! This parser is designed to be a **subset** of the Rust AST, meaning:
-//! - All AST node structures exactly match their Rust counterparts
-//! - Field names, types, and semantics follow Rust conventions
-//! - Comments are taken directly from the official Rust documentation
-//! - Only essential features are included (no macros, attributes, complex generics)
-//!
-//! ## Key Features
-//!
-//! ### Expression System
-//! - **Literals**: Integers, floats, strings, booleans
-//! - **Binary Operations**: Arithmetic (`+`, `-`, `*`, `/`), comparisons (`==`, `<`, etc.)
-//! - **Function Calls**: Full argument parsing with proper precedence
-//! - **Control Flow**: If-else expressions, block expressions
-//! - **Collections**: Array literals (`[1, 2, 3]`)
-//! - **Parentheses**: Precedence override with `(expr)`
-//!
-//! ### Statement System
-//! - **Let Bindings**: Variable declarations (`let x = 5;`)
-//! - **Expression Statements**: Both with and without semicolons
-//! - **Item Definitions**: Functions, structs (planned)
-//!
-//! ### Parser Architecture
-//! - **Modular Design**: Separate modules for expressions, statements, literals
-//! - **Error Recovery**: Graceful handling of syntax errors
-//! - **Precedence Handling**: Correct operator precedence following mathematical conventions
-//! - **Chumsky Framework**: Built on the Chumsky parser combinator library
-//!
-//! ## AST Structure Compliance
-//!
-//! The AST structures in this crate are direct subsets of the Rust AST:
-//!
-//! ```rust,ignore
-//! // Our Expr matches rustc_ast::ast::Expr exactly:
-//! pub struct Expr {
-//!     pub id: NodeId,      // ✓ Same as Rust
-//!     pub kind: ExprKind,  // ✓ Same as Rust  
-//!     pub span: Span,      // ✓ Same as Rust
-//!     // attrs and tokens omitted for simplicity
-//! }
-//!
-//! // Our ExprKind is a subset of rustc_ast::ast::ExprKind:
-//! pub enum ExprKind {
-//!     Array(LocalVec<Box<Expr>>),                    // ✓ ThinVec -> LocalVec
-//!     Call(Box<Expr>, LocalVec<Box<Expr>>),          // ✓ Exact match
-//!     Binary(BinOp, Box<Expr>, Box<Expr>),           // ✓ Exact match
-//!     Lit(Lit),                                      // ✓ Exact match
-//!     If(Box<Expr>, Box<Block>, Option<Box<Expr>>),  // ✓ Exact match
-//!     Block(Box<Block>),                             // ✓ Simplified (no Label)
-//!     Path(String),                                  // ✓ Simplified Path
-//!     Paren(Box<Expr>),                              // ✓ Exact match
-//!     Err,                                           // ✓ Simplified ErrorGuaranteed
-//! }
-//! ```
-//!
-//! ## Documentation Source
-//!
-//! All comments and documentation are taken directly from the official Rust AST documentation
-//! at <https://doc.rust-lang.org/nightly/nightly-rustc/rustc_ast/ast/index.html>, ensuring
-//! consistency and accuracy with the reference implementation.
+#![feature(
+    allocator_api,
+    try_blocks,
+    gen_blocks,
+    default_field_values,
+    negative_impls
+)]
 
 use std::path::Path;
 
