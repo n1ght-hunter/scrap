@@ -45,21 +45,17 @@ pub enum Literals<'a> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Operators {
-    #[token("->")]
-    Arrow,
-    #[token("=")]
-    Assign,
+pub enum BinaryOperators {
     #[token("+")]
-    Plus,
+    Add,
     #[token("-")]
-    Minus,
+    Sub,
     #[token("*")]
-    Star,
+    Mul,
     #[token("/")]
-    Slash,
+    Div,
     #[token("%")]
-    Percent,
+    Rem,
     #[token("&&")]
     And,
     #[token("||")]
@@ -86,6 +82,42 @@ pub enum Operators {
     Ge,
     #[token(">")]
     Gt,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum AssignOps {
+    #[token("+=")]
+    AddAssign,
+    #[token("-=")]
+    SubAssign,
+    #[token("*=")]
+    MulAssign,
+    #[token("/=")]
+    DivAssign,
+    #[token("%=")]
+    RemAssign,
+    #[token("&&=")]
+    AndAssign,
+    #[token("||=")]
+    OrAssign,
+    #[token("^=")]
+    BitXorAssign,
+    #[token("&=")]
+    BitAndAssign,
+    #[token("|=")]
+    BitOrAssign,
+    #[token("<<=")]
+    ShlAssign,
+    #[token(">>=")]
+    ShrAssign,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Operators {
+    #[token("->")]
+    Arrow,
+    #[token("=")]
+    Assign,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -122,6 +154,9 @@ pub enum Token<'a> {
     #[regex(r"//[^\r\n]*", logos::skip)]
     #[display("<comment>")]
     Comment,
+    #[regex(r"///[^\r\n]*", logos::skip)]
+    #[display("<doc_comment>")]
+    DocComment,
 }
 
 }
