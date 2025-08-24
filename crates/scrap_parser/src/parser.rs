@@ -45,7 +45,7 @@ impl<'src, I: Input<'src>> chumsky::inspector::Inspector<'src, I> for State {
     }
 }
 
-type Extra<'tokens, 'src> = extra::Full<Rich<'tokens, Token<'src>, Span>, State, ()>;
+type Extra<'tokens, 'src> = extra::Full<ParseError<'tokens, Token<'src>, Span>, State, ()>;
 
 /// A trait alias to simplify the common parser signature used throughout the codebase.
 /// This encapsulates the complex return type:
@@ -97,6 +97,7 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
+use crate::parse_error::ParseError;
 use crate::Span;
 use crate::ast::NodeId;
 

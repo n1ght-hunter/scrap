@@ -24,13 +24,16 @@ pub fn parse_local<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'sr
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    just(Token::Let)
+    let without_semi = just(Token::Let)
         .ignore_then(pat_parser())
         .then(just(Token::Colon).ignore_then(parse_type()).or_not())
         .then_ignore(just(Token::Assign))
-        .then(inline_expr_parser())
-        .map(|(s, expr)| (s, expr))
+        .then(inline_expr_parser());
+
+    without_semi
+        .clone()
         .then_ignore(just(Token::Semicolon))
+        .recover_with(via_parser(without_semi))
         .map_with(|((pat, ty), expr), e| Local {
             id: e.state().new_node_id(),
             super_: None,

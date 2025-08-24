@@ -1,7 +1,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{Span, ast::NodeId};
+use crate::{ast::NodeId, parse_error::ParseError, Span};
 
 use super::{ScrapInput, ScrapParser};
 
@@ -25,7 +25,7 @@ where
             '_,
             '_,
             I,
-            extra::Full<Rich<'tokens, Token<'src>>, crate::parser::State, ()>,
+            extra::Full<ParseError<'tokens, Token<'src>>, crate::parser::State, ()>,
         >| Ident {
             id: e.state().new_node_id(),
             name: s.to_string(),
@@ -42,7 +42,7 @@ where
 {
     parse_ident().validate(move |id, _, emitter| {
         if !id.name.chars().next().unwrap().is_uppercase() {
-            emitter.emit(Rich::custom(id.span, err_msg));
+            emitter.emit(ParseError::custom(id.span, err_msg));
         }
 
         id

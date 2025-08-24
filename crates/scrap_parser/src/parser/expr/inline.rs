@@ -45,7 +45,7 @@ where
 
         // ===== CONTROL FLOW EXPRESSIONS =====
         let block = block_expr_parser();
-        let if_expr = if_expr_parser(inline_expr.clone());
+        let if_expr = if_expr_parser(false);
 
         // Combine all expression types
         let block_expr = block.or(if_expr);

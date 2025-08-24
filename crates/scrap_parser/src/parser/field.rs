@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{ast::NodeId, utils::LocalVec};
+use crate::{ast::NodeId, parse_error::ParseError, utils::LocalVec};
 
 use super::{
     ScrapInput, ScrapParser,
@@ -41,7 +41,7 @@ where
 
             args.iter().for_each(|field| {
                 if !field_name.insert(&field.ident.name) {
-                    emitter.emit(Rich::custom(
+                    emitter.emit(ParseError::custom(
                         field.ident.span,
                         format!("duplicate identifier '{}'", field.ident.name),
                     ));
@@ -50,12 +50,12 @@ where
                     && first_char.is_uppercase()
                 {
                     if uppcase_error {
-                        emitter.emit(Rich::custom(
+                        emitter.emit(ParseError::custom(
                             field.ident.span,
                             "Field name must start with a lowercase letter",
                         ));
                     } else {
-                        emitter.emit(Rich::custom(
+                        emitter.emit(ParseError::custom(
                             field.ident.span,
                             "Field name must start with a lowercase letter",
                         ));

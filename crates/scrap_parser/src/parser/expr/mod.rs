@@ -43,7 +43,6 @@ pub mod block_expr;
 pub mod call;
 pub mod if_expr;
 pub mod inline;
-pub mod items;
 
 // Re-export the main parser functions
 pub use atom::{
@@ -51,9 +50,7 @@ pub use atom::{
 };
 pub use block_expr::block_expr_parser;
 pub use call::call_parser;
-pub use if_expr::if_expr_parser;
 pub use inline::{expr_parser, inline_expr_parser};
-pub use items::items_parser;
 
 // Re-export binary operations from parent module
 pub use super::binary::{bin_op_parser, comparison_parser, product_parser, sum_parser};

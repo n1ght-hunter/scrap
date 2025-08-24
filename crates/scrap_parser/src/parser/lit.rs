@@ -6,7 +6,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::ast::NodeId;
+use crate::{ast::NodeId, parse_error::ParseError};
 
 use super::{ScrapInput, ScrapParser};
 
@@ -85,7 +85,7 @@ where
             '_,
             '_,
             I,
-            extra::Full<Rich<'tokens, Token<'src>>, crate::parser::State, ()>,
+            extra::Full<ParseError<'tokens, Token<'src>>, crate::parser::State, ()>,
         >| Lit {
             id: e.state().new_node_id(),
             kind,

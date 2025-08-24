@@ -7,7 +7,6 @@ use super::{
     ScrapInput, ScrapParser, capital_ident,
     field::{Field, fields},
     ident::Ident,
-    parse_ident,
 };
 
 #[derive(Debug, Clone)]

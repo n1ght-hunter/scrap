@@ -15,6 +15,7 @@ use std::path::Path;
 use anyhow::Context;
 use ariadne::{Color, Label, Report, ReportKind};
 use chumsky::{input::Stream, prelude::*};
+use parse_error::ParseError;
 use parser::{file_parser, item::Item};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use scrap_lexer::{Logos, Token};
@@ -22,6 +23,7 @@ use scrap_lexer::{Logos, Token};
 pub mod ast;
 pub mod parser;
 pub mod utils;
+mod parse_error;
 
 pub type Span = SimpleSpan;
 
@@ -113,14 +115,14 @@ pub fn parse_files(
     Ok(res)
 }
 
-pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<Rich<'a, Token<'a>>>> {
+pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token<'a>>>> {
     let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
         (Vec::new(), Vec::new()),
         |(mut tokens, mut token_errors), (new_tok, new_span)| {
             let span = SimpleSpan::from(new_span);
             match new_tok {
                 Ok(new_tok) => tokens.push((new_tok, span)),
-                Err(e) => token_errors.push(Rich::<Token, _>::custom(span, e.to_string())),
+                Err(e) => token_errors.push(ParseError::<Token, _>::custom(span, e.to_string())),
             }
             (tokens, token_errors)
         },
