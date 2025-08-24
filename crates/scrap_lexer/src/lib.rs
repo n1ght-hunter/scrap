@@ -40,7 +40,6 @@ pub enum Literals<'a> {
     #[token("true", |_| true)]
     Bool(bool),
 
-
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'a str),
 }
@@ -116,72 +115,15 @@ pub enum Delimiters {
 pub enum Token<'a> {
     // Skip whitespace
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
+    #[display("<whitespace>")]
     Whitespace,
 
     // Skip comments
     #[regex(r"//[^\r\n]*", logos::skip)]
+    #[display("<comment>")]
     Comment,
 }
 
-}
-
-impl<'a> std::fmt::Display for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            // Keywords
-            Token::Enum => write!(f, "enum"),
-            Token::Struct => write!(f, "struct"),
-            Token::Fn => write!(f, "fn"),
-            Token::Let => write!(f, "let"),
-            Token::If => write!(f, "if"),
-            Token::Else => write!(f, "else"),
-            Token::Return => write!(f, "return"),
-
-            // Literals and Identifiers that carry their own string slice
-            Token::Str(s) => write!(f, "{s}"),
-            Token::Int(s) => write!(f, "{s}"),
-            Token::Float(s) => write!(f, "{s}"),
-            Token::Ident(s) => write!(f, "{s}"),
-            Token::Bool(b) => write!(f, "{b}"),
-
-            // Operators
-            Token::Arrow => write!(f, "->"),
-            Token::Assign => write!(f, "="),
-            Token::Plus => write!(f, "+"),
-            Token::Minus => write!(f, "-"),
-            Token::Star => write!(f, "*"),
-            Token::Slash => write!(f, "/"),
-            Token::Percent => write!(f, "%"),
-            Token::And => write!(f, "&&"),
-            Token::Or => write!(f, "||"),
-            Token::BitXor => write!(f, "^"),
-            Token::BitAnd => write!(f, "&"),
-            Token::BitOr => write!(f, "|"),
-            Token::Shl => write!(f, "<<"),
-            Token::Shr => write!(f, ">>"),
-            Token::Eq => write!(f, "=="),
-            Token::Lt => write!(f, "<"),
-            Token::Le => write!(f, "<="),
-            Token::Ne => write!(f, "!="),
-            Token::Ge => write!(f, ">="),
-            Token::Gt => write!(f, ">"),
-
-            // Punctuation
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::LBrace => write!(f, "{{"), // Double braces to escape in format string
-            Token::RBrace => write!(f, "}}"), // Double braces to escape in format string
-            Token::LBracket => write!(f, "["),
-            Token::RBracket => write!(f, "]"),
-            Token::Comma => write!(f, ","),
-            Token::Colon => write!(f, ":"),
-            Token::Semicolon => write!(f, ";"),
-
-            // Whitespace is skipped, but we must handle it for an exhaustive match
-            Token::Whitespace => write!(f, "<whitespace>"),
-            Token::Comment => write!(f, "<comment>"),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -190,7 +132,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let file = std::fs::read_to_string("../../example/basic.sc").unwrap();
+        let file = std::fs::read_to_string("../../tests/basic.sc").unwrap();
 
         let mut lexer = Token::lexer(&file);
 
