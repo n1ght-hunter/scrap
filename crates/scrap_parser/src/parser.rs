@@ -82,7 +82,6 @@ where
 {
 }
 
-pub mod binary;
 pub mod block;
 pub mod enumdef;
 pub mod expr;
@@ -92,6 +91,7 @@ pub mod ident;
 pub mod item;
 pub mod lit;
 pub mod local;
+pub mod operators;
 pub mod pat;
 pub mod stmt;
 pub mod structdef;

@@ -5,7 +5,7 @@ use scrap_lexer::Token;
 use crate::{ast::NodeId, parse_error::ParseError, utils::LocalVec};
 
 use super::{
-    ScrapInput, ScrapParser, 
+    ScrapInput, ScrapParser,
     field::{Field, fields},
     ident::Ident,
     parse_ident,
@@ -29,7 +29,11 @@ where
                     // Maybe should be a hard error
                     emmiter.emit(crate::parse_error::ParseError::custom_with_kind(
                         field.ident.span,
-                        format!("fields should be in snake_case: {} -> {}", field.ident.name, field.ident.name.to_snake_case()),
+                        format!(
+                            "fields should be in snake_case: {} -> {}",
+                            field.ident.name,
+                            field.ident.name.to_snake_case()
+                        ),
                         crate::parse_error::kind::ReportKind::Warning,
                     ));
                 }
@@ -46,7 +50,11 @@ where
                     if !id.name.is_pascal_case() {
                         emitter.emit(ParseError::custom(
                             id.span,
-                            format!("Struct name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                            format!(
+                                "Struct name must be in PascalCase: {} -> {}",
+                                id.name,
+                                id.name.to_pascal_case()
+                            ),
                         ));
                     }
 

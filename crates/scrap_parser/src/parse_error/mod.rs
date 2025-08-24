@@ -48,7 +48,6 @@ impl<'a, T, S> ParseError<'a, T, S> {
         self.kind = kind;
         self
     }
-
 }
 
 impl<'a, T, S> ParseError<'a, T, S> {
@@ -145,10 +144,10 @@ impl<'a, T, S> ParseError<'a, T, S> {
         ParseError {
             reason: Box::new(self.reason.map_token(&mut f)),
             context: self
-            .context
-            .into_iter()
-            .map(|(p, s)| (p.map_token(&mut f), s))
-            .collect(),
+                .context
+                .into_iter()
+                .map(|(p, s)| (p.map_token(&mut f), s))
+                .collect(),
             span: self.span,
             kind: self.kind,
             help: self.help,

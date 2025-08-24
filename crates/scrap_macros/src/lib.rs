@@ -122,9 +122,9 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
             const REMOVE_ATTRS: &[&str] = &["token", "display", "regex"];
             for variant in &mut item.variants {
                 // Remove ALL attributes as they're processed separately
-                variant.attrs.retain(|attr| {
-                    REMOVE_ATTRS.iter().all(|&id| !attr.path().is_ident(id))
-                });
+                variant
+                    .attrs
+                    .retain(|attr| REMOVE_ATTRS.iter().all(|&id| !attr.path().is_ident(id)));
             }
             item
         })

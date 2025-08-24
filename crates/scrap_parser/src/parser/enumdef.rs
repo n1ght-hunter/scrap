@@ -30,7 +30,11 @@ where
             if !id.name.is_pascal_case() {
                 emitter.emit(ParseError::custom(
                     id.span,
-                    format!("Enum variant name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                    format!(
+                        "Enum variant name must be in PascalCase: {} -> {}",
+                        id.name,
+                        id.name.to_pascal_case()
+                    ),
                 ));
             }
 
@@ -63,7 +67,11 @@ where
                     if !id.name.is_pascal_case() {
                         emitter.emit(ParseError::custom(
                             id.span,
-                            format!("Enum name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                            format!(
+                                "Enum name must be in PascalCase: {} -> {}",
+                                id.name,
+                                id.name.to_pascal_case()
+                            ),
                         ));
                     }
 

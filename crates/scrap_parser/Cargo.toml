@@ -14,6 +14,7 @@ rayon.workspace = true
 tracing.workspace = true
 wyhash.workspace = true
 inflections.workspace = true
+bitflags.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

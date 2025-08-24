@@ -1,4 +1,4 @@
-use crate::{Span, ast::NodeId, utils::LocalVec};
+use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
@@ -65,41 +65,10 @@ where
         .as_context();
 
     // Expressions with semicolons (discarded values)
-    let expr_with_semi = {
-        // Create a parser that includes function calls for semicolon-terminated expressions
-        let expr_parser = recursive(|_expr| {
-            let basic_expr = inline_expr_parser();
-
-            // Add function call support for semicolon-terminated statements
-            let atom = basic_expr.clone();
-            let call_expr = atom
-                .clone()
-                .then(
-                    atom.clone()
-                        .map(Box::new)
-                        .separated_by(just(Token::Comma))
-                        .allow_trailing()
-                        .collect::<LocalVec<_>>()
-                        .delimited_by(just(Token::LParen), just(Token::RParen))
-                        .or_not(),
-                )
-                .map_with(|(f, args_opt), e| match args_opt {
-                    Some(args) => crate::parser::expr::Expr {
-                        id: e.state().new_node_id(),
-                        kind: crate::parser::expr::ExprKind::Call(Box::new(f), args),
-                        span: e.span(),
-                    },
-                    None => f,
-                });
-
-            call_expr.or(basic_expr)
-        });
-
-        expr_parser
-            .map(|expr| StmtKind::Semi(Box::new(expr)))
-            .labelled("expression statement")
-            .as_context()
-    };
+    let expr_with_semi = inline_expr_parser()
+        .map(|expr| StmtKind::Semi(Box::new(expr)))
+        .labelled("expression statement")
+        .as_context();
 
     // Try statements in order - put let_stmt first so it doesn't get consumed as expr_without_semi
     choice((

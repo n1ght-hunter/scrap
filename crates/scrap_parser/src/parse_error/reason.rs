@@ -162,7 +162,6 @@ where
     }
 }
 
-
 fn write_token<T>(
     f: &mut fmt::Formatter,
     mut fmt_token: impl FnMut(&T, &mut fmt::Formatter<'_>) -> fmt::Result,

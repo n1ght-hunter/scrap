@@ -1,10 +1,10 @@
-use crate::{Span, ast::NodeId, parse_error::ParseError};
+use crate::{Span, ast::NodeId};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
     ScrapInput, ScrapParser,
-    expr::{Expr, inline_expr_parser},
+    expr::{Expr, expr_parser},
     pat::{Pat, pat_parser},
     typedef::{Type, parse_type},
 };
@@ -24,16 +24,12 @@ pub fn parse_local<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'sr
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let parser = just(Token::Let)
+    just(Token::Let)
         .ignore_then(pat_parser())
         .then(just(Token::Colon).ignore_then(parse_type()).or_not())
         .then_ignore(just(Token::Assign))
-        .then(inline_expr_parser().labelled("local expression"));
-
-    parser
-        .clone()
+        .then(expr_parser())
         .then_ignore(just(Token::Semicolon))
-        .recover_with(via_parser(parser))
         .map_with(|((pat, ty), expr), e| Local {
             id: e.state().new_node_id(),
             super_: None,

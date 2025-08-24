@@ -1,9 +1,12 @@
 use std::{borrow::Cow, fmt};
 
-use chumsky::{input::StrInput, text::{self, Char}, util::MaybeRef, DefaultExpected};
+use chumsky::{
+    DefaultExpected,
+    input::StrInput,
+    text::{self, Char},
+    util::MaybeRef,
+};
 use tracing::warn;
-
-
 
 /// An expected pattern for a [`Rich`] error.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -32,7 +35,7 @@ impl<'a, T> From<DefaultExpected<'a, T>> for Pattern<'a, T> {
             _ => {
                 warn!(target: "scrap_parser", "Unexpected pattern in DefaultExpected");
                 Self::SomethingElse
-            },
+            }
         }
     }
 }
@@ -55,7 +58,7 @@ where
             _ => {
                 warn!(target: "scrap_parser", "Unexpected pattern in TextExpected");
                 Self::SomethingElse
-            },
+            }
         }
     }
 }
