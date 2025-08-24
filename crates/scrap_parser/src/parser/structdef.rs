@@ -1,12 +1,14 @@
 use chumsky::prelude::*;
+use inflections::Inflect;
 use scrap_lexer::Token;
 
-use crate::{ast::NodeId, utils::LocalVec};
+use crate::{ast::NodeId, parse_error::ParseError, utils::LocalVec};
 
 use super::{
-    ScrapInput, ScrapParser, capital_ident,
+    ScrapInput, ScrapParser, 
     field::{Field, fields},
     ident::Ident,
+    parse_ident,
 };
 
 #[derive(Debug, Clone)]
@@ -20,13 +22,36 @@ pub fn struct_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, '
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let fields = fields(true)
+    let fields = fields()
+        .validate(|fields, _, emmiter| {
+            for field in fields.iter() {
+                if !field.ident.name.is_snake_case() {
+                    // Maybe should be a hard error
+                    emmiter.emit(crate::parse_error::ParseError::custom_with_kind(
+                        field.ident.span,
+                        format!("fields should be in snake_case: {} -> {}", field.ident.name, field.ident.name.to_snake_case()),
+                        crate::parse_error::kind::ReportKind::Warning,
+                    ));
+                }
+            }
+            fields
+        })
         .delimited_by(just(Token::LBrace), just(Token::RBrace))
         .labelled("struct fields");
 
     just(Token::Struct)
         .ignore_then(
-            capital_ident("Struct name must start with an uppercase letter")
+            parse_ident()
+                .validate(move |id, _, emitter| {
+                    if !id.name.is_pascal_case() {
+                        emitter.emit(ParseError::custom(
+                            id.span,
+                            format!("Struct name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                        ));
+                    }
+
+                    id
+                })
                 .labelled("struct name"),
         )
         .then(fields)

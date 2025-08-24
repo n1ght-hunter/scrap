@@ -2,9 +2,9 @@ pub mod kind;
 pub mod pattern;
 pub mod reason;
 
-use std::fmt;
+use std::{fmt, path::Path};
 
-use ariadne::{Color, Label};
+use ariadne::Label;
 use chumsky::{input::Input, span::Span, util::MaybeRef};
 use kind::ReportKind;
 use pattern::Pattern;
@@ -13,6 +13,7 @@ use reason::Reason;
 pub struct ParseError<'a, T, S = crate::Span> {
     span: S,
     kind: ReportKind,
+    help: Option<String>,
     reason: Box<Reason<'a, T>>,
     context: Vec<(Pattern<'a, T>, S)>,
 }
@@ -36,6 +37,21 @@ impl<T, S> ParseError<'_, T, S> {
 }
 
 impl<'a, T, S> ParseError<'a, T, S> {
+    /// Set the help message for this error.
+    fn with_help(mut self, msg: impl Into<String>) -> Self {
+        self.help = Some(msg.into());
+        self
+    }
+
+    /// Set the kind of this error.
+    pub fn with_kind(mut self, kind: ReportKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+}
+
+impl<'a, T, S> ParseError<'a, T, S> {
     /// Create an error with a custom message and span
     #[inline]
     pub fn custom<M: ToString>(span: S, msg: M) -> Self {
@@ -44,6 +60,7 @@ impl<'a, T, S> ParseError<'a, T, S> {
             reason: Box::new(Reason::Custom(msg.to_string())),
             context: Vec::new(),
             kind: ReportKind::Error,
+            help: None,
         }
     }
 
@@ -54,6 +71,7 @@ impl<'a, T, S> ParseError<'a, T, S> {
             reason: Box::new(Reason::Custom(msg.to_string())),
             context: Vec::new(),
             kind,
+            help: None,
         }
     }
 
@@ -77,6 +95,11 @@ impl<'a, T, S> ParseError<'a, T, S> {
     /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
     pub fn found(&self) -> Option<&T> {
         self.reason.found()
+    }
+
+    /// Get the help message associated with this error.
+    pub fn help(&self) -> Option<&str> {
+        self.help.as_deref()
     }
 
     /// Return an iterator over the labelled contexts of this error, from least general to most.
@@ -120,14 +143,15 @@ impl<'a, T, S> ParseError<'a, T, S> {
         T: Clone,
     {
         ParseError {
-            span: self.span,
             reason: Box::new(self.reason.map_token(&mut f)),
             context: self
-                .context
-                .into_iter()
-                .map(|(p, s)| (p.map_token(&mut f), s))
-                .collect(),
+            .context
+            .into_iter()
+            .map(|(p, s)| (p.map_token(&mut f), s))
+            .collect(),
+            span: self.span,
             kind: self.kind,
+            help: self.help,
         }
     }
 }
@@ -139,25 +163,30 @@ where
 {
     pub fn print(
         &self,
-        filename: &str,
-        source: ariadne::Source<&String>,
+        filename: impl AsRef<Path>,
+        source: &ariadne::Source<&String>,
     ) -> Result<(), std::io::Error> {
+        let filename = &filename.as_ref().to_string_lossy().to_string();
         let span = Span::start(self.span())..=Span::end(self.span());
-        ariadne::Report::build(self.kind.into(), (filename, span.clone()))
+        let mut error = ariadne::Report::build(self.kind.into(), (filename, span.clone()))
             .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
             .with_message(self.to_string())
             .with_label(
                 Label::new((filename, span))
                     .with_message(self.reason().to_string())
-                    .with_color(Color::Red),
+                    .with_color(self.kind.color()),
             )
             .with_labels(self.contexts().map(|(label, span)| {
                 Label::new((filename, (Span::start(span)..=Span::end(span))))
                     .with_message(format!("while parsing this {label}"))
-                    .with_color(Color::Yellow)
-            }))
-            .finish()
-            .print((filename, source))
+                    .with_color(self.kind.color())
+            }));
+
+        if let Some(help) = self.help() {
+            error = error.with_help(help);
+        }
+
+        error.finish().print((filename, source))
     }
 }
 
@@ -173,6 +202,7 @@ where
             reason: Box::new(new_reason),
             context: self.context,
             kind: self.kind,
+            help: self.help,
         }
     }
 }
@@ -196,6 +226,7 @@ where
             }),
             context: Vec::new(),
             kind: ReportKind::Error,
+            help: None,
         }
     }
 
@@ -255,7 +286,7 @@ where
                 expected.clear();
                 expected.push(label.into());
             }
-            Reason::Custom(msg) => {
+            Reason::Custom(_) => {
                 self.reason = Box::new(Reason::ExpectedFound {
                     expected: vec![label.into()],
                     found: self.reason.take_found(),

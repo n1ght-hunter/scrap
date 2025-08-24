@@ -19,9 +19,7 @@ pub struct Field {
 }
 
 /// will emit an warn or error fi the field name starts with uppcase
-pub fn fields<'tokens, 'src: 'tokens, I>(
-    uppcase_error: bool,
-) -> impl ScrapParser<'tokens, 'src, I, LocalVec<Field>>
+pub fn fields<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, LocalVec<Field>>
 where
     I: ScrapInput<'tokens, 'src>,
 {
@@ -45,21 +43,6 @@ where
                         field.ident.span,
                         format!("duplicate identifier '{}'", field.ident.name),
                     ));
-                }
-                if let Some(first_char) = field.ident.name.chars().next()
-                    && first_char.is_uppercase()
-                {
-                    if uppcase_error {
-                        emitter.emit(ParseError::custom(
-                            field.ident.span,
-                            "Field name must start with a lowercase letter",
-                        ));
-                    } else {
-                        emitter.emit(ParseError::custom(
-                            field.ident.span,
-                            "Field name must start with a lowercase letter",
-                        ));
-                    }
                 }
             });
             args

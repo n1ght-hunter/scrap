@@ -1,7 +1,7 @@
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
-use crate::{ast::NodeId, parse_error::ParseError, Span};
+use crate::{Span, ast::NodeId, parse_error::ParseError};
 
 use super::{ScrapInput, ScrapParser};
 
@@ -32,19 +32,4 @@ where
             span: e.span(),
         },
     )
-}
-
-pub fn capital_ident<'tokens, 'src: 'tokens, I>(
-    err_msg: &'static str,
-) -> impl ScrapParser<'tokens, 'src, I, Ident>
-where
-    I: ScrapInput<'tokens, 'src>,
-{
-    parse_ident().validate(move |id, _, emitter| {
-        if !id.name.chars().next().unwrap().is_uppercase() {
-            emitter.emit(ParseError::custom(id.span, err_msg));
-        }
-
-        id
-    })
 }

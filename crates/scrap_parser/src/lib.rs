@@ -13,7 +13,6 @@
 use std::path::Path;
 
 use anyhow::Context;
-use ariadne::{Color, Label, Report, ReportKind};
 use chumsky::{input::Stream, prelude::*};
 use parse_error::ParseError;
 use parser::{file_parser, item::Item};
@@ -21,9 +20,9 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use scrap_lexer::{Logos, Token};
 
 pub mod ast;
+mod parse_error;
 pub mod parser;
 pub mod utils;
-mod parse_error;
 
 pub type Span = SimpleSpan;
 
@@ -73,26 +72,7 @@ pub fn parse_files(
                     let source = ariadne::Source::from(&content);
                     parse_errs
                         .into_iter()
-                        .map(|e| {
-                            Report::build(ReportKind::Error, (&filename, e.span().into_range()))
-                                .with_config(
-                                    ariadne::Config::new()
-                                        .with_index_type(ariadne::IndexType::Byte),
-                                )
-                                .with_message(e.to_string())
-                                .with_label(
-                                    Label::new((&filename, e.span().into_range()))
-                                        .with_message(e.reason().to_string())
-                                        .with_color(Color::Red),
-                                )
-                                .with_labels(e.contexts().map(|(label, span)| {
-                                    Label::new((&filename, span.into_range()))
-                                        .with_message(format!("while parsing this {label}"))
-                                        .with_color(Color::Yellow)
-                                }))
-                                .finish()
-                                .print((&filename, &source))
-                        })
+                        .map(|e| e.print(&filename, &source))
                         .inspect(|res| {
                             if let Err(e) = res {
                                 tracing::error!("Failed to report parse errors: {}", e);
@@ -115,7 +95,9 @@ pub fn parse_files(
     Ok(res)
 }
 
-pub fn parse_file_str<'a>(content: &'a str) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token<'a>>>> {
+pub fn parse_file_str<'a>(
+    content: &'a str,
+) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token<'a>>>> {
     let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
         (Vec::new(), Vec::new()),
         |(mut tokens, mut token_errors), (new_tok, new_span)| {

@@ -13,6 +13,7 @@ thiserror.workspace = true
 rayon.workspace = true
 tracing.workspace = true
 wyhash.workspace = true
+inflections.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

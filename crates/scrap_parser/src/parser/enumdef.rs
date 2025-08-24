@@ -1,10 +1,11 @@
 use chumsky::prelude::*;
+use inflections::Inflect;
 use scrap_lexer::Token;
 
-use crate::ast::NodeId;
+use crate::{ast::NodeId, parse_error::ParseError};
 
 use super::{
-    ScrapInput, ScrapParser, capital_ident, field::Field, ident::Ident, typedef::parse_type,
+    ScrapInput, ScrapParser, field::Field, ident::Ident, parse_ident, typedef::parse_type,
 };
 
 #[derive(Debug, Clone)]
@@ -24,9 +25,17 @@ pub fn enum_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'sr
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let err_msg = "Enum variant name must start with an uppercase letter";
+    let variant = parse_ident()
+        .validate(move |id, _, emitter| {
+            if !id.name.is_pascal_case() {
+                emitter.emit(ParseError::custom(
+                    id.span,
+                    format!("Enum variant name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                ));
+            }
 
-    let variant = capital_ident(err_msg)
+            id
+        })
         .then(
             parse_type()
                 .delimited_by(just(Token::LParen), just(Token::RParen))
@@ -49,7 +58,18 @@ where
 
     just(Token::Enum)
         .ignore_then(
-            capital_ident("Enum name must start with an uppercase letter").labelled("enum name"),
+            parse_ident()
+                .validate(move |id, _, emitter| {
+                    if !id.name.is_pascal_case() {
+                        emitter.emit(ParseError::custom(
+                            id.span,
+                            format!("Enum name must be in PascalCase: {} -> {}", id.name, id.name.to_pascal_case()),
+                        ));
+                    }
+
+                    id
+                })
+                .labelled("enum name"),
         )
         .then(variant.delimited_by(just(Token::LBrace), just(Token::RBrace)))
         .map_with(|(name, variants), e| EnumDef {

@@ -22,6 +22,15 @@ impl ReportKind {
     pub fn custom(msg: &'static str, color: Color) -> Self {
         ReportKind::Custom(msg, color)
     }
+
+    pub fn color(&self) -> Color {
+        match self {
+            ReportKind::Error => Color::Red,
+            ReportKind::Warning => Color::Yellow,
+            ReportKind::Advice => Color::Cyan,
+            ReportKind::Custom(_, color) => *color,
+        }
+    }
 }
 
 impl fmt::Display for ReportKind {

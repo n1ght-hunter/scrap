@@ -1,4 +1,4 @@
-use crate::{Span, ast::NodeId};
+use crate::{Span, ast::NodeId, parse_error::ParseError};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
 
@@ -24,16 +24,16 @@ pub fn parse_local<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'sr
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let without_semi = just(Token::Let)
+    let parser = just(Token::Let)
         .ignore_then(pat_parser())
         .then(just(Token::Colon).ignore_then(parse_type()).or_not())
         .then_ignore(just(Token::Assign))
-        .then(inline_expr_parser());
+        .then(inline_expr_parser().labelled("local expression"));
 
-    without_semi
+    parser
         .clone()
         .then_ignore(just(Token::Semicolon))
-        .recover_with(via_parser(without_semi))
+        .recover_with(via_parser(parser))
         .map_with(|((pat, ty), expr), e| Local {
             id: e.state().new_node_id(),
             super_: None,

@@ -4,7 +4,7 @@ use item::Item;
 use item::item_parser;
 use scrap_lexer::Token;
 
-pub use ident::{capital_ident, parse_ident};
+pub use ident::parse_ident;
 
 #[derive(Debug, Clone)]
 pub struct State {
@@ -97,9 +97,9 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
-use crate::parse_error::ParseError;
 use crate::Span;
 use crate::ast::NodeId;
+use crate::parse_error::ParseError;
 
 /// Parse a sc file into ast
 pub fn file_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Vec<Item>>

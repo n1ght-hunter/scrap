@@ -36,6 +36,7 @@ thin-vec = "0.2"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 wyhash = "0.6.0"
+inflections = "1.1.1"
 
 # backend
 cranelift = "0.123"

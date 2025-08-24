@@ -1,4 +1,5 @@
 use chumsky::prelude::*;
+use inflections::Inflect;
 use scrap_lexer::Token;
 
 use crate::{Span, ast::NodeId, utils::LocalVec};
@@ -27,7 +28,19 @@ pub fn function_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens,
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    let args = fields(false)
+    let args = fields()
+        .validate(|args, _, emmiter| {
+            for arg in args.iter() {
+                if !arg.ident.name.is_snake_case() {
+                    emmiter.emit(crate::parse_error::ParseError::custom_with_kind(
+                        arg.ident.span,
+                        format!("arguments '{}' should be in snake_case", arg.ident.name),
+                        crate::parse_error::kind::ReportKind::Warning,
+                    ));
+                }
+            }
+            args
+        })
         .delimited_by(just(Token::LParen), just(Token::RParen))
         .labelled("function args");
 
