@@ -1,14 +1,18 @@
+pub mod kind;
 pub mod pattern;
 pub mod reason;
 
 use std::fmt;
 
-use chumsky::{input::Input, util::MaybeRef};
+use ariadne::{Color, Label};
+use chumsky::{input::Input, span::Span, util::MaybeRef};
+use kind::ReportKind;
 use pattern::Pattern;
 use reason::Reason;
 
 pub struct ParseError<'a, T, S = crate::Span> {
     span: S,
+    kind: ReportKind,
     reason: Box<Reason<'a, T>>,
     context: Vec<(Pattern<'a, T>, S)>,
 }
@@ -39,6 +43,17 @@ impl<'a, T, S> ParseError<'a, T, S> {
             span,
             reason: Box::new(Reason::Custom(msg.to_string())),
             context: Vec::new(),
+            kind: ReportKind::Error,
+        }
+    }
+
+    #[inline]
+    pub fn custom_with_kind<M: ToString>(span: S, msg: M, kind: ReportKind) -> Self {
+        ParseError {
+            span,
+            reason: Box::new(Reason::Custom(msg.to_string())),
+            context: Vec::new(),
+            kind,
         }
     }
 
@@ -112,7 +127,37 @@ impl<'a, T, S> ParseError<'a, T, S> {
                 .into_iter()
                 .map(|(p, s)| (p.map_token(&mut f), s))
                 .collect(),
+            kind: self.kind,
         }
+    }
+}
+
+impl<'a, T, S: Span<Offset = usize>> ParseError<'a, T, S>
+where
+    T: fmt::Display,
+    S: fmt::Display,
+{
+    pub fn print(
+        &self,
+        filename: &str,
+        source: ariadne::Source<&String>,
+    ) -> Result<(), std::io::Error> {
+        let span = Span::start(self.span())..=Span::end(self.span());
+        ariadne::Report::build(self.kind.into(), (filename, span.clone()))
+            .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+            .with_message(self.to_string())
+            .with_label(
+                Label::new((filename, span))
+                    .with_message(self.reason().to_string())
+                    .with_color(Color::Red),
+            )
+            .with_labels(self.contexts().map(|(label, span)| {
+                Label::new((filename, (Span::start(span)..=Span::end(span))))
+                    .with_message(format!("while parsing this {label}"))
+                    .with_color(Color::Yellow)
+            }))
+            .finish()
+            .print((filename, source))
     }
 }
 
@@ -127,6 +172,7 @@ where
             span: self.span,
             reason: Box::new(new_reason),
             context: self.context,
+            kind: self.kind,
         }
     }
 }
@@ -149,6 +195,7 @@ where
                 found,
             }),
             context: Vec::new(),
+            kind: ReportKind::Error,
         }
     }
 
@@ -208,7 +255,7 @@ where
                 expected.clear();
                 expected.push(label.into());
             }
-            _ => {
+            Reason::Custom(msg) => {
                 self.reason = Box::new(Reason::ExpectedFound {
                     expected: vec![label.into()],
                     found: self.reason.take_found(),
