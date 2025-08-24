@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, Attribute, Meta, LitStr};
+use syn::{Attribute, LitStr, Meta, parse::Parse, parse_macro_input};
 
 struct VecItems(pub Vec<syn::ItemEnum>);
 
@@ -41,7 +41,11 @@ fn extract_display_string(attrs: &[Attribute]) -> Option<String> {
     None
 }
 
-fn create_display_arm(variant_name: &syn::Ident, variant_fields: &syn::Fields, variant_attrs: &[syn::Attribute]) -> Option<proc_macro2::TokenStream> {
+fn create_display_arm(
+    variant_name: &syn::Ident,
+    variant_fields: &syn::Fields,
+    variant_attrs: &[syn::Attribute],
+) -> Option<proc_macro2::TokenStream> {
     match variant_fields {
         syn::Fields::Unit => {
             if let Some(token_str) = extract_token_string(variant_attrs) {
@@ -91,29 +95,36 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
             if item.ident == "Token" {
                 // Extract existing display arms from Token enum if any
                 for variant in &item.variants {
-                    if let Some(display_arm) = create_display_arm(&variant.ident, &variant.fields, &variant.attrs) {
+                    if let Some(display_arm) =
+                        create_display_arm(&variant.ident, &variant.fields, &variant.attrs)
+                    {
                         display_arms.push(display_arm);
                     }
                 }
-                
+
                 token_enum.replace(item);
                 None
             } else {
                 // Process other enums and collect display information
                 for variant in &item.variants {
-                    if let Some(display_arm) = create_display_arm(&variant.ident, &variant.fields, &variant.attrs) {
+                    if let Some(display_arm) =
+                        create_display_arm(&variant.ident, &variant.fields, &variant.attrs)
+                    {
                         display_arms.push(display_arm);
                     }
                 }
-                
+
                 all_variants.extend(item.variants.clone());
                 Some(item)
             }
         })
         .map(|mut item| {
+            const REMOVE_ATTRS: &[&str] = &["token", "display", "regex"];
             for variant in &mut item.variants {
                 // Remove ALL attributes as they're processed separately
-                variant.attrs.clear();
+                variant.attrs.retain(|attr| {
+                    REMOVE_ATTRS.iter().all(|&id| !attr.path().is_ident(id))
+                });
             }
             item
         })
@@ -130,9 +141,9 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
 
     // Remove processed attributes from Token enum variants but keep enum-level attributes
     for variant in &mut token_enum.variants {
-        variant.attrs.retain(|attr| {
-            !attr.path().is_ident("display")
-        });
+        variant
+            .attrs
+            .retain(|attr| !attr.path().is_ident("display"));
     }
 
     for var in all_variants {
