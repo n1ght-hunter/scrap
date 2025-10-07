@@ -37,13 +37,18 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 wyhash = "0.6.0"
 inflections = "1.1.1"
+serde = "1"
+serde_json = "1"
+rustc-hash = "2.1.1"
+parking_lot = "0.12.5"
+
 
 # backend
-cranelift = "0.123"
-cranelift-module = "0.123"
-cranelift-jit = "0.123"
-cranelift-native = "0.123"
-cranelift-object = "0.123"
+cranelift = "0.125"
+cranelift-module = "0.125"
+cranelift-jit = "0.125"
+cranelift-native = "0.125"
+cranelift-object = "0.125"
 
 # Parser
 chumsky = "0.10.1"
@@ -53,10 +58,10 @@ ariadne = "0.5.1"
 logos = "0.15.1"
 
 # macros
-syn = { version = "2.0.106", features = ["full"] }
-proc-macro2 = "1.0.101"
-quote = "1.0.40"
-bitflags = "2.4"
+syn = { version = "2", features = ["full"] }
+proc-macro2 = "1"
+quote = "1"
+bitflags = "2"
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
