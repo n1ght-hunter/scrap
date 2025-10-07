@@ -1,0 +1,34 @@
+{
+    "name": "scrap",
+    "displayName": "scrap",
+    "description": "scrap lang support",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.104.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "scrap",
+                "aliases": [
+                    "Scrap",
+                    "scrap"
+                ],
+                "extensions": [
+                    ".sc"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "scrap",
+                "scopeName": "",
+                "path": "./syntaxes/scrap.tmLanguage.json"
+            }
+        ]
+    }
+}
