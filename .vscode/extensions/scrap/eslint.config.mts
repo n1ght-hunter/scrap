@@ -18,7 +18,6 @@ const config = [
     }),
     {
         rules: {
-            "no-console": "warn",
             "@typescript-eslint/no-unused-vars": [
                 "error",
                 {

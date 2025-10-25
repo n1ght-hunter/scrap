@@ -27,7 +27,7 @@
         "test": "node ./out/tests/runTests.js"
     },
     "dependencies": {
-          "jiti": "^2.4.2",
+        "jiti": "^2.4.2",
         "vscode-languageclient": "^9.0.1"
     },
     "devDependencies": {
@@ -62,6 +62,13 @@
                     ".sc"
                 ],
                 "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "scrap",
+                "scopeName": "source.scrap",
+                "path": "./syntaxes/scrap.tmLanguage.json"
             }
         ],
         "semanticTokenTypes": [
@@ -138,6 +145,16 @@
             {
                 "command": "scrap.restart",
                 "title": "Restart Scrap Language Server",
+                "category": "Scrap"
+            },
+            {
+                "command": "scrap.stop",
+                "title": "Stop Scrap Language Server",
+                "category": "Scrap"
+            },
+            {
+                "command": "scrap.start",
+                "title": "Start Scrap Language Server",
                 "category": "Scrap"
             }
         ]

@@ -1,29 +1,42 @@
+mod trace_layer;
+
 use anyhow::{Result, anyhow};
 use lsp_server::{Connection, Message, Request, RequestId, Response};
 use lsp_types::{
-    notification::{DidChangeTextDocument, DidOpenTextDocument, Notification, PublishDiagnostics}, request::{Completion, Formatting, GotoDefinition, HoverRequest, Request as _}, CompletionItem, CompletionItemKind, CompletionOptions, CompletionResponse, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, Hover, HoverContents, HoverProviderCapability, InitializeParams, MarkedString, OneOf, Position, PublishDiagnosticsParams, Range, SemanticTokenType, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions
+    CompletionItem, CompletionItemKind, CompletionOptions, CompletionResponse, Diagnostic,
+    DiagnosticSeverity, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
+    DocumentFormattingParams, Hover, HoverContents, HoverProviderCapability, InitializeParams,
+    MarkedString, OneOf, Position, PublishDiagnosticsParams, Range, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri,
+    notification::{
+        DidChangeTextDocument, DidOpenTextDocument, Notification as _, PublishDiagnostics,
+    },
+    request::{Completion, Formatting, GotoDefinition, HoverRequest, Request as _},
 };
 use rustc_hash::FxHashMap;
 use tracing::{error, info};
-
-const LEGEND_TYPES: &[SemanticTokenType] = &[
-    SemanticTokenType::KEYWORD,
-    SemanticTokenType::STRING,
-    SemanticTokenType::NUMBER,
-    SemanticTokenType::OPERATOR,
-    SemanticTokenType::VARIABLE,
-    SemanticTokenType::TYPE,
-];
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_ansi(true)
+    let (connection, io_threads) = Connection::stdio();
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new("scrap_lsp=info,warn"))
+        // .with(
+        //     tracing_subscriber::fmt::layer()
+        //         .with_ansi(false)
+        //         .with_writer(
+        //             std::fs::File::options()
+        //                 .create(true)
+        //                 .write(true)
+        //                 .append(true)
+        //                 .open("scrap_lsp.log")?,
+        //         ),
+        // )
+        .with(trace_layer::LspLayer::new(connection.sender.clone()))
         .init();
 
     info!("Starting Scrap LSP server...");
-
-    let (connection, io_threads) = Connection::stdio();
 
     // advertised capabilities
     let caps = ServerCapabilities {
