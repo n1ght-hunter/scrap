@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { workspace, ExtensionContext, window, LogOutputChannel } from 'vscode';
+import { workspace, ExtensionContext, window, LogOutputChannel, commands, ProgressLocation } from 'vscode';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -79,11 +79,48 @@ export function activate(context: ExtensionContext) {
             outputChannel.error(`Failed to start Scrap LSP client: ${error}`);
             window.showErrorMessage(`Failed to start Scrap LSP: ${error}`);
         });
+
+        // Register restart command
+        const restartCommand = commands.registerCommand('scrap.restart', async () => {
+            await restartServer();
+        });
+        context.subscriptions.push(restartCommand);
     } catch (error) {
         const errorMsg = `Failed to activate Scrap LSP extension: ${error}`;
         outputChannel.error(`ERROR: ${errorMsg}`);
         window.showErrorMessage(errorMsg);
     }
+}
+
+async function restartServer(): Promise<void> {
+    if (!client) {
+        window.showWarningMessage('Scrap Language Server is not running.');
+        return;
+    }
+
+    await window.withProgress({
+        location: ProgressLocation.Notification,
+        title: "Scrap Language Server",
+        cancellable: false,
+    }, async (progress) => {
+        try {
+            progress.report({ increment: 0, message: "Stopping server..." });
+            outputChannel.info('Restarting Scrap Language Server...');
+
+            progress.report({ increment: 50, message: "Restarting server..." });
+            await client.restart();
+
+            progress.report({ increment: 100, message: "Server restarted successfully!" });
+            outputChannel.info('Scrap Language Server restarted successfully!');
+
+            // Brief delay to show completion message
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (error) {
+            const errorMsg = `Failed to restart Scrap Language Server: ${error}`;
+            outputChannel.error(`ERROR: ${errorMsg}`);
+            window.showErrorMessage(errorMsg);
+        }
+    });
 }
 
 export function deactivate(): Thenable<void> | undefined {

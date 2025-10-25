@@ -133,6 +133,13 @@
                     ]
                 }
             }
+        ],
+        "commands": [
+            {
+                "command": "scrap.restart",
+                "title": "Restart Scrap Language Server",
+                "category": "Scrap"
+            }
         ]
     }
 }
