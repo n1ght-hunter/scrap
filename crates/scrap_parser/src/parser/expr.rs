@@ -2,14 +2,32 @@
 
 use super::{
     ScrapInput, ScrapParser,
-    block::{Block, block_parser},
-    ident::parse_ident,
+    block::Block,
+    ident::Ident,
     lit::{Lit, lit_parser},
     operators::{AssignOpKind, BinOp, BinOpKind},
+    parse_ident,
 };
-use crate::{Spanned, ast::NodeId, utils::LocalVec};
+use crate::{Spanned, ast::NodeId, parser::operators::ops_parser, utils::LocalVec};
 use chumsky::prelude::*;
 use scrap_lexer::Token;
+use thin_vec::ThinVec;
+
+#[derive(Debug, Clone)]
+pub struct PathSegment {
+    /// The identifier portion of this path segment.
+    pub ident: Ident,
+
+    pub id: NodeId,
+}
+
+#[derive(Debug, Clone)]
+pub struct Path {
+    pub span: crate::Span,
+    /// The segments in the path: the things separated by `::`.
+    /// Global paths begin with `kw::PathRoot`.
+    pub segments: ThinVec<PathSegment>,
+}
 
 /// An expression node in the AST
 #[derive(Debug, Clone)]
@@ -35,13 +53,13 @@ pub enum ExprKind {
     /// A block (`{ ... }`)
     Block(Box<Block>),
     /// Variable reference
-    Path(String),
+    Path(Path),
     /// A parenthesized expression
     Paren(Box<Expr>),
     /// A `return` expression
     Return(Option<Box<Expr>>),
     /// An assignment (`place = expr`)
-    Assign(Box<Expr>, Box<Expr>),
+    Assign(Box<Expr>, Box<Expr>, crate::Span),
     /// An assignment with an operator (`place += expr`)
     AssignOp(Spanned<AssignOpKind>, Box<Expr>, Box<Expr>),
     /// Error placeholder
@@ -49,283 +67,54 @@ pub enum ExprKind {
 }
 
 /// Parse a full expression with all operators and precedence
-pub fn expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn expr_parser<'tokens, 'src: 'tokens, I>(
+    block_parser: impl ScrapParser<'tokens, 'src, I, Block> + 'tokens,
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
 where
     I: ScrapInput<'tokens, 'src>,
 {
     recursive(|expr| {
-        // Atom expressions (highest precedence)
-        let atom = choice((
-            // Literals
+        choice((
+            just(Token::Return)
+                .then(inline_expr_parser().or_not())
+                .then_ignore(just(Token::Semicolon))
+                .map_with(|(_, expr), e| Expr {
+                    id: e.state().new_node_id(),
+                    kind: ExprKind::Return(expr.map(Box::new)),
+                    span: e.span(),
+                }),
             lit_parser().map_with(|lit, e| Expr {
                 id: e.state().new_node_id(),
                 kind: ExprKind::Lit(lit),
                 span: e.span(),
             }),
-            // Identifiers/paths
-            parse_ident().map_with(|ident, e| Expr {
-                id: e.state().new_node_id(),
-                kind: ExprKind::Path(ident.name),
-                span: e.span(),
-            }),
-            // Parenthesized expressions
-            expr.clone()
-                .delimited_by(just(Token::LParen), just(Token::RParen))
-                .map_with(
-                    |inner_expr,
-                     e: &mut chumsky::input::MapExtra<
-                        '_,
-                        '_,
-                        I,
-                        extra::Full<
-                            crate::parse_error::ParseError<'_, Token<'_>>,
-                            super::State,
-                            (),
-                        >,
-                    >| Expr {
-                        id: e.state().new_node_id(),
-                        kind: ExprKind::Paren(Box::new(inner_expr)),
-                        span: e.span(),
-                    },
-                )
-                .boxed(),
-            // Blocks
-            block_parser()
-                .map_with(
-                    |block,
-                     e: &mut chumsky::input::MapExtra<
-                        '_,
-                        '_,
-                        I,
-                        extra::Full<
-                            crate::parse_error::ParseError<'_, Token<'_>>,
-                            super::State,
-                            (),
-                        >,
-                    >| Expr {
-                        id: e.state().new_node_id(),
-                        kind: ExprKind::Block(Box::new(block)),
-                        span: e.span(),
-                    },
-                )
-                .boxed(),
-            // Arrays - simplified to avoid nested map_with
-            expr.clone()
-                .map(Box::new)
-                .separated_by(just(Token::Comma))
-                .collect::<LocalVec<_>>()
-                .delimited_by(just(Token::LBracket), just(Token::RBracket))
-                .map_with(
-                    |elements,
-                     e: &mut chumsky::input::MapExtra<
-                        '_,
-                        '_,
-                        I,
-                        extra::Full<
-                            crate::parse_error::ParseError<'_, Token<'_>>,
-                            super::State,
-                            (),
-                        >,
-                    >| Expr {
-                        id: e.state().new_node_id(),
-                        kind: ExprKind::Array(elements),
-                        span: e.span(),
-                    },
-                )
-                .boxed(),
-            // Return expressions
-            just(Token::Return)
-                .ignore_then(expr.clone().map(Box::new).or_not())
-                .map_with(|return_expr, e| Expr {
+            just(Token::If)
+                .then(inline_expr_parser())
+                .then(block_parser)
+                .then(just(Token::Else).ignore_then(expr.clone()).or_not())
+                .map_with(|(((_, cond), then_block), else_block), e| Expr {
                     id: e.state().new_node_id(),
-                    kind: ExprKind::Return(return_expr),
+                    kind: ExprKind::If(
+                        Box::new(cond),
+                        Box::new(then_block),
+                        else_block.map(Box::new),
+                    ),
                     span: e.span(),
-                })
-                .boxed(),
+                }),
+            // just(Token::If)
+            //     .then(inline_expr_parser())
+            //     .then(block_parser())
+            //     .then(just(Token::Else).ignore_then(block_parser()).or_not())
+            //     .map_with(|(((_, cond), then_block), else_block), e| Expr {
+            //         id: e.state().new_node_id(),
+            //         kind: ExprKind::If(
+            //             Box::new(cond),
+            //             Box::new(then_block),
+            //             else_block.map(Box::new),
+            //         ),
+            //         span: e.span(),
+            //     }),
         ))
-        .boxed();
-
-        // Function calls (postfix)
-        let call = atom
-            .foldl_with(
-                expr.clone()
-                    .map(Box::new)
-                    .separated_by(just(Token::Comma))
-                    .collect::<LocalVec<_>>()
-                    .delimited_by(just(Token::LParen), just(Token::RParen))
-                    .repeated(),
-                |func, args, e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Call(Box::new(func), args),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Multiplication and division
-        let product = call
-            .clone()
-            .foldl_with(
-                choice((
-                    just(Token::Mul).to(BinOpKind::Mul),
-                    just(Token::Div).to(BinOpKind::Div),
-                    just(Token::Rem).to(BinOpKind::Rem),
-                ))
-                .then(call)
-                .repeated(),
-                |lhs, (op, rhs), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Binary(
-                        Spanned {
-                            node: op,
-                            span: e.span(),
-                        },
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    ),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Addition and subtraction
-        let sum = product
-            .clone()
-            .foldl_with(
-                choice((
-                    just(Token::Add).to(BinOpKind::Add),
-                    just(Token::Sub).to(BinOpKind::Sub),
-                ))
-                .then(product)
-                .repeated(),
-                |lhs, (op, rhs), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Binary(
-                        Spanned {
-                            node: op,
-                            span: e.span(),
-                        },
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    ),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Comparisons
-        let comparison = sum
-            .clone()
-            .foldl_with(
-                choice((
-                    just(Token::Eq).to(BinOpKind::Eq),
-                    just(Token::Ne).to(BinOpKind::Ne),
-                    just(Token::Lt).to(BinOpKind::Lt),
-                    just(Token::Le).to(BinOpKind::Le),
-                    just(Token::Gt).to(BinOpKind::Gt),
-                    just(Token::Ge).to(BinOpKind::Ge),
-                ))
-                .then(sum)
-                .repeated(),
-                |lhs, (op, rhs), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Binary(
-                        Spanned {
-                            node: op,
-                            span: e.span(),
-                        },
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    ),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Logical AND
-        let logical_and = comparison
-            .clone()
-            .foldl_with(
-                just(Token::And)
-                    .to(BinOpKind::And)
-                    .then(comparison)
-                    .repeated(),
-                |lhs, (op, rhs), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Binary(
-                        Spanned {
-                            node: op,
-                            span: e.span(),
-                        },
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    ),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Logical OR
-        let logical_or = logical_and
-            .clone()
-            .foldl_with(
-                just(Token::Or)
-                    .to(BinOpKind::Or)
-                    .then(logical_and)
-                    .repeated(),
-                |lhs, (op, rhs), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Binary(
-                        Spanned {
-                            node: op,
-                            span: e.span(),
-                        },
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    ),
-                    span: e.span(),
-                },
-            )
-            .boxed();
-
-        // Assignments (lowest precedence)
-        logical_or
-            .clone()
-            .foldl_with(
-                choice((
-                    just(Token::Assign).to(None),
-                    choice((
-                        just(Token::AddAssign).to(AssignOpKind::AddAssign),
-                        just(Token::SubAssign).to(AssignOpKind::SubAssign),
-                        just(Token::MulAssign).to(AssignOpKind::MulAssign),
-                        just(Token::DivAssign).to(AssignOpKind::DivAssign),
-                        just(Token::RemAssign).to(AssignOpKind::RemAssign),
-                    ))
-                    .map(Some),
-                ))
-                .then(logical_or)
-                .repeated(),
-                |lhs, (assign_op, rhs), e| match assign_op {
-                    None => Expr {
-                        id: e.state().new_node_id(),
-                        kind: ExprKind::Assign(Box::new(lhs), Box::new(rhs)),
-                        span: e.span(),
-                    },
-                    Some(op) => Expr {
-                        id: e.state().new_node_id(),
-                        kind: ExprKind::AssignOp(
-                            Spanned {
-                                node: op,
-                                span: e.span(),
-                            },
-                            Box::new(lhs),
-                            Box::new(rhs),
-                        ),
-                        span: e.span(),
-                    },
-                },
-            )
-            .boxed()
     })
     .labelled("expression")
 }
@@ -335,5 +124,61 @@ pub fn inline_expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'toke
 where
     I: ScrapInput<'tokens, 'src>,
 {
-    expr_parser().labelled("inline expression").boxed()
+    atom_parser()
+}
+
+pub fn atom_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
+where
+    I: ScrapInput<'tokens, 'src>,
+{
+    let lit_parser = lit_parser().map_with(|lit, e| Expr {
+        id: e.state().new_node_id(),
+        kind: ExprKind::Lit(lit),
+        span: e.span(),
+    });
+
+    let ident = parse_ident().map_with(|ident, e| Expr {
+        id: e.state().new_node_id(),
+        kind: ExprKind::Path(Path {
+            span: e.span(),
+            segments: ThinVec::from(vec![PathSegment {
+                ident,
+                id: e.state().new_node_id(),
+            }]),
+        }),
+        span: e.span(),
+    });
+
+    ops_parser(choice((lit_parser, ident)))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::{
+        State,
+        block::block_parser,
+        lit::{LitKind, TempLit},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_parse_simple_return() {
+        let input = [Token::Return, Token::Int(42), Token::Semicolon];
+        let mut state = State::new("test.sc");
+        let expr = expr_parser(block_parser())
+            .parse_with_state(&input, &mut state)
+            .unwrap();
+
+        match expr.kind {
+            ExprKind::Return(Some(boxed_expr)) => match boxed_expr.kind {
+                ExprKind::Lit(lit) => match lit.temp_lit {
+                    TempLit::Int(value) => assert_eq!(value, 42),
+                    _ => panic!("Expected integer literal"),
+                },
+                _ => panic!("Expected literal expression"),
+            },
+            _ => panic!("Expected return expression"),
+        }
+    }
 }

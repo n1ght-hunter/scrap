@@ -92,4 +92,5 @@ where
             temp_lit,
         },
     )
+    .labelled("literal")
 }

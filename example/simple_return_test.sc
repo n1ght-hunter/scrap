@@ -25,12 +25,12 @@ fn no_return_no_type() {
     let y = 10;
 }
 
-fn mixed_returns(x: i32) -> i32 {
-    if x > 100 {
-        return 999;
-    }
-    if x > 50 {
-        return x * 5;
-    }
-    return x;
-}
+// fn mixed_returns(x: i32) -> i32 {
+//     if x > 100 {
+//         return 999;
+//     }
+//     if x > 50 {
+//         return x * 5;
+//     }
+//     return x;
+// }

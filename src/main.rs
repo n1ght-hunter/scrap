@@ -8,9 +8,9 @@ fn setup_logging() {
 fn main() -> anyhow::Result<()> {
     setup_logging();
 
-    let files = vec!["example/basic.sc"];
+    let files = vec!["example/simple_return_test.sc"];
     let ast = scrap_parser::parse_files(files)?;
-    std::fs::write("ast.ron", format!("{:#?}", ast))?;
+    std::fs::write("target/ast.ron", format!("{:#?}", ast))?;
 
     // println!("Scrap Programming Language - Code Generation Demo");
 

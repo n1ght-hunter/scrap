@@ -279,3 +279,23 @@ where
         },
     )
 }
+
+pub fn ops_parser<'tokens, 'src: 'tokens, I>(
+    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
+) -> impl ScrapParser<'tokens, 'src, I, Expr>
+where
+    I: ScrapInput<'tokens, 'src>,
+{
+    // Product ops (multiply and divide) have equal precedence
+
+    let product = product_parser(base_parser);
+
+    // Sum ops (add and subtract) have equal precedence
+    
+    let sum = sum_parser(product);
+    // Comparison ops (equal, not-equal) have equal precedence
+
+    let compare = comparison_parser(sum);
+
+    compare.labelled("expression").as_context()
+}

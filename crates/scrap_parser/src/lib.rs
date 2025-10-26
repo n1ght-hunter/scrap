@@ -87,7 +87,7 @@ pub fn parse_files(
         })
         .inspect(|res| {
             if let Err(e) = res {
-                tracing::error!("Failed to parse file: {}", e);
+                tracing::error!("{}", e);
             }
         })
         .collect::<anyhow::Result<Vec<_>>>()?;

@@ -3,10 +3,7 @@ use chumsky::prelude::*;
 use scrap_lexer::Token;
 
 use super::{
-    ScrapInput, ScrapParser,
-    expr::{Expr, expr_parser},
-    pat::{Pat, pat_parser},
-    typedef::{Type, parse_type},
+    block::Block, expr::{expr_parser, Expr}, pat::{pat_parser, Pat}, typedef::{parse_type, Type}, ScrapInput, ScrapParser
 };
 
 /// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.
@@ -20,7 +17,9 @@ pub struct Local {
     pub span: Span,
 }
 
-pub fn parse_local<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Local>
+pub fn parse_local<'tokens, 'src: 'tokens, I>(
+    block_parser: impl ScrapParser<'tokens, 'src, I, Block> + 'tokens,
+) -> impl ScrapParser<'tokens, 'src, I, Local>
 where
     I: ScrapInput<'tokens, 'src>,
 {
@@ -28,7 +27,7 @@ where
         .ignore_then(pat_parser())
         .then(just(Token::Colon).ignore_then(parse_type()).or_not())
         .then_ignore(just(Token::Assign))
-        .then(expr_parser())
+        .then(expr_parser(block_parser))
         .then_ignore(just(Token::Semicolon))
         .map_with(|((pat, ty), expr), e| Local {
             id: e.state().new_node_id(),
