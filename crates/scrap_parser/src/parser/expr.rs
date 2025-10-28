@@ -5,7 +5,7 @@ use super::{
     block::Block,
     ident::Ident,
     lit::{Lit, lit_parser},
-    operators::{AssignOpKind, BinOp, BinOpKind},
+    operators::{AssignOpKind, BinOp},
     parse_ident,
 };
 use crate::{Spanned, ast::NodeId, parser::operators::ops_parser, utils::LocalVec};
@@ -67,11 +67,11 @@ pub enum ExprKind {
 }
 
 /// Parse a full expression with all operators and precedence
-pub fn expr_parser<'tokens, 'src: 'tokens, I>(
-    block_parser: impl ScrapParser<'tokens, 'src, I, Block> + 'tokens,
-) -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn expr_parser<'tokens, I>(
+    block_parser: impl ScrapParser<'tokens, I, Block> + 'tokens,
+) -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     recursive(|expr| {
         choice((
@@ -120,16 +120,16 @@ where
 }
 
 /// Parse inline expressions (simplified version for simple cases)
-pub fn inline_expr_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn inline_expr_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     atom_parser()
 }
 
-pub fn atom_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn atom_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let lit_parser = lit_parser().map_with(|lit, e| Expr {
         id: e.state().new_node_id(),
@@ -154,17 +154,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{
-        State,
-        block::block_parser,
-        lit::{LitKind, TempLit},
-    };
+    use crate::parser::{State, block::block_parser, lit::LitKind};
 
     use super::*;
 
     #[test]
     fn test_parse_simple_return() {
-        let input = [Token::Return, Token::Int(42), Token::Semicolon];
+        let input = [Token::Return, Token::Int, Token::Semicolon];
         let mut state = State::new("test.sc");
         let expr = expr_parser(block_parser())
             .parse_with_state(&input, &mut state)
@@ -172,10 +168,7 @@ mod tests {
 
         match expr.kind {
             ExprKind::Return(Some(boxed_expr)) => match boxed_expr.kind {
-                ExprKind::Lit(lit) => match lit.temp_lit {
-                    TempLit::Int(value) => assert_eq!(value, 42),
-                    _ => panic!("Expected integer literal"),
-                },
+                ExprKind::Lit(lit) => assert_eq!(lit.kind, LitKind::Integer),
                 _ => panic!("Expected literal expression"),
             },
             _ => panic!("Expected return expression"),

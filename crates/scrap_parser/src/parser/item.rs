@@ -24,10 +24,10 @@ pub enum ItemKind {
     Struct(StructDef),
 }
 
-/// Parse a sc file into ast
-pub fn item_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Item>
+/// Parse top-level items (functions, structs, enums, etc.)
+pub fn item_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Item>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     choice((
         function_parser().map(ItemKind::Fn),

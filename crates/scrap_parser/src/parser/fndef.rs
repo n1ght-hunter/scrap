@@ -24,9 +24,10 @@ pub struct FnDef {
     pub span: Span,
 }
 
-pub fn function_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, FnDef>
+/// Parse a function definition
+pub fn function_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, FnDef>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let args = fields()
         .validate(|args, _, emmiter| {

@@ -18,25 +18,11 @@ pub struct Lit {
     pub id: NodeId,
     /// The kind of literal (determines how it should be interpreted)
     pub kind: LitKind,
-    /// The actual literal data (simplified representation for our language)
-    pub temp_lit: TempLit,
+    /// The span of the literal in the source code
+    pub span: crate::Span,
     // In full Rust AST, there would also be:
     // pub symbol: Symbol,        // The original source representation
     // pub suffix: Option<Symbol>, // Type suffix like "f32" in "1.0f32"
-}
-
-/// Temporary literal representation for our simplified language.
-/// This holds the actual parsed values rather than symbols/tokens.
-#[derive(Debug, Clone)]
-pub enum TempLit {
-    /// A boolean literal (`true`, `false`)
-    Bool(bool),
-    /// An integer literal (`1`, `42`, `-5`)
-    Int(i64),
-    /// A floating-point literal (`1.0`, `3.14`)
-    Float(f64),
-    /// A string literal (`"hello"`, `"world"`)
-    Str(String),
 }
 
 /// Literal kinds, following Rust AST enum structure.
@@ -69,27 +55,27 @@ pub enum LitKind {
 ///
 /// The parser extracts the value from the token and creates the appropriate
 /// `Lit` node with the correct `LitKind` and `TempLit` representation.
-pub fn lit_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Lit>
+pub fn lit_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Lit>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     select! {
-        Token::Bool(value) => (LitKind::Bool, TempLit::Bool(value)),
-        Token::Int(value) => (LitKind::Integer, TempLit::Int(value)),
-        Token::Float(value) => (LitKind::Float, TempLit::Float(value)),
-        Token::Str(value) => (LitKind::Str, TempLit::Str(value.to_string())),
+        Token::Bool => LitKind::Bool,
+        Token::Int => LitKind::Integer,
+        Token::Float => LitKind::Float,
+        Token::Str => LitKind::Str,
     }
     .map_with(
-        |(kind, temp_lit),
+        |kind,
          e: &mut chumsky::input::MapExtra<
             '_,
             '_,
             I,
-            extra::Full<ParseError<'tokens, Token<'src>>, crate::parser::State, ()>,
+            extra::Full<ParseError<'tokens, Token>, crate::parser::State, ()>,
         >| Lit {
             id: e.state().new_node_id(),
             kind,
-            temp_lit,
+            span: e.span(),
         },
     )
     .labelled("literal")

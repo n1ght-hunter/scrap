@@ -45,42 +45,31 @@ impl<'src, I: Input<'src>> chumsky::inspector::Inspector<'src, I> for State {
     }
 }
 
-type Extra<'tokens, 'src> = extra::Full<ParseError<'tokens, Token<'src>, Span>, State, ()>;
+type Extra<'tokens> = extra::Full<ParseError<'tokens, Token, Span>, State, ()>;
 
 /// A trait alias to simplify the common parser signature used throughout the codebase.
 /// This encapsulates the complex return type:
-/// `Parser<'tokens, I, Output, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone`
-pub trait ScrapParser<'tokens, 'src, I, Output>:
-    Parser<'tokens, I, Output, Extra<'tokens, 'src>> + Clone
+/// `Parser<'tokens, I, Output, extra::Err<Rich<'tokens, Token, Span>>> + Clone`
+pub trait ScrapParser<'tokens, I, Output>:
+    Parser<'tokens, I, Output, Extra<'tokens>> + Clone
 where
-    'src: 'tokens,
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
 }
 
 // Blanket implementation for any type that already implements the required bounds
-impl<'tokens, 'src, I, Output, P> ScrapParser<'tokens, 'src, I, Output> for P
+impl<'tokens, I, Output, P> ScrapParser<'tokens, I, Output> for P
 where
-    'src: 'tokens,
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-    P: Parser<'tokens, I, Output, Extra<'tokens, 'src>> + Clone,
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+    P: Parser<'tokens, I, Output, Extra<'tokens>> + Clone,
 {
 }
 
 /// Shorthand constraint for the common input type used in parsers
-pub trait ScrapInput<'tokens, 'src>: ValueInput<'tokens, Token = Token<'src>, Span = Span>
-where
-    'src: 'tokens,
-{
-}
+pub trait ScrapInput<'tokens>: ValueInput<'tokens, Token = Token, Span = Span> {}
 
 // Blanket implementation for any input that meets our requirements
-impl<'tokens, 'src, I> ScrapInput<'tokens, 'src> for I
-where
-    'src: 'tokens,
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
-{
-}
+impl<'tokens, I> ScrapInput<'tokens> for I where I: ValueInput<'tokens, Token = Token, Span = Span> {}
 
 pub mod block;
 pub mod enumdef;
@@ -102,9 +91,9 @@ use crate::ast::NodeId;
 use crate::parse_error::ParseError;
 
 /// Parse a sc file into ast
-pub fn file_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Vec<Item>>
+pub fn file_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Vec<Item>>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     item_parser().repeated().collect()
 }

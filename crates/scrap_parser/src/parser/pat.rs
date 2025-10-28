@@ -36,9 +36,10 @@ pub struct Pat {
     pub span: Span,
 }
 
-pub fn pat_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Pat>
+/// Parse a pattern (e.g., in let bindings, function parameters)
+pub fn pat_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Pat>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     parse_ident().map_with(|ident, e| Pat {
         id: e.state().new_node_id(),

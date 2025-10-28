@@ -26,7 +26,7 @@ impl From<ParseIntError> for LexingError {
 }
 
 impl LexingError {
-    pub fn from_lexer<'a>(lex: &mut logos::Lexer<'a, Token<'a>>) -> Self {
+    pub fn from_lexer<'a>(lex: &mut logos::Lexer<'a, Token>) -> Self {
         LexingError::NonAsciiCharacter(lex.slice().chars().next().unwrap())
     }
 }

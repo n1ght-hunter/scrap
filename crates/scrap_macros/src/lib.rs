@@ -153,7 +153,7 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
     // Generate Display implementation
     let display_impl = if !display_arms.is_empty() {
         quote! {
-            impl<'a> std::fmt::Display for Token<'a> {
+            impl std::fmt::Display for Token {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         #(#display_arms,)*

@@ -88,9 +88,9 @@ pub enum BinOpKind {
 }
 
 /// Basic binary operator parser
-pub fn bin_op_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, BinOpKind>
+pub fn bin_op_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, BinOpKind>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     choice((
         just(Token::Add).to(BinOpKind::Add),
@@ -114,10 +114,10 @@ where
     ))
 }
 
-pub fn assign_op_parser<'tokens, 'src: 'tokens, I>()
--> impl ScrapParser<'tokens, 'src, I, AssignOpKind>
+pub fn assign_op_parser<'tokens, I>()
+-> impl ScrapParser<'tokens, I, AssignOpKind>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     choice((
         just(Token::AddAssign).to(AssignOpKind::AddAssign),
@@ -133,9 +133,9 @@ where
     ))
 }
 
-fn assoc_op_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, AssocOp>
+fn assoc_op_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, AssocOp>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     choice((
         just(Token::Assign).to(AssocOp::Assign),
@@ -185,11 +185,11 @@ impl AssocOp {
 use crate::parser::expr::{Expr, ExprKind};
 
 /// Parse multiplication and division operations (highest precedence binary ops)
-pub fn product_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
-) -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn product_parser<'tokens, I>(
+    base_parser: impl ScrapParser<'tokens, I, Expr>,
+) -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let mul_div_ops = just(Token::Mul).or(just(Token::Div));
 
@@ -214,11 +214,11 @@ where
 }
 
 /// Parse addition and subtraction operations (medium precedence)
-pub fn sum_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
-) -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn sum_parser<'tokens, I>(
+    base_parser: impl ScrapParser<'tokens, I, Expr>,
+) -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let add_sub_ops = just(Token::Add).or(just(Token::Sub));
 
@@ -243,11 +243,11 @@ where
 }
 
 /// Parse comparison operations (lowest precedence)
-pub fn comparison_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
-) -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn comparison_parser<'tokens, I>(
+    base_parser: impl ScrapParser<'tokens, I, Expr>,
+) -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let comparison_ops = just(Token::Gt)
         .or(just(Token::Lt))
@@ -280,11 +280,11 @@ where
     )
 }
 
-pub fn ops_parser<'tokens, 'src: 'tokens, I>(
-    base_parser: impl ScrapParser<'tokens, 'src, I, Expr>,
-) -> impl ScrapParser<'tokens, 'src, I, Expr>
+pub fn ops_parser<'tokens, I>(
+    base_parser: impl ScrapParser<'tokens, I, Expr>,
+) -> impl ScrapParser<'tokens, I, Expr>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     // Product ops (multiply and divide) have equal precedence
 

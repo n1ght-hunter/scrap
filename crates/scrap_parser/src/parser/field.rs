@@ -19,9 +19,9 @@ pub struct Field {
 }
 
 /// will emit an warn or error fi the field name starts with uppcase
-pub fn fields<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, LocalVec<Field>>
+pub fn fields<'tokens, I>() -> impl ScrapParser<'tokens, I, LocalVec<Field>>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     parse_ident()
         .then_ignore(just(Token::Colon))

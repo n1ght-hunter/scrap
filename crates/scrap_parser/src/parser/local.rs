@@ -17,11 +17,11 @@ pub struct Local {
     pub span: Span,
 }
 
-pub fn parse_local<'tokens, 'src: 'tokens, I>(
-    block_parser: impl ScrapParser<'tokens, 'src, I, Block> + 'tokens,
-) -> impl ScrapParser<'tokens, 'src, I, Local>
+pub fn parse_local<'tokens, I>(
+    block_parser: impl ScrapParser<'tokens, I, Block> + 'tokens,
+) -> impl ScrapParser<'tokens, I, Local>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     just(Token::Let)
         .ignore_then(pat_parser())

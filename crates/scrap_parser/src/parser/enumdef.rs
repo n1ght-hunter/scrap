@@ -21,9 +21,10 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariant>,
 }
 
-pub fn enum_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, EnumDef>
+/// Parse an enum definition
+pub fn enum_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, EnumDef>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let variant = parse_ident()
         .validate(move |id, _, emitter| {

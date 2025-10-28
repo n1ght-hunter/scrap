@@ -12,12 +12,12 @@ pub struct Ident {
     pub span: Span,
 }
 
-pub fn parse_ident<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Ident>
+pub fn parse_ident<'tokens, I>() -> impl ScrapParser<'tokens, I, Ident>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     select! {
-        Token::Ident(s) => s,
+        Token::Ident => "placeholder_ident",
     }
     .map_with(
         |s,
@@ -25,7 +25,7 @@ where
             '_,
             '_,
             I,
-            extra::Full<ParseError<'tokens, Token<'src>>, crate::parser::State, ()>,
+            extra::Full<ParseError<'tokens, Token>, crate::parser::State, ()>,
         >| Ident {
             id: e.state().new_node_id(),
             name: s.to_string(),

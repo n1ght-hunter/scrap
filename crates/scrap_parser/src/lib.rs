@@ -39,7 +39,7 @@ pub enum Error<'a> {
     #[error("Parse error: {0}")]
     Parse(anyhow::Error),
     #[error("Parser errors found")]
-    Parser(Vec<Rich<'a, Token<'a>>>),
+    Parser(Vec<Rich<'a, Token>>),
 }
 
 pub fn parse_files(
@@ -97,7 +97,7 @@ pub fn parse_files(
 
 pub fn parse_file_str<'a>(
     content: &'a str,
-) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token<'a>>>> {
+) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token>>> {
     let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
         (Vec::new(), Vec::new()),
         |(mut tokens, mut token_errors), (new_tok, new_span)| {

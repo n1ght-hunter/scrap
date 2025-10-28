@@ -26,22 +26,22 @@ pub enum KeyWords {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Literals<'a> {
+pub enum Literals {
     #[regex(r#""(\\.|[^"\\])*""#)]
-    Str(&'a str),
+    Str,
 
-    #[regex(r"[0-9]+\.[0-9]*", |lex| lex.slice().parse::<f64>().unwrap())]
-    Float(f64),
+    #[regex(r"[0-9]+\.[0-9]*")]
+    Float,
 
-    #[regex(r"[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
-    Int(i64),
+    #[regex(r"[0-9]+")]
+    Int,
 
-    #[token("false", |_| false)]
-    #[token("true", |_| true)]
-    Bool(bool),
+    #[token("false")]
+    #[token("true")]
+    Bool,
 
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
-    Ident(&'a str),
+    Ident,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -144,7 +144,7 @@ pub enum Delimiters {
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(error(LexingError, LexingError::from_lexer))]
-pub enum Token<'a> {
+pub enum Token {
     // Skip whitespace
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     #[display("<whitespace>")]

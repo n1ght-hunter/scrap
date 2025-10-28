@@ -18,9 +18,10 @@ pub struct Type {
     pub ident: Ident,
 }
 
-pub fn parse_type<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Type>
+/// Parse a type annotation
+pub fn parse_type<'tokens, I>() -> impl ScrapParser<'tokens, I, Type>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     parse_ident().map_with(|ident, e| Type {
         id: e.state().new_node_id(),

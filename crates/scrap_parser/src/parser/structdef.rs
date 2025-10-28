@@ -18,9 +18,10 @@ pub struct StructDef {
     pub fields: LocalVec<Field>,
 }
 
-pub fn struct_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, StructDef>
+/// Parse a struct definition
+pub fn struct_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, StructDef>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     let fields = fields()
         .validate(|fields, _, emmiter| {

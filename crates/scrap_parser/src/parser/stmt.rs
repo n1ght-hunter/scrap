@@ -42,11 +42,12 @@ pub enum StmtKind {
     Empty,
 }
 
-pub fn parse_stmt<'tokens, 'src: 'tokens, I>(
-    block_parser: impl ScrapParser<'tokens, 'src, I, Block> + 'tokens,
-) -> impl ScrapParser<'tokens, 'src, I, Stmt>
+/// Parse a statement
+pub fn parse_stmt<'tokens, I>(
+    block_parser: impl ScrapParser<'tokens, I, Block> + 'tokens,
+) -> impl ScrapParser<'tokens, I, Stmt>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     // Let statements MUST have semicolons
     let let_stmt = parse_local(block_parser.clone())
@@ -80,7 +81,7 @@ where
                 '_,
                 I,
                 chumsky::extra::Full<
-                    crate::parse_error::ParseError<'_, Token<'_>>,
+                    crate::parse_error::ParseError<'_, Token>,
                     super::State,
                     (),
                 >,
@@ -121,7 +122,7 @@ where
             '_,
             '_,
             I,
-            chumsky::extra::Full<crate::parse_error::ParseError<'_, Token<'_>>, super::State, ()>,
+            chumsky::extra::Full<crate::parse_error::ParseError<'_, Token>, super::State, ()>,
         >| Stmt {
             id: e.state().new_node_id(),
             kind,

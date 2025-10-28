@@ -17,9 +17,9 @@ pub struct Block {
     pub error: bool,
 }
 
-pub fn block_parser<'tokens, 'src: 'tokens, I>() -> impl ScrapParser<'tokens, 'src, I, Block>
+pub fn block_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Block>
 where
-    I: ScrapInput<'tokens, 'src>,
+    I: ScrapInput<'tokens>,
 {
     recursive(|block| {
         // Parse statements with better structure:

@@ -38,7 +38,7 @@ impl<T, S> ParseError<'_, T, S> {
 
 impl<'a, T, S> ParseError<'a, T, S> {
     /// Set the help message for this error.
-    fn with_help(mut self, msg: impl Into<String>) -> Self {
+    pub fn with_help(mut self, msg: impl Into<String>) -> Self {
         self.help = Some(msg.into());
         self
     }
