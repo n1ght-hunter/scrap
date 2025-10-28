@@ -777,6 +777,7 @@ dependencies = [
  "insta",
  "scrap_lexer",
  "scrap_parser",
+ "target-lexicon",
  "thiserror",
 ]
 

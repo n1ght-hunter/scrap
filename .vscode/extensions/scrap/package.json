@@ -13,17 +13,17 @@
     "activationEvents": [],
     "main": "./out/main.js",
     "scripts": {
-        "vscode:prepublish": "npm run build-base -- --minify",
+        "vscode:prepublish": "pnpm run build-base -- --minify",
         "package": "vsce package -o rust-analyzer.vsix",
-        "build-base": "esbuild ./src/main.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node --target=node20",
-        "build": "npm run build-base -- --sourcemap",
-        "watch": "npm run build-base -- --sourcemap --watch",
+        "build-base": "esbuild ./src/main.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node --target=node22",
+        "build": "pnpm run build-base --sourcemap",
+        "watch": "pnpm run build-base --sourcemap --watch",
         "format": "node --experimental-strip-types node_modules/prettier/bin/prettier.cjs . --write",
         "format:check": "node --experimental-strip-types node_modules/prettier/bin/prettier.cjs . --check",
         "lint": "eslint .",
-        "lint:fix": "npm run lint -- --fix",
+        "lint:fix": "pnpm run lint -- --fix",
         "typecheck": "tsc",
-        "pretest": "npm run typecheck && npm run build",
+        "pretest": "pnpm run typecheck && pnpm run build",
         "test": "node ./out/tests/runTests.js"
     },
     "dependencies": {

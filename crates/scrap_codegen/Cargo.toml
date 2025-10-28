@@ -19,5 +19,8 @@ cranelift-jit.workspace = true
 cranelift-native.workspace = true
 cranelift-object.workspace = true
 
+# general dependencies
+target-lexicon.workspace = true
+
 [dev-dependencies]
 insta.workspace = true
