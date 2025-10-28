@@ -781,6 +781,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrap_ir"
+version = "0.1.0"
+
+[[package]]
 name = "scrap_lexer"
 version = "0.1.0"
 dependencies = [

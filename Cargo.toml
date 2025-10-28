@@ -13,6 +13,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [workspace]
 members = ["crates/*"]
+resolver = "3"
 
 [workspace.package]
 version = "0.1.0"
