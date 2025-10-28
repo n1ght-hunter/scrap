@@ -1,0 +1,13 @@
+[package]
+name = "scrap_ast"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scrap_span.workspace = true
+scrap_errors.workspace = true
+thin-vec.workspace = true
+scrap_lexer.workspace = true
+
+[lints]
+workspace = true

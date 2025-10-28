@@ -6,9 +6,11 @@ edition.workspace = true
 [dependencies]
 scrap_codegen.workspace = true
 scrap_parser.workspace = true
+scrap_ir.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+clap.workspace = true
 
 
 [workspace]
@@ -26,6 +28,7 @@ scrap_parser = { path = "crates/scrap_parser" }
 scrap_lexer = { path = "crates/scrap_lexer" }
 scrap_codegen = { path = "crates/scrap_codegen" }
 scrap_macros = { path = "crates/scrap_macros" }
+scrap_ir = { path = "crates/scrap_ir" }
 
 
 thiserror = "2"
@@ -44,6 +47,7 @@ rustc-hash = "2.1.1"
 parking_lot = "0.12.5"
 crossbeam = "0.8"
 target-lexicon = "0.13.3"
+clap = { version = "4", features = ["derive"] }
 
 
 # backend
