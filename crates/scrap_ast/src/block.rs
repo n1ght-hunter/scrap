@@ -9,5 +9,4 @@ pub struct Block {
     pub stmts: ThinVec<Stmt>,
     pub id: NodeId,
     pub span: Span,
-    pub error: bool,
 }

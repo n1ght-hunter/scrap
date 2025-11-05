@@ -23,8 +23,45 @@ pub struct Variant {
 pub enum VariantData {
     Struct {
         fields: ThinVec<FieldDef>,
-        recovered: Recovered,
     },
     Tuple(ThinVec<FieldDef>, NodeId),
     Unit(NodeId),
+}
+
+impl VariantData {
+    pub fn is_struct(&self) -> bool {
+        matches!(self, VariantData::Struct { .. })
+    }
+
+    pub fn unwrap_struct(&self) -> &ThinVec<FieldDef> {
+        if let VariantData::Struct { fields } = self {
+            fields
+        } else {
+            panic!("called `unwrap_struct()` on a non-struct VariantData");
+        }
+    }
+
+    pub fn is_tuple(&self) -> bool {
+        matches!(self, VariantData::Tuple(_, _))
+    }
+
+    pub fn unwrap_tuple(&self) -> &ThinVec<FieldDef> {
+        if let VariantData::Tuple(fields, _) = self {
+            fields
+        } else {
+            panic!("called `unwrap_tuple()` on a non-tuple VariantData");
+        }
+    }
+
+    pub fn is_unit(&self) -> bool {
+        matches!(self, VariantData::Unit(_))
+    }
+
+    pub fn unwrap_unit(&self) -> NodeId {
+        if let VariantData::Unit(id) = self {
+            *id
+        } else {
+            panic!("called `unwrap_unit()` on a non-unit VariantData");
+        }
+    }
 }

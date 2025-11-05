@@ -1,12 +1,12 @@
 use rayon::prelude::*;
-use scrap_parser::parser::{
+use scrap_ast::{
     block::Block,
     expr::{Expr, ExprKind},
     fndef::FnDef,
     item::{Item, ItemKind},
     pat::PatKind,
     stmt::{Stmt, StmtKind},
-    typedef::Type,
+    typedef::Ty,
 };
 
 use crate::mir;
@@ -134,7 +134,7 @@ impl MirBuilder {
         })
     }
 
-    fn lower_type(&self, ast_type: &Type) -> Result<mir::Ty> {
+    fn lower_type(&self, ast_type: &Ty) -> Result<mir::Ty> {
         match ast_type.ident.name.as_str() {
             "int" => Ok(mir::Ty::Int),
             "bool" => Ok(mir::Ty::Bool),

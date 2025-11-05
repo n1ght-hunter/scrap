@@ -6,7 +6,6 @@ use crate::{expr::Expr, node_id::NodeId, pat::Pat, typedef::Ty};
 #[derive(Debug, Clone)]
 pub struct Local {
     pub id: NodeId,
-    pub super_: Option<Span>,
     pub pat: Box<Pat>,
     pub ty: Option<Ty>,
     pub expr: Box<Expr>,

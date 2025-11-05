@@ -1,0 +1,13 @@
+[package]
+name = "scrap_diagnostics"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+annotate-snippets.workspace = true
+anstyle.workspace = true
+anstream.workspace = true
+scrap_span.workspace = true
+
+[lints]
+workspace = true

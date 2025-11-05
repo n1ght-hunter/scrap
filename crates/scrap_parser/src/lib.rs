@@ -10,125 +10,55 @@
     negative_impls
 )]
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
-use chumsky::{input::Stream, prelude::*};
-use parse_error::ParseError;
-use parser::{file_parser, item::Item};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use scrap_diagnostics::annotate_snippets::Group;
 use scrap_lexer::{Logos, Token};
+use scrap_span::Spanned;
 
-pub mod ast;
-mod parse_error;
 pub mod parser;
-pub mod utils;
+mod errors;
 
-pub type Span = SimpleSpan;
+pub type PResult<'a, T> = std::result::Result<T, Group<'a>>;
+pub type TokenStream = Arc<Vec<Spanned<Token>>>;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Spanned<T> {
-    pub node: T,
-    pub span: Span,
-}
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error<'a> {
-    #[error("IO error: {0}")]
-    Io(std::io::Error),
-    #[error("Parse error: {0}")]
-    Parse(anyhow::Error),
-    #[error("Parser errors found")]
-    Parser(Vec<Rich<'a, Token>>),
-}
+// pub fn parse_file_str<'a>(
+//     content: &'a str,
+// ) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token>>> {
+//     let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
+//         (Vec::new(), Vec::new()),
+//         |(mut tokens, mut token_errors), (new_tok, new_span)| {
+//             let span = Span::from(new_span);
+//             match new_tok {
+//                 Ok(new_tok) => tokens.push((new_tok, span)),
+//                 Err(e) => token_errors.push(ParseError::<Token, _>::custom(span, e.to_string())),
+//             }
+//             (tokens, token_errors)
+//         },
+//     );
 
-pub fn parse_files(
-    files: impl IntoParallelIterator<Item = impl AsRef<Path>>,
-) -> anyhow::Result<Vec<(String, Vec<Item>)>> {
-    let res = files
-        .into_par_iter()
-        .map(|file| {
-            let file = file.as_ref();
-            if !file.exists() {
-                anyhow::bail!("File does not exist: {}", file.display());
-            }
-            let content = std::fs::read_to_string(file)
-                .with_context(|| format!("Failed to read file: {}", file.display()))?;
-            let filename = file
-                .file_name()
-                .context("Failed to get file name")?
-                .to_string_lossy()
-                .into_owned();
+//     let token_stream =
+//         Stream::from_iter(token_iter).map((0..content.len()).into(), |(t, s): (_, _)| (t, s));
 
-            match parse_file_str(&content) {
-                Ok(ast) => {
-                    if ast.is_none() {
-                        anyhow::bail!("No items found in file: {}", file.display());
-                    }
+//     let mut state = parser::State::new("<input>");
 
-                    Ok((filename, ast.unwrap()))
-                }
-                Err(parse_errs) => {
-                    let source = ariadne::Source::from(&content);
-                    parse_errs
-                        .into_iter()
-                        .map(|e| e.print(&filename, &source))
-                        .inspect(|res| {
-                            if let Err(e) = res {
-                                tracing::error!("Failed to report parse errors: {}", e);
-                            }
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                        .context("Failed to report parse errors")?;
+//     let (ast, mut parse_errs) = file_parser()
+//         .parse_with_state(token_stream, &mut state)
+//         .into_output_errors();
 
-                    anyhow::bail!("Failed to parse file: {}", file.display());
-                }
-            }
-        })
-        .inspect(|res| {
-            if let Err(e) = res {
-                tracing::error!("{}", e);
-            }
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+//     if parse_errs.is_empty() && lex_errs.is_empty() {
+//         return Ok(ast);
+//     }
 
-    Ok(res)
-}
+//     parse_errs.append(&mut lex_errs);
 
-pub fn parse_file_str<'a>(
-    content: &'a str,
-) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token>>> {
-    let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
-        (Vec::new(), Vec::new()),
-        |(mut tokens, mut token_errors), (new_tok, new_span)| {
-            let span = SimpleSpan::from(new_span);
-            match new_tok {
-                Ok(new_tok) => tokens.push((new_tok, span)),
-                Err(e) => token_errors.push(ParseError::<Token, _>::custom(span, e.to_string())),
-            }
-            (tokens, token_errors)
-        },
-    );
+//     Err(parse_errs)
+// }
 
-    let token_stream =
-        Stream::from_iter(token_iter).map((0..content.len()).into(), |(t, s): (_, _)| (t, s));
-
-    let mut state = parser::State::new("<input>");
-
-    let (ast, mut parse_errs) = file_parser()
-        .parse_with_state(token_stream, &mut state)
-        .into_output_errors();
-
-    if parse_errs.is_empty() && lex_errs.is_empty() {
-        return Ok(ast);
-    }
-
-    parse_errs.append(&mut lex_errs);
-
-    Err(parse_errs)
-}
-
-#[cfg(test)]
+#[cfg(target_feature = "rayon")]
 mod tests {
     use std::path::PathBuf;
 

@@ -18,3 +18,13 @@ pub struct Path {
     /// Global paths begin with `kw::PathRoot`.
     pub segments: ThinVec<PathSegment>,
 }
+
+impl Path {
+    pub fn from_ident(ident: Ident) -> Self {
+        let id = ident.id;
+        Path {
+            span: ident.span,
+            segments: ThinVec::from([PathSegment { ident, id }]),
+        }
+    }
+}

@@ -1,4 +1,3 @@
-use std::num::ParseIntError;
 
 use crate::Token;
 
@@ -12,17 +11,6 @@ pub enum LexingError {
     #[default]
     #[error("other error")]
     Other,
-}
-
-/// Error type returned by calling `lex.slice().parse()` to u8.
-impl From<ParseIntError> for LexingError {
-    fn from(err: ParseIntError) -> Self {
-        use std::num::IntErrorKind::*;
-        match err.kind() {
-            PosOverflow | NegOverflow => LexingError::InvalidInteger("overflow error".to_owned()),
-            _ => LexingError::InvalidInteger("other error".to_owned()),
-        }
-    }
 }
 
 impl LexingError {

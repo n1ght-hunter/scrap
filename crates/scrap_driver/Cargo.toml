@@ -1,12 +1,9 @@
 [package]
-name = "scrap_ir"
+name = "scrap_driver"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-scrap_ast.workspace = true
-rayon.workspace = true
-thiserror.workspace = true
 
 [lints]
 workspace = true

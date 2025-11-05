@@ -1,177 +1,84 @@
-//! Expression parsing following the Rust parser structure
-
-use super::{
-    ScrapInput, ScrapParser,
+use scrap_ast::{
     block::Block,
-    ident::Ident,
-    lit::{Lit, lit_parser},
-    operators::{AssignOpKind, BinOp},
-    parse_ident,
+    expr::{Expr, ExprKind},
 };
-use crate::{Spanned, ast::NodeId, parser::operators::ops_parser, utils::LocalVec};
-use chumsky::prelude::*;
 use scrap_lexer::Token;
-use thin_vec::ThinVec;
+use scrap_span::{Span, Spanned};
 
-#[derive(Debug, Clone)]
-pub struct PathSegment {
-    /// The identifier portion of this path segment.
-    pub ident: Ident,
+impl<'a> super::NewParser<'a> {
+    pub fn parse_expr(&mut self) -> crate::PResult<'a, Expr> {
+        let start = self.token.span.start;
 
-    pub id: NodeId,
-}
+        let kind = self.parse_expr_kind()?;
 
-#[derive(Debug, Clone)]
-pub struct Path {
-    pub span: crate::Span,
-    /// The segments in the path: the things separated by `::`.
-    /// Global paths begin with `kw::PathRoot`.
-    pub segments: ThinVec<PathSegment>,
-}
+        Ok(Expr {
+            id: self.state.new_node_id(),
+            kind: kind,
+            span: Span::new(start..self.token.span.end),
+        })
+    }
 
-/// An expression node in the AST
-#[derive(Debug, Clone)]
-pub struct Expr {
-    pub id: NodeId,
-    pub kind: ExprKind,
-    pub span: crate::Span,
-}
+    pub fn parse_expr_kind(&mut self) -> crate::PResult<'a, ExprKind> {
+        if self.check(Token::LBrace) {
+            let block = self.parse_block()?;
+            return Ok(ExprKind::Block(Box::new(block)));
+        }
+        if self.check(Token::LBracket) {
+            unimplemented!("array expression parsing not implemented yet");
+        }
+        if self.check(Token::Ident) {
+            if let Some(Spanned {
+                node: Token::LParen,
+                ..
+            }) = self.look_ahead(1)
+            {
+                unimplemented!("function call expression parsing not implemented yet");
+            }
+        }
 
-/// Expression kinds - subset of Rust's ExprKind enum
-#[derive(Debug, Clone)]
-pub enum ExprKind {
-    /// An array literal (e.g., `[a, b, c, d]`)
-    Array(LocalVec<Box<Expr>>),
-    /// A function call
-    Call(Box<Expr>, LocalVec<Box<Expr>>),
-    /// A binary operation (e.g., `a + b`, `a * b`)
-    Binary(BinOp, Box<Expr>, Box<Expr>),
-    /// A literal value (e.g., `1`, `"foo"`)
-    Lit(Lit),
-    /// An `if` block, with an optional `else` block
-    If(Box<Expr>, Box<Block>, Option<Box<Expr>>),
-    /// A block (`{ ... }`)
-    Block(Box<Block>),
-    /// Variable reference
-    Path(Path),
-    /// A parenthesized expression
-    Paren(Box<Expr>),
-    /// A `return` expression
-    Return(Option<Box<Expr>>),
-    /// An assignment (`place = expr`)
-    Assign(Box<Expr>, Box<Expr>, crate::Span),
-    /// An assignment with an operator (`place += expr`)
-    AssignOp(Spanned<AssignOpKind>, Box<Expr>, Box<Expr>),
-    /// Error placeholder
-    Err,
-}
+        if self.eat(Token::Return) {
+            let expr = if !self.eat(Token::Semicolon) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+            return Ok(ExprKind::Return(expr.map(Box::new)));
+        }
 
-/// Parse a full expression with all operators and precedence
-pub fn expr_parser<'tokens, I>(
-    block_parser: impl ScrapParser<'tokens, I, Block> + 'tokens,
-) -> impl ScrapParser<'tokens, I, Expr>
-where
-    I: ScrapInput<'tokens>,
-{
-    recursive(|expr| {
-        choice((
-            just(Token::Return)
-                .then(inline_expr_parser().or_not())
-                .then_ignore(just(Token::Semicolon))
-                .map_with(|(_, expr), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::Return(expr.map(Box::new)),
-                    span: e.span(),
-                }),
-            lit_parser().map_with(|lit, e| Expr {
-                id: e.state().new_node_id(),
-                kind: ExprKind::Lit(lit),
-                span: e.span(),
-            }),
-            just(Token::If)
-                .then(inline_expr_parser())
-                .then(block_parser)
-                .then(just(Token::Else).ignore_then(expr.clone()).or_not())
-                .map_with(|(((_, cond), then_block), else_block), e| Expr {
-                    id: e.state().new_node_id(),
-                    kind: ExprKind::If(
-                        Box::new(cond),
-                        Box::new(then_block),
-                        else_block.map(Box::new),
-                    ),
-                    span: e.span(),
-                }),
-            // just(Token::If)
-            //     .then(inline_expr_parser())
-            //     .then(block_parser())
-            //     .then(just(Token::Else).ignore_then(block_parser()).or_not())
-            //     .map_with(|(((_, cond), then_block), else_block), e| Expr {
-            //         id: e.state().new_node_id(),
-            //         kind: ExprKind::If(
-            //             Box::new(cond),
-            //             Box::new(then_block),
-            //             else_block.map(Box::new),
-            //         ),
-            //         span: e.span(),
-            //     }),
-        ))
-    })
-    .labelled("expression")
-}
-
-/// Parse inline expressions (simplified version for simple cases)
-pub fn inline_expr_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Expr>
-where
-    I: ScrapInput<'tokens>,
-{
-    atom_parser()
-}
-
-pub fn atom_parser<'tokens, I>() -> impl ScrapParser<'tokens, I, Expr>
-where
-    I: ScrapInput<'tokens>,
-{
-    let lit_parser = lit_parser().map_with(|lit, e| Expr {
-        id: e.state().new_node_id(),
-        kind: ExprKind::Lit(lit),
-        span: e.span(),
-    });
-
-    let ident = parse_ident().map_with(|ident, e| Expr {
-        id: e.state().new_node_id(),
-        kind: ExprKind::Path(Path {
-            span: e.span(),
-            segments: ThinVec::from(vec![PathSegment {
-                ident,
-                id: e.state().new_node_id(),
-            }]),
-        }),
-        span: e.span(),
-    });
-
-    ops_parser(choice((lit_parser, ident)))
+        Err(self.unexpected_token_error(&[
+            Token::LBrace,
+            Token::LBracket,
+            Token::Ident,
+            Token::Return,
+        ]))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{State, block::block_parser, lit::LitKind};
+    use scrap_ast::expr::ExprKind;
 
-    use super::*;
+    use crate::parser::parse_test_utils::{ExtendRes, parse_with};
+
 
     #[test]
-    fn test_parse_simple_return() {
-        let input = [Token::Return, Token::Int, Token::Semicolon];
-        let mut state = State::new("test.sc");
-        let expr = expr_parser(block_parser())
-            .parse_with_state(&input, &mut state)
-            .unwrap();
+    fn parse_return() {
+         let source = "return;";
+        let mut parser = parse_with(source);
+        let expr = parser.parse_expr().unwrap_or_render();
+        assert!(matches!(expr.kind, ExprKind::Return(None)));
+    }
 
+    #[test]
+    fn parse_return_with_expr() {
+         let source = "return 42;";
+        let mut parser = parse_with(source);
+        let expr = parser.parse_expr().unwrap_or_render();
         match expr.kind {
-            ExprKind::Return(Some(boxed_expr)) => match boxed_expr.kind {
-                ExprKind::Lit(lit) => assert_eq!(lit.kind, LitKind::Integer),
-                _ => panic!("Expected literal expression"),
-            },
-            _ => panic!("Expected return expression"),
+            ExprKind::Return(Some(ret_expr)) => {
+                assert!(matches!(ret_expr.kind, ExprKind::Lit(_)));
+            }
+            _ => panic!("expected return expression with value"),
         }
     }
 }

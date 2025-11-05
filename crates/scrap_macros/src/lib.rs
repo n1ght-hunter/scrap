@@ -146,6 +146,18 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
             .retain(|attr| !attr.path().is_ident("display"));
     }
 
+    let all_name = all_variants.iter().map(|v| &v.ident).collect::<Vec<_>>();
+    let from_u32 = quote! {
+        impl Token {
+            pub fn from_u32(val: u32) -> Token {
+                match val {
+                    #(x if x == Token::#all_name as u32 => Token::#all_name,)*
+                    _ => panic!("unhandled value: {}", val),
+                }
+            }
+        }
+    };
+
     for var in all_variants {
         token_enum.variants.push(var);
     }
@@ -172,6 +184,8 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
         #token_enum
 
         #display_impl
+
+        #from_u32
     }
     .into()
 }

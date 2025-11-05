@@ -4,8 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-chumsky.workspace = true
 scrap_lexer.workspace = true
+scrap_span.workspace = true
+scrap_errors.workspace = true
+scrap_ast.workspace = true
+scrap_diagnostics.workspace = true
+
+
 ariadne.workspace = true
 thin-vec.workspace = true
 anyhow.workspace = true
@@ -14,7 +19,8 @@ rayon.workspace = true
 tracing.workspace = true
 wyhash.workspace = true
 inflections.workspace = true
-bitflags.workspace = true
+strum.workspace = true
+lasso.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

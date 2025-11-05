@@ -4,6 +4,7 @@ use scrap_macros::expand_tokens;
 use crate::error::LexingError;
 
 pub mod error;
+pub mod token_stream;
 
 expand_tokens! {
 
@@ -23,6 +24,8 @@ pub enum KeyWords {
     Else,
     #[token("return")]
     Return,
+    #[token("mod")]
+    Mod,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -142,7 +145,13 @@ pub enum Delimiters {
     Semicolon,
 }
 
-#[derive(Logos, Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
+pub enum Visibility {
+    #[token("pub")]
+    Pub,
+}
+
+#[derive(Logos, Debug, PartialEq, Clone, Copy)]
 #[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     // Skip whitespace
@@ -157,8 +166,17 @@ pub enum Token {
     #[regex(r"///[^\r\n]*", logos::skip)]
     #[display("<doc_comment>")]
     DocComment,
+
+    Dummy,
+    Eof,
 }
 
+}
+
+impl Token {
+    pub const fn dummy() -> Self {
+        Token::Dummy
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use scrap_span::Span;
+use strum_macros::{EnumDiscriminants, EnumIter};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -18,7 +19,8 @@ pub struct Expr {
 }
 
 /// Expression kinds - subset of Rust's ExprKind enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 pub enum ExprKind {
     /// An array literal (e.g., `[a, b, c, d]`)
     Array(ThinVec<Box<Expr>>),

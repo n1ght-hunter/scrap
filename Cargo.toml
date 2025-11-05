@@ -30,26 +30,48 @@ scrap_codegen = { path = "crates/scrap_codegen" }
 scrap_macros = { path = "crates/scrap_macros" }
 scrap_ir = { path = "crates/scrap_ir" }
 scrap_ast = { path = "crates/scrap_ast" }
+scrap_diagnostics = { path = "crates/scrap_diagnostics" }
+scrap_errors = { path = "crates/scrap_errors" }
+scrap_span = { path = "crates/scrap_span" }
 
 
-thiserror = "2"
-anyhow = "1"
 either = "1"
-rayon = "1"
-insta = "1"
-thin-vec = "0.2"
-tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
 wyhash = "0.6.0"
 inflections = "1.1.1"
-serde = "1"
-serde_json = "1"
-rustc-hash = "2.1.1"
-parking_lot = "0.12.5"
-crossbeam = "0.8"
 target-lexicon = "0.13.3"
 clap = { version = "4", features = ["derive"] }
+salsa = "0.24.0"
+strum = "0.27.2"
+strum_macros = "0.27.2"
+lasso = "0.7.3"
 
+# diagnostics and error reporting
+tracing = "0.1.41"
+tracing-subscriber = "0.3.20"
+thiserror = "2"
+anyhow = "1"
+annotate-snippets = "0.12.8"
+ariadne = "0.6.0"
+anstyle = "1.0.13"
+anstream = "0.6.21"
+
+# extended std like
+rayon = "1"
+thin-vec = "0.2"
+parking_lot = "0.12.5"
+crossbeam = "0.8"
+rustc-hash = "2.1.1"
+
+# testing
+insta = "1"
+
+# serialization
+bincode = { version = "2", default-features = false, features = [
+    "serde",
+    "std",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # backend
 cranelift = "0.125"
@@ -60,7 +82,6 @@ cranelift-object = "0.125"
 
 # Parser
 chumsky = "0.11.1"
-ariadne = "0.5.1"
 
 # Lexer 
 logos = "0.15.1"
@@ -72,7 +93,6 @@ quote = "1"
 bitflags = "2"
 
 [workspace.lints.rust]
-missing_debug_implementations = "warn"
 missing_docs = "allow"
 unsafe_code = "warn"
 

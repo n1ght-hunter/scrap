@@ -1,6 +1,6 @@
 
 
 fn main() {
-    // print("Hello, world!");
-    return;
+    print("Hello, world!");
 }
+

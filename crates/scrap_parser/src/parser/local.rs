@@ -1,40 +1,29 @@
-use crate::{Span, ast::NodeId};
-use chumsky::prelude::*;
+use scrap_ast::{block::Block, local::Local};
 use scrap_lexer::Token;
+use scrap_span::Span;
 
-use super::{
-    block::Block, expr::{expr_parser, Expr}, pat::{pat_parser, Pat}, typedef::{parse_type, Type}, ScrapInput, ScrapParser
-};
+impl<'a> super::NewParser<'a> {
+    /// let <pat>:<ty> = <expr>;
+    pub fn parse_local(&mut self) -> crate::PResult<'a, Local> {
+        let start = self.token.span.start;
+        self.expect(Token::Let)?;
+        let pat = self.parse_pat()?;
+        let mut ty = None;
+        if self.eat(Token::Colon) {
+            ty = Some(self.parse_type()?);
+        }
+        self.expect(Token::Eq)?;
 
-/// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.
-#[derive(Debug, Clone)]
-pub struct Local {
-    pub id: NodeId,
-    pub super_: Option<Span>,
-    pub pat: Box<Pat>,
-    pub ty: Option<Type>,
-    pub expr: Box<Expr>,
-    pub span: Span,
-}
+        let expr = self.parse_expr()?;
 
-pub fn parse_local<'tokens, I>(
-    block_parser: impl ScrapParser<'tokens, I, Block> + 'tokens,
-) -> impl ScrapParser<'tokens, I, Local>
-where
-    I: ScrapInput<'tokens>,
-{
-    just(Token::Let)
-        .ignore_then(pat_parser())
-        .then(just(Token::Colon).ignore_then(parse_type()).or_not())
-        .then_ignore(just(Token::Assign))
-        .then(expr_parser(block_parser))
-        .then_ignore(just(Token::Semicolon))
-        .map_with(|((pat, ty), expr), e| Local {
-            id: e.state().new_node_id(),
-            super_: None,
+        self.expect(Token::Semicolon)?;
+
+        Ok(Local {
+            id: self.state.new_node_id(),
+            span: Span::new(start..expr.span.end),
             pat: Box::new(pat),
             ty,
             expr: Box::new(expr),
-            span: e.span(),
         })
+    }
 }
