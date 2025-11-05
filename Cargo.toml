@@ -29,6 +29,7 @@ scrap_lexer = { path = "crates/scrap_lexer" }
 scrap_codegen = { path = "crates/scrap_codegen" }
 scrap_macros = { path = "crates/scrap_macros" }
 scrap_ir = { path = "crates/scrap_ir" }
+scrap_ast = { path = "crates/scrap_ast" }
 
 
 thiserror = "2"
