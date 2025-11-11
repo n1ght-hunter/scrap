@@ -1,7 +1,4 @@
-use scrap_ast::{
-    block::Block,
-    expr::{Expr, ExprKind},
-};
+use scrap_ast::expr::{Expr, ExprKind};
 use scrap_lexer::Token;
 use scrap_span::{Span, Spanned};
 
@@ -45,6 +42,11 @@ impl<'a> super::NewParser<'a> {
             return Ok(ExprKind::Return(expr.map(Box::new)));
         }
 
+        if self.token.node.is_literal() {
+            let lit = self.parse_lit()?;
+            return Ok(ExprKind::Lit(lit));
+        }
+
         Err(self.unexpected_token_error(&[
             Token::LBrace,
             Token::LBracket,
@@ -56,14 +58,13 @@ impl<'a> super::NewParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use scrap_ast::expr::ExprKind;
+    use scrap_ast::{expr::ExprKind, lit::Lit};
 
     use crate::parser::parse_test_utils::{ExtendRes, parse_with};
 
-
     #[test]
     fn parse_return() {
-         let source = "return;";
+        let source = "return;";
         let mut parser = parse_with(source);
         let expr = parser.parse_expr().unwrap_or_render();
         assert!(matches!(expr.kind, ExprKind::Return(None)));
@@ -71,12 +72,18 @@ mod tests {
 
     #[test]
     fn parse_return_with_expr() {
-         let source = "return 42;";
+        let source = "return 42;";
         let mut parser = parse_with(source);
         let expr = parser.parse_expr().unwrap_or_render();
         match expr.kind {
             ExprKind::Return(Some(ret_expr)) => {
-                assert!(matches!(ret_expr.kind, ExprKind::Lit(_)));
+                assert!(matches!(
+                    ret_expr.kind,
+                    ExprKind::Lit(Lit {
+                        kind: scrap_ast::lit::LitKind::Integer,
+                        ..
+                    })
+                ));
             }
             _ => panic!("expected return expression with value"),
         }

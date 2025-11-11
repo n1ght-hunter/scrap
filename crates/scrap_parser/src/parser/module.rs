@@ -1,5 +1,5 @@
 use scrap_ast::{
-    item::{Item, ItemKind, ItemKindDiscriminants},
+    item::{Item, ItemKind},
     module::{Inline, Module},
 };
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};

@@ -1,4 +1,4 @@
-use scrap_ast::{block::Block, local::Local};
+use scrap_ast::local::Local;
 use scrap_lexer::Token;
 use scrap_span::Span;
 

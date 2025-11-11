@@ -1,19 +1,13 @@
 use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
-use scrap_ast::item::Item;
 use scrap_ast::node_id::NodeId;
-use scrap_diagnostics::AnnotationKind;
-use scrap_diagnostics::Level;
-use scrap_diagnostics::Snippet;
-use scrap_errors::FatalError;
 use scrap_lexer::Token;
 
 use scrap_lexer::token_stream::TokenStreamCursor;
 use scrap_lexer::token_stream::TokenTypeSet;
 use scrap_span::Span;
 use scrap_span::Spanned;
-use thin_vec::ThinVec;
 
 #[derive(Debug, Clone)]
 pub struct State<'a> {
@@ -58,6 +52,7 @@ mod utils;
 pub mod stmt;
 pub mod local;
 pub mod expr;
+pub mod lit;
 
 pub struct NewParser<'a> {
     pub(crate) source: &'a str,

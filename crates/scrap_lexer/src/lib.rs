@@ -9,7 +9,7 @@ pub mod token_stream;
 expand_tokens! {
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum KeyWords {
+pub enum KeyWord {
    #[token("enum")]
     Enum,
     #[token("struct")]
@@ -29,7 +29,7 @@ pub enum KeyWords {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Literals {
+pub enum Literal {
     #[regex(r#""(\\.|[^"\\])*""#)]
     Str,
 
@@ -48,7 +48,7 @@ pub enum Literals {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum BinaryOperators {
+pub enum BinaryOperator {
     #[token("+")]
     Add,
     #[token("-")]
@@ -88,7 +88,7 @@ pub enum BinaryOperators {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum AssignOps {
+pub enum AssignOp {
     #[token("+=")]
     AddAssign,
     #[token("-=")]
@@ -116,7 +116,7 @@ pub enum AssignOps {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Operators {
+pub enum Operator {
     #[token("->")]
     Arrow,
     #[token("=")]
@@ -124,7 +124,7 @@ pub enum Operators {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Delimiters {
+pub enum Delimiter {
     #[token("(")]
     LParen,
     #[token(")")]

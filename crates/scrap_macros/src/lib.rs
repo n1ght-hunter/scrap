@@ -172,6 +172,39 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
         }
     });
 
+    // Generate TryFrom implementations for each sub-enum
+    let try_from_impls = sub_enums.iter().map(|(enum_name, variant_names)| {
+        let match_arms = variant_names.iter().map(|variant| {
+            quote! {
+                Token::#variant => Ok(#enum_name::#variant)
+            }
+        });
+
+        quote! {
+            impl TryFrom<Token> for #enum_name {
+                type Error = Token;
+
+                fn try_from(token: Token) -> Result<Self, Self::Error> {
+                    match token {
+                        #(#match_arms,)*
+                        other => Err(other),
+                    }
+                }
+            }
+
+            impl<'a> TryFrom<&'a Token> for #enum_name {
+                type Error = &'a Token;
+
+                fn try_from(token: &'a Token) -> Result<Self, Self::Error> {
+                    match token {
+                        #(Token::#variant_names => Ok(#enum_name::#variant_names),)*
+                        other => Err(other),
+                    }
+                }
+            }
+        }
+    });
+
     let from_u32 = quote! {
         impl Token {
             pub fn from_u32(val: u32) -> Token {
@@ -213,6 +246,8 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
         #display_impl
 
         #from_u32
+
+        #(#try_from_impls)*
     }
     .into()
 }

@@ -1,9 +1,5 @@
-use scrap_ast::{
-    block::Block,
-    stmt::{Stmt, StmtKind},
-};
+use scrap_ast::stmt::{Stmt, StmtKind};
 use scrap_lexer::Token;
-use scrap_span::Span;
 
 impl<'a> super::NewParser<'a> {
     pub fn parse_stmt(&mut self) -> crate::PResult<'a, Stmt> {

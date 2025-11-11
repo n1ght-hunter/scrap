@@ -10,12 +10,10 @@
     negative_impls
 )]
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::Context;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use scrap_diagnostics::annotate_snippets::Group;
-use scrap_lexer::{Logos, Token};
+use scrap_lexer::Token;
 use scrap_span::Spanned;
 
 pub mod parser;
