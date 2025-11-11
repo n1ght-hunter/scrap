@@ -38,6 +38,7 @@ scrap_span = { path = "crates/scrap_span" }
 either = "1"
 wyhash = "0.6.0"
 inflections = "1.1.1"
+heck = "0.5.0"
 target-lexicon = "0.13.3"
 clap = { version = "4", features = ["derive"] }
 salsa = "0.24.0"

@@ -1,3 +1,4 @@
+use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Attribute, LitStr, Meta, parse::Parse, parse_macro_input};
@@ -89,6 +90,9 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
     let mut token_enum = None;
     let mut display_arms = Vec::new();
 
+    // Store enum names and their variants for generating is_* methods
+    let mut sub_enums: Vec<(syn::Ident, Vec<syn::Ident>)> = Vec::new();
+
     let items = items
         .into_iter()
         .filter_map(|item| {
@@ -113,6 +117,11 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
                         display_arms.push(display_arm);
                     }
                 }
+
+                // Store enum name and variant names for is_* methods
+                let variant_names: Vec<syn::Ident> =
+                    item.variants.iter().map(|v| v.ident.clone()).collect();
+                sub_enums.push((item.ident.clone(), variant_names));
 
                 all_variants.extend(item.variants.clone());
                 Some(item)
@@ -147,6 +156,22 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
     }
 
     let all_name = all_variants.iter().map(|v| &v.ident).collect::<Vec<_>>();
+
+    // Generate is_* methods for each sub-enum
+    let is_methods = sub_enums.iter().map(|(enum_name, variant_names)| {
+        // Convert enum name to snake_case for method name (e.g., BinaryOperators -> is_binary_operators)
+        let method_name = syn::Ident::new(
+            &format!("is_{}", enum_name.to_string().to_snake_case()),
+            enum_name.span(),
+        );
+
+        quote! {
+            pub fn #method_name(&self) -> bool {
+                matches!(self, #(Token::#variant_names)|*)
+            }
+        }
+    });
+
     let from_u32 = quote! {
         impl Token {
             pub fn from_u32(val: u32) -> Token {
@@ -155,6 +180,8 @@ pub fn expand_tokens(input: TokenStream) -> TokenStream {
                     _ => panic!("unhandled value: {}", val),
                 }
             }
+
+            #(#is_methods)*
         }
     };
 
