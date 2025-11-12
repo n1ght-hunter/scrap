@@ -1010,9 +1010,9 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "insta",
+ "scrap_ast",
  "scrap_ir",
  "scrap_lexer",
- "scrap_parser",
  "target-lexicon",
  "thiserror",
 ]

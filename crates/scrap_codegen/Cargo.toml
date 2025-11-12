@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 # Local crates
-scrap_parser.workspace = true
+scrap_ast.workspace = true
 scrap_lexer.workspace = true
 scrap_ir.workspace = true
 

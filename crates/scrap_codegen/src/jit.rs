@@ -4,8 +4,7 @@ use crate::{CodegenError, CodegenResult};
 use anyhow::Result;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{FuncId, Linkage, Module};
-use scrap_parser::parser::fndef::FnDef;
+use cranelift_module::FuncId;
 use std::collections::HashMap;
 
 /// A JIT compiler for Scrap programs that can execute code in memory.
@@ -32,43 +31,43 @@ impl JitCompiler {
     }
 
     /// Compiles and loads a function into the JIT.
-    pub fn compile_function(&mut self, func: &FnDef) -> CodegenResult<FuncId> {
-        // Create the function signature
-        let mut sig = self.module.make_signature();
+    // pub fn compile_function(&mut self, func: &FnDef) -> CodegenResult<FuncId> {
+    //     // Create the function signature
+    //     let mut sig = self.module.make_signature();
 
-        // TODO: Add parameters based on function signature
-        // For now, assume no parameters and return i64
-        sig.returns.push(AbiParam::new(types::I64));
+    //     // TODO: Add parameters based on function signature
+    //     // For now, assume no parameters and return i64
+    //     sig.returns.push(AbiParam::new(types::I64));
 
-        let func_id = self
-            .module
-            .declare_function(&func.ident.name, Linkage::Export, &sig)?;
+    //     let func_id = self
+    //         .module
+    //         .declare_function(&func.ident.name, Linkage::Export, &sig)?;
 
-        // Create function context and builder
-        let mut ctx = codegen::Context::new();
-        ctx.func.signature = sig;
+    //     // Create function context and builder
+    //     let mut ctx = codegen::Context::new();
+    //     ctx.func.signature = sig;
 
-        {
-            let mut builder = FunctionBuilder::new(&mut ctx.func, &mut self.builder_context);
-            let entry_block = builder.create_block();
-            builder.append_block_params_for_function_params(entry_block);
-            builder.switch_to_block(entry_block);
-            builder.seal_block(entry_block);
+    //     {
+    //         let mut builder = FunctionBuilder::new(&mut ctx.func, &mut self.builder_context);
+    //         let entry_block = builder.create_block();
+    //         builder.append_block_params_for_function_params(entry_block);
+    //         builder.switch_to_block(entry_block);
+    //         builder.seal_block(entry_block);
 
-            // TODO: Compile function body
-            // For now, just return a constant
-            let value = builder.ins().iconst(types::I64, 42);
-            builder.ins().return_(&[value]);
+    //         // TODO: Compile function body
+    //         // For now, just return a constant
+    //         let value = builder.ins().iconst(types::I64, 42);
+    //         builder.ins().return_(&[value]);
 
-            builder.finalize();
-        }
+    //         builder.finalize();
+    //     }
 
-        // Define the function in the module
-        self.module.define_function(func_id, &mut ctx)?;
+    //     // Define the function in the module
+    //     self.module.define_function(func_id, &mut ctx)?;
 
-        self.functions.insert(func.ident.name.clone(), func_id);
-        Ok(func_id)
-    }
+    //     self.functions.insert(func.ident.name.clone(), func_id);
+    //     Ok(func_id)
+    // }
 
     /// Finalizes all compiled functions and prepares them for execution.
     pub fn finalize(&mut self) -> CodegenResult<()> {

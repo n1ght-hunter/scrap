@@ -123,7 +123,7 @@ fn create_start_function(
 
     // --- IR to call main() ---
     let main_ref = module.declare_func_in_func(main_func_id, builder.func);
-    let call_main = builder.ins().call(main_ref, &[]);
+    let _call_main = builder.ins().call(main_ref, &[]);
     // let main_exit_code = builder.inst_results(call_main)[0];
     let main_exit_code = builder.ins().iconst(types::I32, 30); // FIX: Placeholder for main's return value
 

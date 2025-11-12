@@ -1,4 +1,3 @@
-use std::path::Path;
 
 use scrap_ast::Can;
 use scrap_ast::Recovered;

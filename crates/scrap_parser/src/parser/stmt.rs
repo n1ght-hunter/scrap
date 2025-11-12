@@ -1,5 +1,4 @@
 use scrap_ast::stmt::{Stmt, StmtKind};
-use scrap_diagnostics::Level;
 use scrap_lexer::Token;
 
 use crate::utils::ExtendRes;

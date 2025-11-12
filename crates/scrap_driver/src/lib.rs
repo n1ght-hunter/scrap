@@ -1,13 +1,9 @@
 mod args;
 
-use std::{ffi::OsString, path::PathBuf};
+use std::ffi::OsString;
 
 use args::UnPrettyOut;
 use clap::Parser;
-use salsa::Database;
-use scrap_ast::{Can, module::Module};
-use scrap_lexer::Logos;
-use scrap_parser::TokenStream;
 
 #[salsa::tracked(debug)]
 struct TrackedArgs<'db> {

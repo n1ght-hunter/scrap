@@ -10,13 +10,11 @@
     negative_impls
 )]
 
-use std::sync::Arc;
 
 use parser::{Parser, State};
 use scrap_ast::item::Item;
 use scrap_diagnostics::annotate_snippets::Group;
 use scrap_lexer::{Token, token_stream::TokenStreamCursor};
-use scrap_span::Spanned;
 use thin_vec::ThinVec;
 
 mod errors;
