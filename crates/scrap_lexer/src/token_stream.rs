@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc};
 
-use scrap_span::{Span, Spanned};
+use scrap_span::Spanned;
 
 use crate::Token;
 
@@ -58,23 +58,23 @@ impl Iterator for TokenTypeSetIter {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokenStream {
-    inner: Arc<Vec<Spanned<Token>>>,
+pub struct TokenStream<'db> {
+    inner: Arc<Vec<Spanned<'db, Token>>>,
 }
 
-impl Deref for TokenStream {
-    type Target = Vec<Spanned<Token>>;
+impl<'db> Deref for TokenStream<'db> {
+    type Target = Vec<Spanned<'db, Token>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl TokenStream {
-    pub fn new(mut inner: Vec<Spanned<Token>>) -> Self {
+impl<'db> TokenStream<'db> {
+    pub fn new(mut inner: Vec<Spanned<'db, Token>>) -> Self {
         if let Some(last) = inner.last() {
             if last.node != Token::Eof {
-                inner.push(Spanned::new(Token::Eof, Span::new(last.span.end..last.span.end)));
+                inner.push(Spanned::new(Token::Eof, last.span.clone()));
             }
         }
         TokenStream {
@@ -84,24 +84,24 @@ impl TokenStream {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokenStreamCursor {
-    stream: TokenStream,
+pub struct TokenStreamCursor<'db> {
+    stream: TokenStream<'db>,
     index: usize,
 }
 
-impl TokenStreamCursor {
+impl<'db> TokenStreamCursor<'db> {
     #[inline]
-    pub fn new(stream: TokenStream) -> Self {
+    pub fn new(stream: TokenStream<'db>) -> Self {
         TokenStreamCursor { stream, index: 0 }
     }
 
     #[inline]
     /// Get the current token.
-    pub fn curr(&self) -> Option<Spanned<Token>> {
+    pub fn curr(&self) -> Option<Spanned<'db, Token>> {
         self.stream.get(self.index).copied()
     }
 
-    pub fn look_ahead(&self, n: usize) -> Option<&Spanned<Token>> {
+    pub fn look_ahead(&self, n: usize) -> Option<&Spanned<'db, Token>> {
         self.stream.get(self.index + n)
     }
 

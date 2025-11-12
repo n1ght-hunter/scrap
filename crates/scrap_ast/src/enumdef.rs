@@ -1,39 +1,37 @@
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{Recovered, field::FieldDef, ident::Ident, node_id::NodeId};
+use crate::{field::FieldDef, ident::Ident, node_id::NodeId};
 
-#[derive(Debug, Clone)]
-pub struct EnumDef {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct EnumDef<'db> {
     pub id: NodeId,
-    pub ident: Ident,
-    pub variants: Vec<Variant>,
+    pub ident: Ident<'db>,
+    pub variants: Vec<Variant<'db>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Variant {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct Variant<'db> {
     pub id: NodeId,
-    pub span: Span,
+    pub span: Span<'db>,
     // pub vis: Visibility,
-    pub ident: Ident,
-    pub data: VariantData,
+    pub ident: Ident<'db>,
+    pub data: VariantData<'db>,
 }
 
-#[derive(Clone, Debug)]
-pub enum VariantData {
-    Struct {
-        fields: ThinVec<FieldDef>,
-    },
-    Tuple(ThinVec<FieldDef>, NodeId),
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+pub enum VariantData<'db> {
+    Struct { fields: ThinVec<FieldDef<'db>> },
+    Tuple(ThinVec<FieldDef<'db>>, NodeId),
     Unit(NodeId),
 }
 
-impl VariantData {
+impl<'db> VariantData<'db> {
     pub fn is_struct(&self) -> bool {
         matches!(self, VariantData::Struct { .. })
     }
 
-    pub fn unwrap_struct(&self) -> &ThinVec<FieldDef> {
+    pub fn unwrap_struct(&self) -> &ThinVec<FieldDef<'db>> {
         if let VariantData::Struct { fields } = self {
             fields
         } else {
@@ -45,7 +43,7 @@ impl VariantData {
         matches!(self, VariantData::Tuple(_, _))
     }
 
-    pub fn unwrap_tuple(&self) -> &ThinVec<FieldDef> {
+    pub fn unwrap_tuple(&self) -> &ThinVec<FieldDef<'db>> {
         if let VariantData::Tuple(fields, _) = self {
             fields
         } else {

@@ -45,35 +45,41 @@ pub mod item;
 // pub mod operators;
 pub mod pat;
 // pub mod stmt;
-pub mod module;
-pub mod structdef;
-pub mod ty;
-mod utils;
-pub mod stmt;
-pub mod local;
 pub mod expr;
 pub mod lit;
+pub mod local;
+pub mod module;
+pub mod stmt;
+pub mod structdef;
+pub mod ty;
 
-pub struct Parser<'a> {
+pub struct Parser<'a, 'db> {
     pub(crate) source: &'a str,
-    pub(crate) token_stream: TokenStreamCursor,
+    pub(crate) token_stream: TokenStreamCursor<'db>,
     expected_token_types: TokenTypeSet,
-    pub(crate) token: Spanned<Token>,
+    pub(crate) token: Spanned<'db, Token>,
     pub(crate) state: State<'a>,
     pub(crate) lasso: lasso::Rodeo,
+    pub(crate) db: &'db dyn salsa::Database,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(source: &'a str, token_stream: TokenStreamCursor, state: State<'a>) -> Self {
+impl<'a, 'db> Parser<'a, 'db> {
+    pub fn new(
+        db: &'db dyn salsa::Database,
+        source: &'a str,
+        token_stream: TokenStreamCursor<'db>,
+        state: State<'a>,
+    ) -> Self {
         Self {
             token: token_stream
                 .curr()
-                .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::default())),
+                .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(db))),
             source,
             token_stream,
             expected_token_types: TokenTypeSet::new(),
             state,
             lasso: lasso::Rodeo::default(),
+            db,
         }
     }
 
@@ -96,7 +102,7 @@ impl<'a> Parser<'a> {
         self.token = self
             .token_stream
             .curr()
-            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::default()))
+            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)))
     }
 
     #[inline]
@@ -162,11 +168,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can> {
+        let id = self.state.new_node_id();
         let items = self.parse_module_inner(Token::Eof)?;
-        Ok(Can {
-            items,
-            id: self.state.new_node_id(),
-        })
+        Ok(Can { items, id })
     }
 
     pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility> {
@@ -197,13 +201,13 @@ pub mod parse_test_utils {
     use crate::parser::Parser;
     use crate::parser::State;
 
-    pub fn parse_with<'a>(source: &'a str) -> Parser<'a> {
+    pub fn parse_with<'a, 'db>(db: &'db dyn salsa::Database, source: &'a str) -> Parser<'a, 'db> {
         let (token_iter, lex_errs) = scrap_lexer::Token::lexer(source).spanned().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens, mut token_errors), (new_tok, new_span)| {
-                let span = Span::from(new_span);
+                let span = Span::new(db, new_span.start, new_span.end);
                 match new_tok {
-                    Ok(new_tok) => tokens.push((new_tok, span)),
+                    Ok(new_tok) => tokens.push(Spanned::new(new_tok, span)),
                     Err(e) => {
                         token_errors.push(e);
                     }
@@ -219,21 +223,17 @@ pub mod parse_test_utils {
             panic!("Lexing errors encountered");
         }
 
-        let token_stream = TokenStream::new(
-            token_iter
-                .into_iter()
-                .map(|(t, s)| Spanned::new(t, s))
-                .collect(),
-        );
-
-        let state = State::new("test.sc");
-        Parser::new(source, TokenStreamCursor::new(token_stream), state)
+        test_parser(db, source, token_iter)
     }
 
-    pub fn test_parser<'a>(source: &'a str, tokens: &'a [Spanned<Token>]) -> Parser<'a> {
-        let token_stream = TokenStreamCursor::new(TokenStream::new(tokens.to_vec()));
+    pub fn test_parser<'a, 'db>(
+        db: &'db dyn salsa::Database,
+        source: &'a str,
+        tokens: Vec<Spanned<'db, Token>>,
+    ) -> Parser<'a, 'db> {
+        let token_stream = TokenStreamCursor::new(TokenStream::new(tokens));
         let state = State::new("test.sc");
-        Parser::new(source, token_stream, state)
+        Parser::new(db, source, token_stream, state)
     }
 
     pub fn render(report: &[Group]) -> ! {

@@ -20,43 +20,10 @@ pub mod parser;
 mod errors;
 
 pub type PResult<'a, T> = std::result::Result<T, Group<'a>>;
-pub type TokenStream = Arc<Vec<Spanned<Token>>>;
+pub type TokenStream<'db> = Arc<Vec<Spanned<'db, Token>>>;
 
 
-// pub fn parse_file_str<'a>(
-//     content: &'a str,
-// ) -> Result<Option<Vec<Item>>, Vec<ParseError<'a, Token>>> {
-//     let (token_iter, mut lex_errs) = scrap_lexer::Token::lexer(content).spanned().fold(
-//         (Vec::new(), Vec::new()),
-//         |(mut tokens, mut token_errors), (new_tok, new_span)| {
-//             let span = Span::from(new_span);
-//             match new_tok {
-//                 Ok(new_tok) => tokens.push((new_tok, span)),
-//                 Err(e) => token_errors.push(ParseError::<Token, _>::custom(span, e.to_string())),
-//             }
-//             (tokens, token_errors)
-//         },
-//     );
-
-//     let token_stream =
-//         Stream::from_iter(token_iter).map((0..content.len()).into(), |(t, s): (_, _)| (t, s));
-
-//     let mut state = parser::State::new("<input>");
-
-//     let (ast, mut parse_errs) = file_parser()
-//         .parse_with_state(token_stream, &mut state)
-//         .into_output_errors();
-
-//     if parse_errs.is_empty() && lex_errs.is_empty() {
-//         return Ok(ast);
-//     }
-
-//     parse_errs.append(&mut lex_errs);
-
-//     Err(parse_errs)
-// }
-
-#[cfg(target_feature = "rayon")]
+#[cfg(target_arch = "wasm32")]
 mod tests {
     use std::path::PathBuf;
 

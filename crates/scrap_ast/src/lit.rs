@@ -4,14 +4,14 @@ use crate::node_id::NodeId;
 
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
-#[derive(Debug, Clone)]
-pub struct Lit {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct Lit<'db> {
     /// Unique identifier for this literal node
     pub id: NodeId,
     /// The kind of literal (determines how it should be interpreted)
     pub kind: LitKind,
     /// The span of the literal in the source code
-    pub span: Span,
+    pub span: Span<'db>,
     // In full Rust AST, there would also be:
     // pub symbol: Symbol,        // The original source representation
     // pub suffix: Option<Symbol>, // Type suffix like "f32" in "1.0f32"
@@ -24,7 +24,7 @@ pub struct Lit {
 /// deciding the `LitKind`. This means that float literals like `1f32` are
 /// classified by this type as `Float`. This is different to `token::LitKind`
 /// which does *not* consider the suffix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update)]
 pub enum LitKind {
     /// A boolean literal (`true`, `false`)
     Bool,

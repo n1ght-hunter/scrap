@@ -33,6 +33,7 @@ scrap_ast = { path = "crates/scrap_ast" }
 scrap_diagnostics = { path = "crates/scrap_diagnostics" }
 scrap_errors = { path = "crates/scrap_errors" }
 scrap_span = { path = "crates/scrap_span" }
+scrap_salsa = { path = "crates/scrap_salsa" }
 
 
 either = "1"

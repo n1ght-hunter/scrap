@@ -14,7 +14,7 @@ impl<'a> super::Parser<'a> {
         Ok(Block {
             id: self.state.new_node_id(),
             stmts: thin_vec::ThinVec::new(),
-            span: Span::new(start_span.start..end_span.end),
+            span: Span::new(self.db, start_span.start(self.db), end_span.end(self.db)),
         })
     }
 }

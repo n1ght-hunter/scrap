@@ -3,11 +3,11 @@ use scrap_span::Span;
 use crate::{expr::Expr, node_id::NodeId, pat::Pat, typedef::Ty};
 
 /// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.
-#[derive(Debug, Clone)]
-pub struct Local {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct Local<'db> {
     pub id: NodeId,
-    pub pat: Box<Pat>,
-    pub ty: Option<Ty>,
-    pub expr: Box<Expr>,
-    pub span: Span,
+    pub pat: Box<Pat<'db>>,
+    pub ty: Option<Ty<'db>>,
+    pub expr: Box<Expr<'db>>,
+    pub span: Span<'db>,
 }

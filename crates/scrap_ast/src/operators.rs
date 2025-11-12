@@ -1,12 +1,12 @@
-use scrap_span::Spanned;
 use scrap_lexer::Token;
+use scrap_span::Spanned;
 
 /// A binary operator with its source location span.
 /// This matches the Rust AST pattern of wrapping operator kinds with span information.
-pub type BinOp = Spanned<BinOpKind>;
-pub type AssignOp = Spanned<AssignOpKind>;
+pub type BinOp<'db> = Spanned<'db, BinOpKind>;
+pub type AssignOp<'db> = Spanned<'db, AssignOpKind>;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
 pub enum AssocOp {
     /// A binary op.
     Binary(BinOpKind),
@@ -18,7 +18,7 @@ pub enum AssocOp {
 
 /// Assignment operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of assignment operations available in the language.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
 pub enum AssignOpKind {
     /// The `+=` operator (addition)
     AddAssign,
@@ -44,7 +44,7 @@ pub enum AssignOpKind {
 
 /// Binary operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of binary operations available in the language.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
 pub enum BinOpKind {
     /// The `+` operator (addition)
     Add,

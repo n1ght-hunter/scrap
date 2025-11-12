@@ -31,7 +31,7 @@ use node_id::NodeId;
 use thin_vec::ThinVec;
 
 #[derive(Clone, Debug)]
-pub struct Can {
+pub struct Can<'db> {
     pub id: NodeId,
-    pub items: ThinVec<Box<Item>>,
+    pub items: ThinVec<Box<Item<'db>>>,
 }

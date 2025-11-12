@@ -15,7 +15,7 @@ impl<'a> crate::parser::Parser<'a> {
                 .path(self.state.file_name)
                 .annotation(
                     scrap_diagnostics::AnnotationKind::Primary
-                        .span(self.token.span.to_range())
+                        .span(self.token.span.to_range(self.db))
                         .label(if expected_tokens.len() == 1 {
                             format!("expected {} found `{}`", expected_str, self.token.node)
                         } else {

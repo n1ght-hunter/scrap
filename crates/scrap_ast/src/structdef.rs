@@ -1,8 +1,8 @@
 use crate::{enumdef::VariantData, ident::Ident, node_id::NodeId};
 
-#[derive(Debug, Clone)]
-pub struct StructDef {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct StructDef<'db> {
     pub id: NodeId,
-    pub ident: Ident,
-    pub data: VariantData,
+    pub ident: Ident<'db>,
+    pub data: VariantData<'db>,
 }

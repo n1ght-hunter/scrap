@@ -3,21 +3,27 @@ use thin_vec::ThinVec;
 
 use crate::{block::Block, ident::Ident, node_id::NodeId, pat::Pat, typedef::Ty};
 
-#[derive(Debug, Clone)]
-pub struct FnDef {
+#[salsa::tracked(debug)]
+pub struct FnDef<'db> {
     pub id: NodeId,
-    pub ident: Ident,
-    pub args: ThinVec<Param>,
-    pub ret_type: Option<Ty>,
-    pub body: Block,
-    pub span: Span,
+    pub ident: Ident<'db>,
+    #[tracked]
+    #[returns(ref)]
+    pub args: ThinVec<Param<'db>>,
+    #[tracked]
+    #[returns(ref)]
+    pub ret_type: Option<Ty<'db>>,
+    #[tracked]
+    #[returns(ref)]
+    pub body: Block<'db>,
+    pub span: Span<'db>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Param {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+pub struct Param<'db> {
     pub id: NodeId,
-    pub ident: Ident,
-    pub ty: Box<Ty>,
-    pub pat: Box<Pat>,
-    pub span: Span,
+    pub ident: Ident<'db>,
+    pub ty: Box<Ty<'db>>,
+    pub pat: Box<Pat<'db>>,
+    pub span: Span<'db>,
 }

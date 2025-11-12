@@ -1,11 +1,10 @@
 [package]
-name = "scrap_span"
+name = "scrap_salsa"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 salsa.workspace = true
-scrap_salsa.workspace = true
 
 [lints]
 workspace = true

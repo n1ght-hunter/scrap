@@ -151,7 +151,7 @@ pub enum Visibility {
     Pub,
 }
 
-#[derive(Logos, Debug, PartialEq, Clone, Copy)]
+#[derive(Logos, Debug, PartialEq, Clone, Copy, salsa::Update)]
 #[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     // Skip whitespace

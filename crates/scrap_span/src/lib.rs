@@ -3,58 +3,38 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct Span<T = usize> {
+#[salsa::tracked(debug)]
+pub struct Span<'db> {
     /// The start of the span.
-    pub start: T,
+    #[tracked]
+    pub start: usize,
     /// The end of the span (exclusive).
-    pub end: T,
+    #[tracked]
+    pub end: usize,
 }
 
-impl<T> Span<T> {
-    /// Create a new span.
-    pub fn new(range: std::ops::Range<T>) -> Self {
-        Self {
-            start: range.start,
-            end: range.end,
-        }
+impl<'db> Span<'db> {
+    pub fn new_default(db: &'db dyn salsa::Database) -> Self {
+        Self::new(db, 0, 0)
     }
 
-    pub fn to_range(&self) -> std::ops::Range<T>
-    where
-        T: Clone,
-    {
-        self.start.clone()..self.end.clone()
+    pub fn to_range(&self, db: &'db dyn salsa::Database) -> std::ops::Range<usize> {
+        self.start(db)..self.end(db)
     }
 }
 
-impl From<std::ops::Range<usize>> for Span<usize> {
-    fn from(range: std::ops::Range<usize>) -> Self {
-        Self {
-            start: range.start,
-            end: range.end,
-        }
-    }
-}
-
-impl<T: fmt::Display> fmt::Display for Span<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Spanned<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+pub struct Spanned<'db, T: salsa::Update> {
     pub node: T,
-    pub span: Span,
+    pub span: Span<'db>,
 }
 
-impl<T> Spanned<T> {
-    pub fn new(node: T, span: Span) -> Self {
+impl<'db, T: salsa::Update> Spanned<'db, T> {
+    pub fn new(node: T, span: Span<'db>) -> Self {
         Self { node, span }
     }
 
-    pub fn span(&self) -> &Span {
+    pub fn span(&self) -> &Span<'db> {
         &self.span
     }
 
@@ -62,12 +42,12 @@ impl<T> Spanned<T> {
         self.node
     }
 
-    pub fn into_parts(self) -> (T, Span) {
+    pub fn into_parts(self) -> (T, Span<'db>) {
         (self.node, self.span)
     }
 }
 
-impl<T> Deref for Spanned<T> {
+impl<'db, T: salsa::Update> Deref for Spanned<'db, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -75,13 +55,15 @@ impl<T> Deref for Spanned<T> {
     }
 }
 
-impl<T> DerefMut for Spanned<T> {
+impl<'db, T: salsa::Update> DerefMut for Spanned<'db, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.node
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-#[repr(transparent)]
 /// A symbol represents an interned string.
-pub struct Symbol(pub lasso::Spur);
+#[salsa::interned(debug)]
+pub struct Symbol<'db> {
+    #[returns(ref)]
+    pub text: String,
+}

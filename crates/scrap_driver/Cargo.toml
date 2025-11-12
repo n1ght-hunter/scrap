@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+scrap_parser = { workspace = true }
+scrap_ir = { workspace = true }
+scrap_ast = { workspace = true }
+
+clap = { workspace = true, features = ["derive"] }
+salsa = { workspace = true, features = ["persistence"] }
 
 [lints]
 workspace = true

@@ -7,26 +7,12 @@ fn setup_logging() {
         .init();
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Parser)]
-struct Args {
-    /// The type of output to generate
-    #[clap(long = "unpretty-out")]
-    unpretty_out: Option<UnPrettyOut>,
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
-enum UnPrettyOut {
-    Ast,
-    Mir,
-    CLIR,
-}
 
 fn main() -> anyhow::Result<()> {
     setup_logging();
 
-    let args = Args::parse();
 
-    let files = vec!["example/hello_world.sc"];
     let ast = scrap_parser::parse_files(files)?;
 
     if let Some(UnPrettyOut::Ast) = args.unpretty_out {
