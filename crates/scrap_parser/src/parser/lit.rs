@@ -1,7 +1,7 @@
 use scrap_ast::lit::LitKind;
 use scrap_diagnostics::{Level, annotate_snippets::Group};
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn parse_lit(&mut self) -> crate::PResult<'a, scrap_ast::lit::Lit> {
         let lit_span = self.token.span;
         let lit: scrap_lexer::Literal = self.token.node.try_into().unwrap();

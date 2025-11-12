@@ -2,7 +2,7 @@ use scrap_ast::expr::{Expr, ExprKind};
 use scrap_lexer::Token;
 use scrap_span::{Span, Spanned};
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn parse_expr(&mut self) -> crate::PResult<'a, Expr> {
         let start = self.token.span.start;
 

@@ -2,7 +2,7 @@ use scrap_ast::local::Local;
 use scrap_lexer::Token;
 use scrap_span::Span;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     /// let <pat>:<ty> = <expr>;
     pub fn parse_local(&mut self) -> crate::PResult<'a, Local> {
         let start = self.token.span.start;

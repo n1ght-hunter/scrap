@@ -54,7 +54,7 @@ pub mod local;
 pub mod expr;
 pub mod lit;
 
-pub struct NewParser<'a> {
+pub struct Parser<'a> {
     pub(crate) source: &'a str,
     pub(crate) token_stream: TokenStreamCursor,
     expected_token_types: TokenTypeSet,
@@ -63,7 +63,7 @@ pub struct NewParser<'a> {
     pub(crate) lasso: lasso::Rodeo,
 }
 
-impl<'a> NewParser<'a> {
+impl<'a> Parser<'a> {
     pub fn new(source: &'a str, token_stream: TokenStreamCursor, state: State<'a>) -> Self {
         Self {
             token: token_stream
@@ -194,10 +194,10 @@ pub mod parse_test_utils {
     use scrap_lexer::token_stream::TokenStreamCursor;
 
     use super::*;
-    use crate::parser::NewParser;
+    use crate::parser::Parser;
     use crate::parser::State;
 
-    pub fn parse_with<'a>(source: &'a str) -> NewParser<'a> {
+    pub fn parse_with<'a>(source: &'a str) -> Parser<'a> {
         let (token_iter, lex_errs) = scrap_lexer::Token::lexer(source).spanned().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens, mut token_errors), (new_tok, new_span)| {
@@ -227,13 +227,13 @@ pub mod parse_test_utils {
         );
 
         let state = State::new("test.sc");
-        NewParser::new(source, TokenStreamCursor::new(token_stream), state)
+        Parser::new(source, TokenStreamCursor::new(token_stream), state)
     }
 
-    pub fn test_parser<'a>(source: &'a str, tokens: &'a [Spanned<Token>]) -> NewParser<'a> {
+    pub fn test_parser<'a>(source: &'a str, tokens: &'a [Spanned<Token>]) -> Parser<'a> {
         let token_stream = TokenStreamCursor::new(TokenStream::new(tokens.to_vec()));
         let state = State::new("test.sc");
-        NewParser::new(source, token_stream, state)
+        Parser::new(source, token_stream, state)
     }
 
     pub fn render(report: &[Group]) -> ! {
@@ -257,7 +257,7 @@ pub mod parse_test_utils {
         fn should_panic(self) -> T {
             match self {
                 Ok(v) => v,
-                Err(_) => FatalError.raise(),
+                Err(_) => scrap_errors::FatalError.raise(),
             }
         }
     }

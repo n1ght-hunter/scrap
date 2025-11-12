@@ -4,7 +4,7 @@ use scrap_span::Span;
 
 use crate::PResult;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn check_struct_def(&mut self) -> bool {
         self.check(Token::Struct)
     }

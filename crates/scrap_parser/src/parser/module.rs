@@ -7,7 +7,7 @@ use scrap_lexer::Token;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn check_module(&mut self) -> bool {
         self.check(Token::Mod)
     }

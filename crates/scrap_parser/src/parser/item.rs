@@ -3,7 +3,7 @@ use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_span::Span;
 use strum::IntoEnumIterator;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn parse_item(&mut self) -> crate::PResult<'a, Box<Item>> {
         let start_span = self.token.span;
         let item = self.parse_item_kind()?;

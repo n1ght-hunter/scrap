@@ -4,7 +4,7 @@ use scrap_lexer::Token;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     /// Check if the current token is a function definition
     pub fn check_fn_def(&mut self) -> bool {
         self.check(Token::Fn)

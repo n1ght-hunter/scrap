@@ -2,7 +2,7 @@ use scrap_ast::ident::Ident;
 use scrap_diagnostics::{Level, annotate_snippets::Group};
 use scrap_lexer::Token;
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     /// Check if the current token is an identifier
     pub fn check_ident(&mut self) -> bool {
         self.check(Token::Ident)

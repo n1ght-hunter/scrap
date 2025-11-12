@@ -1,8 +1,8 @@
-use super::NewParser;
+use super::Parser;
 
 
 
-impl<'a> NewParser<'a> {
+impl<'a> Parser<'a> {
     #[inline(always)]
     pub fn get_or_intern(&mut self, name: &str) -> scrap_span::Symbol {
         scrap_span::Symbol(self.lasso.get_or_intern(name))

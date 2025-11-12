@@ -4,7 +4,7 @@ use scrap_ast::{
     typedef::{Ty, TyKind},
 };
 
-impl<'a> super::NewParser<'a> {
+impl<'a> super::Parser<'a> {
     pub fn parse_type(&mut self) -> PResult<'a, Ty> {
         // For now, we only support identifier types
         let ident = self.parse_ident()?;
