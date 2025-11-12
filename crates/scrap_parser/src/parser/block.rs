@@ -2,11 +2,10 @@ use scrap_ast::block::Block;
 use scrap_lexer::Token;
 use scrap_span::Span;
 
-impl<'a> super::Parser<'a> {
-    pub fn parse_block(&mut self) -> crate::PResult<'a, Block> {
+impl<'a, 'db> super::Parser<'a, 'db> {
+    pub fn parse_block(&mut self) -> crate::PResult<'a, Block<'db>> {
         let start_span = self.token.span;
         self.expect(Token::LBrace)?;
-
 
         let end_span = self.token.span;
         self.expect(Token::RBrace)?;

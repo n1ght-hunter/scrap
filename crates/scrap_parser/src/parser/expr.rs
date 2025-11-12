@@ -2,20 +2,22 @@ use scrap_ast::expr::{Expr, ExprKind};
 use scrap_lexer::Token;
 use scrap_span::{Span, Spanned};
 
-impl<'a> super::Parser<'a> {
-    pub fn parse_expr(&mut self) -> crate::PResult<'a, Expr> {
-        let start = self.token.span.start;
+impl<'a, 'db> super::Parser<'a, 'db> {
+    pub fn parse_expr(&mut self) -> crate::PResult<'a, Expr<'db>> {
+        let start_pos = self.token.span.start(self.db);
 
         let kind = self.parse_expr_kind()?;
+        let end_pos = self.token.span.end(self.db);
+        let span = Span::new(self.db, start_pos, end_pos);
 
         Ok(Expr {
             id: self.state.new_node_id(),
-            kind: kind,
-            span: Span::new(start..self.token.span.end),
+            kind,
+            span,   
         })
     }
 
-    pub fn parse_expr_kind(&mut self) -> crate::PResult<'a, ExprKind> {
+    pub fn parse_expr_kind(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
         if self.check(Token::LBrace) {
             let block = self.parse_block()?;
             return Ok(ExprKind::Block(Box::new(block)));
@@ -65,7 +67,8 @@ mod tests {
     #[test]
     fn parse_return() {
         let source = "return;";
-        let mut parser = parse_with(source);
+        let db = scrap_salsa::ScrapDb::default();
+        let mut parser = parse_with(&db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         assert!(matches!(expr.kind, ExprKind::Return(None)));
     }
@@ -73,7 +76,8 @@ mod tests {
     #[test]
     fn parse_return_with_expr() {
         let source = "return 42;";
-        let mut parser = parse_with(source);
+        let db = scrap_salsa::ScrapDb::default();
+        let mut parser = parse_with(&db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         match expr.kind {
             ExprKind::Return(Some(ret_expr)) => {

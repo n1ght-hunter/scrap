@@ -2,10 +2,10 @@ use scrap_ast::local::Local;
 use scrap_lexer::Token;
 use scrap_span::Span;
 
-impl<'a> super::Parser<'a> {
+impl<'a, 'db> super::Parser<'a, 'db> {
     /// let <pat>:<ty> = <expr>;
-    pub fn parse_local(&mut self) -> crate::PResult<'a, Local> {
-        let start = self.token.span.start;
+    pub fn parse_local(&mut self) -> crate::PResult<'a, Local<'db>> {
+        let start = self.token.span.start(self.db);
         self.expect(Token::Let)?;
         let pat = self.parse_pat()?;
         let mut ty = None;
@@ -20,7 +20,11 @@ impl<'a> super::Parser<'a> {
 
         Ok(Local {
             id: self.state.new_node_id(),
-            span: Span::new(start..expr.span.end),
+            span: Span::new(
+                self.db,
+                start,
+                expr.span.end(self.db),
+            ),
             pat: Box::new(pat),
             ty,
             expr: Box::new(expr),

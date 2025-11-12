@@ -59,7 +59,6 @@ pub struct Parser<'a, 'db> {
     expected_token_types: TokenTypeSet,
     pub(crate) token: Spanned<'db, Token>,
     pub(crate) state: State<'a>,
-    pub(crate) lasso: lasso::Rodeo,
     pub(crate) db: &'db dyn salsa::Database,
 }
 
@@ -78,7 +77,6 @@ impl<'a, 'db> Parser<'a, 'db> {
             token_stream,
             expected_token_types: TokenTypeSet::new(),
             state,
-            lasso: lasso::Rodeo::default(),
             db,
         }
     }
@@ -93,7 +91,7 @@ impl<'a, 'db> Parser<'a, 'db> {
     }
 
     #[inline]
-    pub fn look_ahead(&mut self, n: usize) -> Option<&Spanned<Token>> {
+    pub fn look_ahead(&mut self, n: usize) -> Option<&Spanned<'db, Token>> {
         self.token_stream.look_ahead(n)
     }
 
@@ -167,13 +165,13 @@ impl<'a, 'db> Parser<'a, 'db> {
         // }
     }
 
-    pub fn parse_can(&mut self) -> crate::PResult<'a, Can> {
+    pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
         let id = self.state.new_node_id();
         let items = self.parse_module_inner(Token::Eof)?;
         Ok(Can { items, id })
     }
 
-    pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility> {
+    pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility<'db>> {
         if self.eat(Token::Pub) {
             Ok(Visibility {
                 kind: scrap_ast::VisibilityKind::Public,

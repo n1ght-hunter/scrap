@@ -1,7 +1,7 @@
 use scrap_diagnostics::{Level, annotate_snippets::Group};
 use scrap_lexer::Token;
 
-impl<'a> crate::parser::Parser<'a> {
+impl<'a, 'db> crate::parser::Parser<'a, 'db> {
     pub fn unexpected_token_error(&mut self, expected_tokens: &[Token]) -> Group<'a> {
         #[cfg(debug_assertions)]
         if expected_tokens.is_empty() {

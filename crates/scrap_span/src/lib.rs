@@ -1,7 +1,4 @@
-use std::{
-    fmt,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 #[salsa::tracked(debug)]
 pub struct Span<'db> {

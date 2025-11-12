@@ -45,7 +45,6 @@ clap = { version = "4", features = ["derive"] }
 salsa = "0.24.0"
 strum = "0.27.2"
 strum_macros = "0.27.2"
-lasso = "0.7.3"
 
 # diagnostics and error reporting
 tracing = "0.1.41"

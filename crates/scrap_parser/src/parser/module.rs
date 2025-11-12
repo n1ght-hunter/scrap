@@ -7,13 +7,13 @@ use scrap_lexer::Token;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-impl<'a> super::Parser<'a> {
+impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn check_module(&mut self) -> bool {
         self.check(Token::Mod)
     }
 
-    pub fn parse_module(&mut self) -> crate::PResult<'a, ItemKind> {
-        let start_span = self.token.span.start;
+    pub fn parse_module(&mut self) -> crate::PResult<'a, ItemKind<'db>> {
+        let start_span = self.token.span.start(self.db);
         self.expect(Token::Mod)?;
         let ident = self.parse_ident()?;
 
@@ -23,7 +23,14 @@ impl<'a> super::Parser<'a> {
             let items = self.parse_module_inner(Token::RBrace)?;
             let end_span = self.token.span;
 
-            Ok(ItemKind::Module(ident, Module::Loaded(items, Inline::Yes, Span::new(start_span..end_span.end))))
+            Ok(ItemKind::Module(
+                ident,
+                Module::Loaded(
+                    items,
+                    Inline::Yes,
+                    Span::new(self.db, start_span, end_span.end(self.db)),
+                ),
+            ))
         } else {
             Err(Level::ERROR
                 .primary_title("expected module body or semicolon")
@@ -32,14 +39,17 @@ impl<'a> super::Parser<'a> {
                         .path(self.state.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(self.token.span.to_range())
+                                .span(self.token.span.to_range(self.db))
                                 .label("expected `{` or `;`".to_string()),
                         ),
                 ))
         }
     }
 
-    pub fn parse_module_inner(&mut self, term: Token) -> crate::PResult<'a, ThinVec<Box<Item>>> {
+    pub fn parse_module_inner(
+        &mut self,
+        term: Token,
+    ) -> crate::PResult<'a, ThinVec<Box<Item<'db>>>> {
         let mut items = ThinVec::new();
         while !self.check(term) && !self.token_stream.eof() {
             let item = self.parse_item()?;
@@ -58,20 +68,21 @@ mod tests {
 
     #[test]
     fn test_parse_module_loaded() {
-        let mut parser = parse_with("mod my_module { fn my_function() {} }");
+        let db = scrap_salsa::ScrapDb::default();
+        let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module { fn my_function() {} }");
         let item = parser.parse_module().unwrap_or_render();
         match item {
             ItemKind::Module(ident, module) => {
-                assert_eq!(parser.resolve_symbol(ident.name), "my_module");
+                assert_eq!(ident.name.text(&db), "my_module");
                 match module {
                     Module::Loaded(items, inline, span) => {
                         assert_eq!(inline, Inline::Yes);
-                        assert_eq!(span.to_range(), 0..37);
+                        assert_eq!(span.to_range(&db), 0..37);
                         assert_eq!(items.len(), 1);
                         match &items[0].kind {
                             ItemKind::Fn(fndef) => {
-                                assert_eq!(parser.resolve_symbol(fndef.ident.name), "my_function");
-                                assert_eq!(fndef.span.to_range(), 16..35);
+                                assert_eq!(fndef.ident(&db).name.text(&db), "my_function");
+                                assert_eq!(fndef.span(&db).to_range(&db), 16..35);
                             }
                             _ => panic!("Expected function item inside module"),
                         }
