@@ -5,7 +5,9 @@
 ///
 /// The `()` field is necessary: it is non-`pub`, which means values of this
 /// type cannot be constructed outside of this crate.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct ErrorGuaranteed(());
 
 impl ErrorGuaranteed {
@@ -45,3 +47,56 @@ impl std::fmt::Display for FatalError {
 
 impl std::error::Error for FatalError {}
 
+static VERBOSE_ERRORS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_verbose_errors(verbose: bool) {
+    VERBOSE_ERRORS.store(verbose, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[inline]
+fn maybe_print_backtrace() {
+    if VERBOSE_ERRORS.load(std::sync::atomic::Ordering::Relaxed) {
+        // print full backtrace
+        let bt = std::backtrace::Backtrace::force_capture();
+        tracing::error!("backtrace:\n{:#?}", bt);
+    }
+}
+
+#[macro_export]
+macro_rules! simple_panic {
+    (
+        $($arg:tt)*
+    ) => {
+        tracing::error!($($arg)*);
+        scrap_errors::FatalError.raise();
+    };
+}
+
+pub trait SimpleError<T, E> {
+    fn sunwrap(self) -> T;
+    fn sexpect(self, msg: &str) -> T;
+}
+
+impl<T, E: std::fmt::Debug> SimpleError<T, E> for Result<T, E> {
+    fn sunwrap(self) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("encountered error: {:?}", e);
+                maybe_print_backtrace();
+                FatalError.raise();
+            }
+        }
+    }
+
+    fn sexpect(self, msg: &str) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("{}: {:?}", msg, e);
+                maybe_print_backtrace();
+                FatalError.raise();
+            }
+        }
+    }
+}

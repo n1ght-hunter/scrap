@@ -3,13 +3,13 @@ use thin_vec::ThinVec;
 
 use crate::item::Item;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum Inline {
     Yes,
     No,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum Module<'db> {
     /// Module with inlined definition `mod foo { ... }`,
     /// or with definition outlined to a separate file `mod foo;` and already loaded from it.

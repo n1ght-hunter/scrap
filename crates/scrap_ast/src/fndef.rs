@@ -3,7 +3,7 @@ use thin_vec::ThinVec;
 
 use crate::{block::Block, ident::Ident, node_id::NodeId, pat::Pat, typedef::Ty};
 
-#[salsa::tracked(debug)]
+#[salsa::tracked(debug, persist)]
 pub struct FnDef<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,
@@ -19,7 +19,7 @@ pub struct FnDef<'db> {
     pub span: Span<'db>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct Param<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,

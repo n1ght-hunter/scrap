@@ -3,13 +3,13 @@ use scrap_span::Span;
 
 use crate::{node_id::NodeId, path::Path};
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct Visibility<'db> {
     pub kind: VisibilityKind<'db>,
     pub span: Span<'db>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum VisibilityKind<'db> {
     Public,
     Restricted {
@@ -20,7 +20,7 @@ pub enum VisibilityKind<'db> {
     Inherited,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum Recovered {
     No,
     Yes(ErrorGuaranteed),

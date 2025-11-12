@@ -1,13 +1,14 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BasicBlockId(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FunctionId(pub usize);
-
+#[salsa::interned(debug)]
+pub struct FunctionId<'db> {
+    #[returns(ref)]
+    pub text: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resolved<T, U> {
@@ -16,7 +17,7 @@ pub enum Resolved<T, U> {
 }
 
 /// A unique, program-wide identifier for a user-defined type (struct or enum).
-#[derive(Debug, Clone,  PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeId(pub usize);
 
 #[derive(Debug, Clone, Default)]
@@ -105,8 +106,6 @@ pub enum Ty {
     Infer,
 }
 
-
-
 /// The MIR for a single function, represented as a Control Flow Graph (CFG).
 #[derive(Debug, Clone, Default)]
 pub struct Body {
@@ -131,8 +130,13 @@ pub struct LocalDecl {
 /// Terminators are instructions that end a basic block and transfer control.
 #[derive(Debug, Clone, Default)]
 pub enum Terminator {
-    Goto { target: BasicBlockId },
-    SwitchInt { discr: Operand, targets: Vec<BasicBlockId> },
+    Goto {
+        target: BasicBlockId,
+    },
+    SwitchInt {
+        discr: Operand,
+        targets: Vec<BasicBlockId>,
+    },
     Return,
     Call {
         func: Operand,
@@ -207,7 +211,24 @@ pub enum Constant {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BinOp { Add, Sub, Mul, Div, Rem, Eq, Lt, Le, Ne, Ge, Gt, And, Or }
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    Lt,
+    Le,
+    Ne,
+    Ge,
+    Gt,
+    And,
+    Or,
+}
 
 #[derive(Debug, Clone, Copy)]
-pub enum UnOp { Neg, Not }
+pub enum UnOp {
+    Neg,
+    Not,
+}

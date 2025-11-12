@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-#[salsa::tracked(debug)]
+#[salsa::tracked(debug, persist)]
 pub struct Span<'db> {
     /// The start of the span.
     #[tracked]
@@ -20,7 +20,7 @@ impl<'db> Span<'db> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct Spanned<'db, T: salsa::Update> {
     pub node: T,
     pub span: Span<'db>,
@@ -59,7 +59,7 @@ impl<'db, T: salsa::Update> DerefMut for Spanned<'db, T> {
 }
 
 /// A symbol represents an interned string.
-#[salsa::interned(debug)]
+#[salsa::interned(debug, persist)]
 pub struct Symbol<'db> {
     #[returns(ref)]
     pub text: String,

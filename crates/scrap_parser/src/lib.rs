@@ -24,18 +24,18 @@ mod utils;
 pub type PResult<'a, T> = std::result::Result<T, Group<'a>>;
 pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 
-#[salsa::tracked(debug)]
+#[salsa::tracked(debug, persist)]
 pub struct ParsedFile<'db> {
     pub ast: AstRoot<'db>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum AstRoot<'db> {
     Can(scrap_ast::Can<'db>),
     Module(ThinVec<Box<Item<'db>>>),
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn parse_tokens<'db>(
     db: &'db dyn salsa::Database,
     file: scrap_shared::salsa::InputFile,

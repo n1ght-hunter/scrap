@@ -9,7 +9,7 @@ pub struct ScrapDb {
 #[salsa::db]
 impl salsa::Database for ScrapDb {}
 
-#[salsa::input(debug)]
+#[salsa::input(debug, persist)]
 pub struct InputFile {
     #[returns(ref)]
     pub path: PathBuf,
@@ -17,13 +17,13 @@ pub struct InputFile {
     pub content: String,
 }
 
-#[salsa::input(debug)]
+#[salsa::input(debug, persist)]
 pub struct InputPath {
     #[returns(ref)]
     pub path: PathBuf,
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn load_file<'db>(db: &'db dyn salsa::Database, path: InputPath) -> InputFile {
     let path = path.path(db);
     let content = std::fs::read_to_string(path).unwrap_or_else(|e| {

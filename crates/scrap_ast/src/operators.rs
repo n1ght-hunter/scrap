@@ -6,7 +6,7 @@ use scrap_span::Spanned;
 pub type BinOp<'db> = Spanned<'db, BinOpKind>;
 pub type AssignOp<'db> = Spanned<'db, AssignOpKind>;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum AssocOp {
     /// A binary op.
     Binary(BinOpKind),
@@ -18,7 +18,7 @@ pub enum AssocOp {
 
 /// Assignment operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of assignment operations available in the language.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum AssignOpKind {
     /// The `+=` operator (addition)
     AddAssign,
@@ -44,7 +44,7 @@ pub enum AssignOpKind {
 
 /// Binary operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of binary operations available in the language.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum BinOpKind {
     /// The `+` operator (addition)
     Add,

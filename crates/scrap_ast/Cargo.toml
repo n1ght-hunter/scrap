@@ -11,6 +11,7 @@ scrap_lexer.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 salsa.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true

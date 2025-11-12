@@ -2,22 +2,22 @@ use scrap_span::Span;
 
 use crate::{ident::Ident, node_id::NodeId};
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum ByRef {
     Yes(Mutability),
     No,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum Mutability {
     Not,
     Mut,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct BindingMode(pub ByRef, pub Mutability);
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum PatKind<'db> {
     /// A missing pattern, e.g. for an anonymous param in a bare fn like `fn f(u32)`.
     Missing,
@@ -28,7 +28,7 @@ pub enum PatKind<'db> {
     Ident(BindingMode, Ident<'db>, Option<Box<Pat<'db>>>),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct Pat<'db> {
     pub id: NodeId,
     pub kind: PatKind<'db>,

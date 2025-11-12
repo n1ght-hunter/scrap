@@ -57,9 +57,31 @@ impl Iterator for TokenTypeSetIter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct TokenStream<'db> {
+    #[serde(with = "arc_serde")]
     inner: Arc<Vec<Spanned<'db, Token>>>,
+}
+
+mod arc_serde {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(arc: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        arc.as_ref().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Arc<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        T::deserialize(deserializer).map(Arc::new)
+    }
 }
 
 impl<'db> Deref for TokenStream<'db> {

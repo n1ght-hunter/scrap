@@ -152,7 +152,7 @@ pub enum Visibility {
     Pub,
 }
 
-#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update)]
+#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 #[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     // Skip whitespace
@@ -180,12 +180,12 @@ impl Token {
     }
 }
 
-#[salsa::tracked(debug)]
+#[salsa::tracked(debug, persist)]
 pub struct LexedTokens<'db> {
     pub tokens: token_stream::TokenStream<'db>,
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn lex_file<'db>(
     db: &'db dyn salsa::Database,
     file: scrap_shared::salsa::InputFile,

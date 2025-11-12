@@ -3,14 +3,14 @@ use scrap_errors::ErrorGuaranteed;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct Ty<'db> {
     pub id: NodeId,
     pub kind: TyKind<'db>,
     pub span: Span<'db>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum TyKind<'db> {
     Path(Path<'db>),
     Tup(ThinVec<Box<Ty<'db>>>),

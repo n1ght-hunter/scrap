@@ -10,9 +10,15 @@ scrap_lexer = { workspace = true }
 scrap_ast = { workspace = true }
 scrap_shared = { workspace = true }
 scrap_span = { workspace = true }
+scrap_errors.workspace = true
 
 clap = { workspace = true, features = ["derive"] }
-salsa = { workspace = true, features = ["persistence"] }
+salsa = { workspace = true }
+serde.workspace = true
+bincode.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

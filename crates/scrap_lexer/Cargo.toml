@@ -10,6 +10,7 @@ scrap_macros.workspace = true
 scrap_span.workspace = true
 salsa.workspace = true
 scrap_shared.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
