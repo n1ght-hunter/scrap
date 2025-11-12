@@ -26,31 +26,19 @@ where
 
     let mut db = scrap_shared::salsa::ScrapDb::default();
 
-    let load_config = bincode::config::standard();
-
-    if let Some(db_snapshot_path) = args.db_snapshot.as_ref() {
-        if db_snapshot_path.exists() {
-            let serialized = std::fs::read_to_string(db_snapshot_path.with_extension("json"))
+    if let Some(cache_path) = args.cache.as_ref() {
+        if cache_path.exists() {
+            let serialized = std::fs::read_to_string(cache_path.with_extension("json"))
                 .sexpect("Failed to read JSON database snapshot for debugging purposes");
             <dyn salsa::Database>::deserialize(
                 &mut db,
                 &mut serde_json::Deserializer::from_str(&serialized),
             )
             .sunwrap();
-
-            let mut file = std::io::BufReader::new(
-                std::fs::File::open(db_snapshot_path).sexpect("Failed to open database snapshot"),
-            );
-            <dyn salsa::Database>::deserialize(
-                &mut db,
-                bincode::serde::OwnedSerdeDecoder::from_reader(&mut file, load_config)
-                    .as_deserializer(),
-            )
-            .sunwrap();
         } else {
             tracing::info!(
                 "Database snapshot file '{}' does not exist. Starting with a fresh database.",
-                db_snapshot_path.display()
+                cache_path.display()
             );
         }
     }
@@ -72,26 +60,15 @@ where
     }()
     .sunwrap();
 
-    if let Some(db_snapshot_path) = args.db_snapshot.as_ref() {
+    if let Some(cache_path) = args.cache.as_ref() {
         std::fs::create_dir_all(
-            db_snapshot_path
+            cache_path
                 .parent()
                 .expect("Failed to get parent directory of database snapshot path"),
         )
         .sexpect("Failed to create parent directory for database snapshot");
-
-        let mut file =
-            std::fs::File::create(db_snapshot_path).expect("Failed to create database snapshot");
-        bincode::serde::encode_into_std_write(
-            <dyn salsa::Database>::as_serialize(&mut db),
-            &mut file,
-            load_config,
-        )
-        .sunwrap();
-
-        let output =
-            serde_json::to_string_pretty(&<dyn salsa::Database>::as_serialize(&mut db)).unwrap();
-        std::fs::write(db_snapshot_path.with_extension("json"), output)
+        let output = serde_json::to_string(&<dyn salsa::Database>::as_serialize(&mut db)).sunwrap();
+        std::fs::write(cache_path.with_extension("json"), output)
             .sexpect("Failed to write JSON database snapshot");
     }
 }

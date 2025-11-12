@@ -18,7 +18,10 @@ pub struct Args {
     pub crate_type: CrateType,
 
     #[arg(long)]
-    pub db_snapshot: Option<PathBuf>,
+    pub cache: Option<PathBuf>,
+
+    #[arg(long, default_value_t = false)]
+    pub clear_cache: bool,
 
     /// Add a directory to the library search path.
     #[arg(short = 'L', long, value_name = "PATH")]
