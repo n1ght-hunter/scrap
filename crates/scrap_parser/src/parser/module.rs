@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_parse_module_loaded() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module { fn my_function() {} }");
         let item = parser.parse_module().unwrap_or_render();
         match item {

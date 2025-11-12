@@ -57,7 +57,7 @@ impl Iterator for TokenTypeSetIter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
 pub struct TokenStream<'db> {
     inner: Arc<Vec<Spanned<'db, Token>>>,
 }

@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_parse_ident() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = parse_with(&db, "my_variable");
         let ident = match parser.parse_ident() {
             Ok(ident) => ident,

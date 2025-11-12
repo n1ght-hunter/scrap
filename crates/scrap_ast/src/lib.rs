@@ -30,7 +30,7 @@ use item::Item;
 use node_id::NodeId;
 use thin_vec::ThinVec;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
 pub struct Can<'db> {
     pub id: NodeId,
     pub items: ThinVec<Box<Item<'db>>>,

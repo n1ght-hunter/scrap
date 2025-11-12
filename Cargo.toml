@@ -4,13 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-scrap_codegen.workspace = true
-scrap_parser.workspace = true
-scrap_ir.workspace = true
-anyhow.workspace = true
-tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-clap.workspace = true
+scrap_driver = { workspace = true }
+
 
 
 [workspace]
@@ -33,7 +29,8 @@ scrap_ast = { path = "crates/scrap_ast" }
 scrap_diagnostics = { path = "crates/scrap_diagnostics" }
 scrap_errors = { path = "crates/scrap_errors" }
 scrap_span = { path = "crates/scrap_span" }
-scrap_salsa = { path = "crates/scrap_salsa" }
+scrap_shared = { path = "crates/scrap_shared" }
+scrap_driver = { path = "crates/scrap_driver" }
 
 
 either = "1"

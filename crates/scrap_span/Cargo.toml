@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 salsa.workspace = true
-scrap_salsa.workspace = true
+scrap_shared.workspace = true
 
 [lints]
 workspace = true

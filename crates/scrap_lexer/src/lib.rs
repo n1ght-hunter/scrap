@@ -1,5 +1,6 @@
 pub use logos::Logos;
 use scrap_macros::expand_tokens;
+use scrap_span::Spanned;
 
 use crate::error::LexingError;
 
@@ -151,7 +152,7 @@ pub enum Visibility {
     Pub,
 }
 
-#[derive(Logos, Debug, PartialEq, Clone, Copy, salsa::Update)]
+#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update)]
 #[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     // Skip whitespace
@@ -177,6 +178,37 @@ impl Token {
     pub const fn dummy() -> Self {
         Token::Dummy
     }
+}
+
+#[salsa::tracked(debug)]
+pub struct LexedTokens<'db> {
+    pub tokens: token_stream::TokenStream<'db>,
+}
+
+#[salsa::tracked]
+pub fn lex_file<'db>(
+    db: &'db dyn salsa::Database,
+    file: scrap_shared::salsa::InputFile,
+) -> LexedTokens<'db> {
+    let content = file.content(db);
+    let (token_iter, mut lex_errs) = Token::lexer(content).spanned().fold(
+        (Vec::new(), Vec::new()),
+        |(mut tokens, mut token_errors), (new_tok, new_span)| {
+            let span = scrap_span::Span::new(db, new_span.start, new_span.end);
+            match new_tok {
+                Ok(new_tok) => tokens.push(Spanned::new(new_tok, span)),
+                Err(e) => token_errors.push((e, span)),
+            }
+            (tokens, token_errors)
+        },
+    );
+    if lex_errs.len() > 0 {
+        eprintln!("Lexing errors in file {}:", file.path(db).display());
+        for (err, span) in lex_errs.drain(..) {
+            eprintln!("  Error at {}-{}: {}", span.start(db), span.end(db), err);
+        }
+    }
+    LexedTokens::new(db, token_stream::TokenStream::new(token_iter))
 }
 
 #[cfg(test)]

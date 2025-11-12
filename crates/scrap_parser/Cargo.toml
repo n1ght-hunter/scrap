@@ -21,7 +21,7 @@ wyhash.workspace = true
 inflections.workspace = true
 strum.workspace = true
 salsa.workspace = true
-scrap_salsa.workspace = true
+scrap_shared.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

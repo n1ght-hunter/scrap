@@ -12,16 +12,59 @@
 
 use std::sync::Arc;
 
+use parser::{Parser, State};
+use scrap_ast::item::Item;
 use scrap_diagnostics::annotate_snippets::Group;
-use scrap_lexer::Token;
+use scrap_lexer::{Token, token_stream::TokenStreamCursor};
 use scrap_span::Spanned;
+use thin_vec::ThinVec;
 
-pub mod parser;
 mod errors;
+pub mod parser;
+mod utils;
 
 pub type PResult<'a, T> = std::result::Result<T, Group<'a>>;
-pub type TokenStream<'db> = Arc<Vec<Spanned<'db, Token>>>;
+pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 
+#[salsa::tracked(debug)]
+pub struct ParsedFile<'db> {
+    pub ast: AstRoot<'db>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+pub enum AstRoot<'db> {
+    Can(scrap_ast::Can<'db>),
+    Module(ThinVec<Box<Item<'db>>>),
+}
+
+#[salsa::tracked]
+pub fn parse_tokens<'db>(
+    db: &'db dyn salsa::Database,
+    file: scrap_shared::salsa::InputFile,
+    tokens: scrap_lexer::LexedTokens<'db>,
+    is_root: bool,
+) -> ParsedFile<'db> {
+    let tokens = tokens.tokens(db);
+    let token_stream = TokenStreamCursor::new(tokens);
+    let state = State::new(file.path(db).to_str().unwrap());
+    let mut parser = Parser::new(db, file.content(db), token_stream, state);
+    let ast = if is_root {
+        parser
+            .parse_can()
+            .map(|ast| ParsedFile::new(db, AstRoot::Can(ast)))
+    } else {
+        parser
+            .parse_module_inner(Token::Eof)
+            .map(|ast| ParsedFile::new(db, AstRoot::Module(ast)))
+    };
+    match ast {
+        Ok(ast) => ast,
+        Err(report) => {
+            scrap_diagnostics::DiagnosticEmitter::new().render(&[report]);
+            scrap_errors::FatalError.raise()
+        }
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 mod tests {

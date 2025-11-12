@@ -135,7 +135,7 @@ impl MirBuilder {
     }
 
     fn lower_type(&self, ast_type: &Ty) -> Result<mir::Ty> {
-        match ast_type.ident.name.as_str() {
+        match ast_type.kind {
             "int" => Ok(mir::Ty::Int),
             "bool" => Ok(mir::Ty::Bool),
             "String" => Ok(mir::Ty::Str),

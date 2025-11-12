@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn empty_fn() {
         let source = "fn my_function() {}";
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = parse_with(&db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
         assert_eq!(fn_def.ident(&db).name.text(&db), "my_function");
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn fn_with_params() {
         let source = "fn add(a: i32, b: i32) {}";
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = parse_with(&db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
         assert_eq!(fn_def.ident(&db).name.text(&db), "add");

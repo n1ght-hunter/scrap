@@ -9,7 +9,7 @@ thiserror.workspace = true
 scrap_macros.workspace = true
 scrap_span.workspace = true
 salsa.workspace = true
-scrap_salsa.workspace = true
+scrap_shared.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

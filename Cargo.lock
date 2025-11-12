@@ -982,12 +982,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 name = "scrap"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "clap",
- "scrap_codegen",
- "scrap_ir",
- "scrap_parser",
- "tracing",
+ "scrap_driver",
  "tracing-subscriber",
 ]
 
@@ -1039,8 +1034,10 @@ dependencies = [
  "clap",
  "salsa",
  "scrap_ast",
- "scrap_ir",
+ "scrap_lexer",
  "scrap_parser",
+ "scrap_shared",
+ "scrap_span",
 ]
 
 [[package]]
@@ -1064,7 +1061,7 @@ dependencies = [
  "logos",
  "salsa",
  "scrap_macros",
- "scrap_salsa",
+ "scrap_shared",
  "scrap_span",
  "thiserror",
 ]
@@ -1109,7 +1106,7 @@ dependencies = [
  "scrap_diagnostics",
  "scrap_errors",
  "scrap_lexer",
- "scrap_salsa",
+ "scrap_shared",
  "scrap_span",
  "strum",
  "thin-vec",
@@ -1119,7 +1116,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "scrap_salsa"
+name = "scrap_shared"
 version = "0.1.0"
 dependencies = [
  "salsa",
@@ -1130,7 +1127,7 @@ name = "scrap_span"
 version = "0.1.0"
 dependencies = [
  "salsa",
- "scrap_salsa",
+ "scrap_shared",
 ]
 
 [[package]]

@@ -1,4 +1,7 @@
-use scrap_ast::expr::{Expr, ExprKind};
+use scrap_ast::{
+    expr::{Expr, ExprKind},
+    path::{Path, PathSegment},
+};
 use scrap_lexer::Token;
 use scrap_span::{Span, Spanned};
 
@@ -13,7 +16,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         Ok(Expr {
             id: self.state.new_node_id(),
             kind,
-            span,   
+            span,
         })
     }
 
@@ -31,7 +34,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 ..
             }) = self.look_ahead(1)
             {
-                unimplemented!("function call expression parsing not implemented yet");
+                return self.function_call_expr();
             }
         }
 
@@ -56,6 +59,57 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             Token::Return,
         ]))
     }
+
+    fn function_call_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        let path = self.parse_path()?;
+        self.expect(Token::LParen)?;
+        let mut args = thin_vec::ThinVec::new();
+        while !self.check(Token::RParen) {
+            let arg_expr = self.parse_expr()?;
+            args.push(Box::new(arg_expr));
+            if !self.eat(Token::Comma) {
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+        Ok(ExprKind::Call(
+            Box::new(Expr {
+                id: self.state.new_node_id(),
+                span: path.span,
+                kind: ExprKind::Path(path),
+            }),
+            args,
+        ))
+    }
+
+    pub fn parse_path(&mut self) -> crate::PResult<'a, Path<'db>> {
+        let mut segments = thin_vec::ThinVec::new();
+
+        loop {
+            let ident = self.parse_ident()?;
+            segments.push(PathSegment {
+                id: self.state.new_node_id(),
+                ident,
+            });
+
+            if !self.eat(Token::Colon) && !self.eat(Token::Colon) {
+                break;
+            }
+        }
+
+        if segments.is_empty() {
+            return Err(self.unexpected_token_error(&[Token::Ident]));
+        }
+
+        Ok(Path {
+            span: Span::new(
+                self.db,
+                segments.first().unwrap().ident.span.start(self.db),
+                segments.last().unwrap().ident.span.end(self.db),
+            ),
+            segments,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -67,7 +121,7 @@ mod tests {
     #[test]
     fn parse_return() {
         let source = "return;";
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = parse_with(&db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         assert!(matches!(expr.kind, ExprKind::Return(None)));
@@ -76,7 +130,7 @@ mod tests {
     #[test]
     fn parse_return_with_expr() {
         let source = "return 42;";
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = parse_with(&db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         match expr.kind {

@@ -18,6 +18,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             }
         };
 
+        self.bump();
+
         Ok(scrap_ast::lit::Lit {
             id: self.state.new_node_id(),
             kind,

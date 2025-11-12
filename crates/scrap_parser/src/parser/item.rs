@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_parse_item_fn() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "fn my_function() {}");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
@@ -77,14 +77,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_parse_item_invalid() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "invalid_item");
         let _item = parser.parse_item().unwrap_or_render();
     }
 
     #[test]
     fn test_parse_item_struct() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "struct MyStruct { field1: i32, field2: String }");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_parse_item_module_loaded() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module { }");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_parse_item_module_unloaded() {
-        let db = scrap_salsa::ScrapDb::default();
+        let db = scrap_shared::salsa::ScrapDb::default();
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module;");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {

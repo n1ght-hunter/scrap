@@ -1,5 +1,5 @@
 [package]
-name = "scrap_salsa"
+name = "scrap_shared"
 version.workspace = true
 edition.workspace = true
 
