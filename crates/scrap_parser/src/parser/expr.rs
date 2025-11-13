@@ -28,14 +28,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.check(Token::LBracket) {
             unimplemented!("array expression parsing not implemented yet");
         }
-        if self.check(Token::Ident) {
-            if let Some(Spanned {
-                node: Token::LParen,
-                ..
-            }) = self.look_ahead(1)
-            {
-                return self.function_call_expr();
-            }
+        if self.check_path(Token::LParen) {
+            return self.function_call_expr();
         }
 
         if self.eat(Token::Return) {
@@ -61,7 +55,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     }
 
     fn function_call_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
-        let path = self.parse_path()?;
+        let path = self.parse_path(Token::LParen)?;
         self.expect(Token::LParen)?;
         let mut args = thin_vec::ThinVec::new();
         while !self.check(Token::RParen) {
@@ -82,17 +76,26 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         ))
     }
 
-    pub fn parse_path(&mut self) -> crate::PResult<'a, Path<'db>> {
+    pub fn check_path(&mut self, term: Token) -> bool {
+        if self.check(Token::Ident)
+            && (self.check_ahead(1, Token::DoubleColon) || self.check_ahead(1, term))
+        {
+            return true;
+        }
+        false
+    }
+
+    pub fn parse_path(&mut self, term: Token) -> crate::PResult<'a, Path<'db>> {
         let mut segments = thin_vec::ThinVec::new();
 
-        loop {
+        while !self.check(term) {
             let ident = self.parse_ident()?;
             segments.push(PathSegment {
                 id: self.state.new_node_id(),
                 ident,
             });
 
-            if !self.eat(Token::Colon) && !self.eat(Token::Colon) {
+            if !self.eat(Token::DoubleColon) || self.check(term) {
                 break;
             }
         }

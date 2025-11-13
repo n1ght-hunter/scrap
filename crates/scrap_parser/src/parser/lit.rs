@@ -1,5 +1,5 @@
 use scrap_ast::lit::LitKind;
-use scrap_diagnostics::{Level, annotate_snippets::Group};
+use scrap_diagnostics::{Annotation, AnnotationKind, Level, Snippet, annotate_snippets::Group};
 
 impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_lit(&mut self) -> crate::PResult<'a, scrap_ast::lit::Lit<'db>> {
@@ -12,9 +12,21 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             scrap_lexer::Literal::Int => LitKind::Integer,
             scrap_lexer::Literal::Bool => LitKind::Bool,
             scrap_lexer::Literal::Ident => {
-                return Err(Group::with_title(
-                    Level::ERROR.primary_title("Ident should not be parsed as literal"),
-                ));
+                let ident_str = &self.source[self.token.span.to_range(self.db)];
+                return Err(Level::ERROR
+                    .primary_title(format!(
+                        "Unexpected identifier '{}' where a literal was expected",
+                        ident_str
+                    ))
+                    .element(
+                        Snippet::source(self.source)
+                            .annotation(
+                                AnnotationKind::Primary
+                                    .span(self.token.span.to_range(self.db))
+                                    .label("expected a literal here"),
+                            )
+                            .path(self.state.file_name),
+                    ));
             }
         };
 

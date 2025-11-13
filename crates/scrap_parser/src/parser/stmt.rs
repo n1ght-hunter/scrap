@@ -14,6 +14,14 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             });
         }
 
+        if let Ok(item) = self.parse_item() {
+            return Ok(Stmt {
+                id: self.state.new_node_id(),
+                span: item.span,
+                kind: StmtKind::Item(item),
+            });
+        }
+
         if self.eat(Token::Semicolon) {
             return Ok(Stmt {
                 id: self.state.new_node_id(),

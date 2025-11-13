@@ -1,11 +1,16 @@
-use scrap_ast::item::{Item, ItemKind, ItemKindDiscriminants};
+use scrap_ast::{
+    item::{Item, ItemKind, ItemKindDiscriminants, UseTree, UseTreeKind},
+    path::{Path, PathSegment},
+};
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
+use scrap_lexer::Token;
 use scrap_span::Span;
 use strum::IntoEnumIterator;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_item(&mut self) -> crate::PResult<'a, Box<Item<'db>>> {
         let start_span = self.token.span;
+        let vis = self.parse_visibility()?;
         let item = self.parse_item_kind()?;
         let span = Span::new(
             self.db,
@@ -16,6 +21,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         Ok(Box::new(Item {
             kind: item,
             span,
+            vis,
             id,
         }))
     }
@@ -29,6 +35,11 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         }
         if self.check_struct_def() {
             return Ok(ItemKind::Struct(self.parse_struct_def()?));
+        }
+
+        if self.check(Token::Use) {
+            let path = self.parse_use_item()?;
+            return Ok(ItemKind::Use(path));
         }
 
         Err(Level::ERROR
@@ -49,6 +60,41 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                             )),
                     ),
             ))
+    }
+
+    pub fn parse_use_item(&mut self) -> crate::PResult<'a, UseTree<'db>> {
+        let use_span = self.token.span;
+        self.expect(Token::Use)?;
+        let mut segments = thin_vec::ThinVec::new();
+
+        while !self.check(Token::Semicolon) {
+            let ident = self.parse_ident()?;
+            segments.push(PathSegment {
+                id: self.state.new_node_id(),
+                ident,
+            });
+
+            if self.eat(Token::Semicolon) || !self.eat(Token::DoubleColon) {
+                break;
+            }
+        }
+        let path = Path {
+            segments,
+            span: Span::new(
+                self.db,
+                use_span.start(self.db),
+                self.token.span.end(self.db),
+            ),
+        };
+        Ok(UseTree {
+            prefix: path,
+            kind: UseTreeKind::Simple(None),
+            span: Span::new(
+                self.db,
+                use_span.start(self.db),
+                self.token.span.end(self.db),
+            ),
+        })
     }
 }
 
@@ -85,7 +131,10 @@ mod tests {
     #[test]
     fn test_parse_item_struct() {
         let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = crate::parser::parse_test_utils::parse_with(&db, "struct MyStruct { field1: i32, field2: String }");
+        let mut parser = crate::parser::parse_test_utils::parse_with(
+            &db,
+            "struct MyStruct { field1: i32, field2: String }",
+        );
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Struct(struct_def) => {

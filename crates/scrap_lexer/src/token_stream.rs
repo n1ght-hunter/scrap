@@ -141,4 +141,29 @@ impl<'db> TokenStreamCursor<'db> {
     pub fn bump_to_end(&mut self) {
         self.index = self.stream.len();
     }
+
+    pub fn position(&self) -> usize {
+        self.index
+    }
+
+    pub fn set_position(&mut self, pos: usize) {
+        self.index = pos;
+    }
+}
+
+
+impl<'a> std::ops::Index<usize> for TokenStream<'a> {
+    type Output = Spanned<'a, Token>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
+impl<'a> std::ops::Index<std::ops::Range<usize>> for TokenStream<'a> {
+    type Output = [Spanned<'a, Token>];
+
+    fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
+        &self.inner[index]
+    }
 }

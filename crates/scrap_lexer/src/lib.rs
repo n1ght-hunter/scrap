@@ -27,6 +27,8 @@ pub enum KeyWord {
     Return,
     #[token("mod")]
     Mod,
+    #[token("use")]
+    Use,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -142,6 +144,8 @@ pub enum Delimiter {
     Comma,
     #[token(":")]
     Colon,
+    #[token("::")]
+    DoubleColon,
     #[token(";")]
     Semicolon,
 }

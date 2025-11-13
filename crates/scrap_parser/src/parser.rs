@@ -1,4 +1,3 @@
-
 use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
@@ -92,6 +91,21 @@ impl<'a, 'db> Parser<'a, 'db> {
     }
 
     #[inline]
+    pub fn check_ahead(&mut self, n: usize, expected: Token) -> bool {
+        let lookahead_token = self.token_stream.look_ahead(n);
+        match lookahead_token {
+            Some(tok) => {
+                let is_present = tok.node == expected;
+                if !is_present {
+                    self.expected_token_types.insert(expected);
+                }
+                is_present
+            }
+            None => false,
+        }
+    }
+
+    #[inline]
     pub fn look_ahead(&mut self, n: usize) -> Option<&Spanned<'db, Token>> {
         self.token_stream.look_ahead(n)
     }
@@ -164,6 +178,18 @@ impl<'a, 'db> Parser<'a, 'db> {
         //     self.expected_one_of_not_found(edible, inedible)
         //         .map(|error_guaranteed| Recovered::Yes(error_guaranteed))
         // }
+    }
+
+    fn position(&self) -> usize {
+        self.token_stream.position()
+    }
+
+    fn set_position(&mut self, pos: usize) {
+        self.token_stream.set_position(pos);
+        self.token = self
+            .token_stream
+            .curr()
+            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)));
     }
 
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
