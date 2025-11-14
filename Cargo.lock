@@ -1062,6 +1062,9 @@ dependencies = [
  "salsa",
  "scrap_ast",
  "scrap_shared",
+ "scrap_span",
+ "serde",
+ "thin-vec",
  "thiserror",
 ]
 

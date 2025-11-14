@@ -27,4 +27,12 @@ impl<'db> Path<'db> {
             segments: ThinVec::from([PathSegment { ident, id }]),
         }
     }
+
+    pub fn single_segment(&self) -> Option<&PathSegment<'db>> {
+        if self.segments.len() == 1 {
+            Some(&self.segments[0])
+        } else {
+            None
+        }
+    }
 }
