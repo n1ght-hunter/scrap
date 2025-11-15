@@ -89,6 +89,10 @@ proc-macro2 = "1"
 quote = "1"
 bitflags = "2"
 
+# overide dependencies with git sources
+[patch.crates-io]
+salsa = { git = "https://github.com/n1ght-hunter/salsa.git", rev = "a885bb4" }
+
 [workspace.lints.rust]
 missing_docs = "allow"
 unsafe_code = "warn"

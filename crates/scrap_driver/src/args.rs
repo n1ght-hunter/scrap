@@ -5,9 +5,13 @@ use clap::{Parser, ValueEnum};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// The source file to compile.
+    /// The entry source file to compile.
     #[arg(required = true, value_parser = clap::value_parser!(PathBuf))]
-    pub source_file: PathBuf,
+    pub entry_source_file: PathBuf,
+
+    /// The source files to compile.
+    #[arg(value_parser = clap::value_parser!(PathBuf))]
+    pub source_files: Vec<PathBuf>,
 
     /// Set the name of the output crate.
     #[arg(long)]

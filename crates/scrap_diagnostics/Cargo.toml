@@ -8,6 +8,7 @@ annotate-snippets.workspace = true
 anstyle.workspace = true
 anstream.workspace = true
 scrap_span.workspace = true
+salsa.workspace = true
 
 [lints]
 workspace = true

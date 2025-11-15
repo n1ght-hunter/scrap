@@ -55,6 +55,10 @@ impl<'a> DiagnosticEmitter<'a> {
     }
 }
 
+#[salsa::accumulator]
+#[derive(Debug)]
+pub struct SalsaDiago(pub Group<'static>);
+
 #[cfg(test)]
 mod tests {
 
