@@ -26,11 +26,14 @@ pub mod typedef;
 pub use shared::*;
 mod shared;
 
+pub use node_id::NodeId;
+
 use item::Item;
-use node_id::NodeId;
 use thin_vec::ThinVec;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct Can<'db> {
     pub id: NodeId,
     pub items: ThinVec<Box<Item<'db>>>,

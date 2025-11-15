@@ -57,7 +57,9 @@ impl Iterator for TokenTypeSetIter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct TokenStream<'db> {
     #[serde(with = "arc_serde")]
     inner: Arc<Vec<Spanned<'db, Token>>>,
@@ -150,7 +152,6 @@ impl<'db> TokenStreamCursor<'db> {
         self.index = pos;
     }
 }
-
 
 impl<'a> std::ops::Index<usize> for TokenStream<'a> {
     type Output = Spanned<'a, Token>;

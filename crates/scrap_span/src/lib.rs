@@ -20,7 +20,9 @@ impl<'db> Span<'db> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct Spanned<'db, T: salsa::Update> {
     pub node: T,
     pub span: Span<'db>,

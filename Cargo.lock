@@ -993,6 +993,7 @@ dependencies = [
  "salsa",
  "scrap_errors",
  "scrap_lexer",
+ "scrap_shared",
  "scrap_span",
  "serde",
  "strum",

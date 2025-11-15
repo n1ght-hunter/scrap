@@ -187,12 +187,11 @@ mod tests {
         fndef::FnDef,
         ident::Ident,
         item::Item,
-        node_id::NodeId,
-        pat::{BindingMode, ByRef, Mutability, Pat, PatKind},
+        pat::{BindingMode, ByRef, Pat, PatKind},
         path::Path,
         typedef::Ty,
     };
-    use scrap_shared::salsa::ScrapDb;
+    use scrap_shared::{Mutability, NodeId, salsa::ScrapDb};
     use scrap_span::{Span, Symbol};
     use thin_vec::ThinVec;
 

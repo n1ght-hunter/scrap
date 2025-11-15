@@ -11,7 +11,9 @@ use crate::{
 };
 
 /// An expression node in the AST
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct Expr<'db> {
     pub id: NodeId,
     pub kind: ExprKind<'db>,
@@ -19,7 +21,17 @@ pub struct Expr<'db> {
 }
 
 /// Expression kinds - subset of Rust's ExprKind enum
-#[derive(Debug, Clone, Hash, PartialEq, Eq, EnumDiscriminants, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    EnumDiscriminants,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[strum_discriminants(derive(EnumIter))]
 pub enum ExprKind<'db> {
     /// An array literal (e.g., `[a, b, c, d]`)

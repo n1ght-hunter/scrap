@@ -26,8 +26,7 @@ pub struct InputPath {
 #[salsa::tracked(persist)]
 pub fn load_file<'db>(db: &'db dyn salsa::Database, path: InputPath) -> InputFile {
     let path = path.path(db);
-    let content = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("Failed to read file {}: {}", path.display(), e)
-    });
+    let content = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("Failed to read file {}: {}", path.display(), e));
     InputFile::new(db, path.clone(), content)
 }

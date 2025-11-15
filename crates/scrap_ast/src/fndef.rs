@@ -19,7 +19,9 @@ pub struct FnDef<'db> {
     pub span: Span<'db>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct Param<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,

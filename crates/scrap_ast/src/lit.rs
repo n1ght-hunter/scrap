@@ -4,7 +4,9 @@ use crate::node_id::NodeId;
 
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct Lit<'db> {
     /// Unique identifier for this literal node
     pub id: NodeId,
@@ -24,7 +26,9 @@ pub struct Lit<'db> {
 /// deciding the `LitKind`. This means that float literals like `1f32` are
 /// classified by this type as `Float`. This is different to `token::LitKind`
 /// which does *not* consider the suffix.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub enum LitKind {
     /// A boolean literal (`true`, `false`)
     Bool,

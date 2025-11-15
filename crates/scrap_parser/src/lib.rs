@@ -10,7 +10,6 @@
     negative_impls
 )]
 
-
 use parser::{Parser, State};
 use scrap_ast::item::Item;
 use scrap_diagnostics::annotate_snippets::Group;
@@ -29,7 +28,9 @@ pub struct ParsedFile<'db> {
     pub ast: AstRoot<'db>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub enum AstRoot<'db> {
     Can(scrap_ast::Can<'db>),
     Module(ThinVec<Box<Item<'db>>>),

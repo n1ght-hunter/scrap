@@ -16,11 +16,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let ident = self.parse_ident()?;
         let params = self.parse_fn_params()?;
         let body = self.parse_block()?;
-        let span = Span::new(
-            self.db,
-            start_span.start(self.db),
-            body.span.end(self.db),
-        );
+        let span = Span::new(self.db, start_span.start(self.db), body.span.end(self.db));
 
         Ok(FnDef::new(
             self.db,

@@ -19,7 +19,10 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                         .label(if expected_tokens.len() == 1 {
                             format!("expected {} found `{}`", expected_str, self.token.node)
                         } else {
-                            format!("expected one of {} found `{}`", expected_str, self.token.node)
+                            format!(
+                                "expected one of {} found `{}`",
+                                expected_str, self.token.node
+                            )
                         }),
                 ),
         )

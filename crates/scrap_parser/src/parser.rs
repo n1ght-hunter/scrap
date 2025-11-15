@@ -1,8 +1,8 @@
 use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
-use scrap_ast::node_id::NodeId;
 use scrap_lexer::Token;
+use scrap_shared::NodeId;
 
 use scrap_lexer::token_stream::TokenStreamCursor;
 use scrap_lexer::token_stream::TokenTypeSet;

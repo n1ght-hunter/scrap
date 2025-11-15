@@ -1,4 +1,3 @@
-
 use crate::Token;
 
 #[derive(Default, Debug, Clone, PartialEq, thiserror::Error)]
