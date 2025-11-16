@@ -29,6 +29,8 @@ where
 
     let mut db = scrap_shared::salsa::ScrapDb::default();
 
+    db_par_iter(&db, std::iter::empty::<()>()).for_each(|(_, _)| {});
+
     if let Some(cache_path) = args.cache.as_ref() {
         let db_cache_path = cache_path.with_extension("json");
         if db_cache_path.exists() {
@@ -113,4 +115,18 @@ fn run(args: &args::Args, db: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Resu
     }
 
     Ok(())
+}
+
+#[salsa::tracked(persist)]
+fn loading_step<'db>(
+    db: &'db dyn scrap_shared::Db,
+    input_path: scrap_shared::salsa::InputPath<'db>,
+) -> scrap_parser::ParsedFile<'db> {
+    let moved_db = db.clone();
+    rayon::spawn(move ||{
+        let _db = db;
+    });
+    let input_file = scrap_shared::salsa::load_file(db, input_path);
+    let lexed_tokens = scrap_lexer::lex_file(db, input_file);
+    scrap_parser::parse_tokens(db, input_file, lexed_tokens, true)
 }

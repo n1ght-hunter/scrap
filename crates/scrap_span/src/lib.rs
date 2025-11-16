@@ -11,11 +11,11 @@ pub struct Span<'db> {
 }
 
 impl<'db> Span<'db> {
-    pub fn new_default(db: &'db dyn salsa::Database) -> Self {
+    pub fn new_default(db: &'db dyn scrap_shared::Db) -> Self {
         Self::new(db, 0, 0)
     }
 
-    pub fn to_range(&self, db: &'db dyn salsa::Database) -> std::ops::Range<usize> {
+    pub fn to_range(&self, db: &'db dyn scrap_shared::Db) -> std::ops::Range<usize> {
         self.start(db)..self.end(db)
     }
 }

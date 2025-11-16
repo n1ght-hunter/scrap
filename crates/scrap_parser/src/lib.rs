@@ -38,8 +38,8 @@ pub enum AstRoot<'db> {
 
 #[salsa::tracked(persist)]
 pub fn parse_tokens<'db>(
-    db: &'db dyn salsa::Database,
-    file: scrap_shared::salsa::InputFile,
+    db: &'db dyn scrap_shared::Db,
+    file: scrap_shared::salsa::InputFile<'db>,
     tokens: scrap_lexer::LexedTokens<'db>,
     is_root: bool,
 ) -> ParsedFile<'db> {

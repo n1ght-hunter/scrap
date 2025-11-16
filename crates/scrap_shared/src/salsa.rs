@@ -9,15 +9,21 @@ pub struct ScrapDb {
 #[salsa::db]
 impl salsa::Database for ScrapDb {}
 
-#[salsa::input(debug, persist)]
-pub struct InputFile {
+#[salsa::db]
+pub trait Db: salsa::Database {}
+
+#[salsa::db]
+impl Db for ScrapDb {}
+
+#[salsa::tracked(debug, persist)]
+pub struct InputFile<'db> {
     #[returns(ref)]
     pub path: PathBuf,
     #[returns(ref)]
     pub content: String,
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(debug, persist)]
 pub struct InputPath<'db> {
     #[returns(ref)]
     pub path: PathBuf,
@@ -27,7 +33,7 @@ pub struct InputPath<'db> {
 
 #[salsa::tracked(persist)]
 pub fn get_input_path(
-    db: &dyn salsa::Database,
+    db: &dyn Db,
     path: PathBuf,
     last_modified: std::time::SystemTime,
 ) -> InputPath<'_> {
@@ -35,9 +41,9 @@ pub fn get_input_path(
 }
 
 #[salsa::tracked(persist)]
-pub fn load_file<'db>(db: &'db dyn salsa::Database, input_path: InputPath<'db>) -> InputFile {
+pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> InputFile<'db> {
+    tracing::debug!("Loading file: {}", input_path.path(db).display());
     let path = input_path.path(db);
-    println!("Loading file: {}", path.display());
     let content = std::fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read file {}: {}", path.display(), e));
     InputFile::new(db, path.clone(), content)

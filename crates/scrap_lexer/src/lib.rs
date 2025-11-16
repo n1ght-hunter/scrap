@@ -191,8 +191,8 @@ pub struct LexedTokens<'db> {
 
 #[salsa::tracked(persist)]
 pub fn lex_file<'db>(
-    db: &'db dyn salsa::Database,
-    file: scrap_shared::salsa::InputFile,
+    db: &'db dyn scrap_shared::Db,
+    file: scrap_shared::salsa::InputFile<'db>,
 ) -> LexedTokens<'db> {
     let content = file.content(db);
     let (token_iter, mut lex_errs) = Token::lexer(content).spanned().fold(

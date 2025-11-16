@@ -53,12 +53,12 @@ pub struct Parser<'a, 'db> {
     pub(super) expected_token_types: TokenTypeSet,
     pub(crate) token: Spanned<'db, Token>,
     pub(crate) state: State<'a>,
-    pub(crate) db: &'db dyn salsa::Database,
+    pub(crate) db: &'db dyn scrap_shared::Db,
 }
 
 impl<'a, 'db> Parser<'a, 'db> {
     pub fn new(
-        db: &'db dyn salsa::Database,
+        db: &'db dyn scrap_shared::Db,
         source: &'a str,
         token_stream: TokenStreamCursor<'db>,
         state: State<'a>,
@@ -220,7 +220,7 @@ pub mod parse_test_utils {
     use crate::parser::Parser;
     use crate::parser::State;
 
-    pub fn parse_with<'a, 'db>(db: &'db dyn salsa::Database, source: &'a str) -> Parser<'a, 'db> {
+    pub fn parse_with<'a, 'db>(db: &'db dyn scrap_shared::Db, source: &'a str) -> Parser<'a, 'db> {
         let (token_iter, lex_errs) = scrap_lexer::Token::lexer(source).spanned().fold(
             (Vec::new(), Vec::new()),
             |(mut tokens, mut token_errors), (new_tok, new_span)| {
@@ -246,7 +246,7 @@ pub mod parse_test_utils {
     }
 
     pub fn test_parser<'a, 'db>(
-        db: &'db dyn salsa::Database,
+        db: &'db dyn scrap_shared::Db,
         source: &'a str,
         tokens: Vec<Spanned<'db, Token>>,
     ) -> Parser<'a, 'db> {

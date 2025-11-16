@@ -37,7 +37,7 @@ pub struct LoweredIr<'db> {
 
 /// Main entry point: lower parsed AST modules to IR
 pub fn lower_to_ir<'db>(
-    db: &'db dyn salsa::Database,
+    db: &'db dyn scrap_shared::Db,
     modules: Vec<(String, Vec<Item<'db>>)>,
 ) -> Result<LoweredIr<'db>, BuilderError> {
     let mut mir_modules = Vec::new();
@@ -53,7 +53,7 @@ pub fn lower_to_ir<'db>(
 
 /// Lower a module with its items
 fn lower_module<'db>(
-    db: &'db dyn salsa::Database,
+    db: &'db dyn scrap_shared::Db,
     path: String,
     ast_items: &[Item<'db>],
 ) -> MResult<ir::Module<'db>> {
@@ -78,7 +78,7 @@ fn lower_module<'db>(
 
 /// Lower a function definition
 fn lower_function<'db>(
-    db: &'db dyn salsa::Database,
+    db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
 ) -> MResult<ir::Function<'db>> {
     let signature = lower_signature(db, ast_function)?;
@@ -89,7 +89,7 @@ fn lower_function<'db>(
 
 /// Lower function signature
 fn lower_signature<'db>(
-    db: &'db dyn salsa::Database,
+    db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
 ) -> MResult<ir::Signature<'db>> {
     let name = ast_function.ident(db).name;
@@ -110,7 +110,7 @@ fn lower_signature<'db>(
 }
 
 /// Lower function body
-fn lower_body<'db>(db: &'db dyn salsa::Database, ast_block: &Block<'db>) -> MResult<ir::Body<'db>> {
+fn lower_body<'db>(db: &'db dyn scrap_shared::Db, ast_block: &Block<'db>) -> MResult<ir::Body<'db>> {
     let mut blocks = Vec::new();
     let mut local_decls = Vec::new();
     let statements = Vec::new();
@@ -153,7 +153,7 @@ fn lower_body<'db>(db: &'db dyn salsa::Database, ast_block: &Block<'db>) -> MRes
 }
 
 /// Lower a type from AST to IR
-fn lower_type<'db>(db: &'db dyn salsa::Database, ast_type: &Ty<'db>) -> MResult<ir::Ty<'db>> {
+fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MResult<ir::Ty<'db>> {
     match &ast_type.kind {
         TyKind::Path(path) => {
             // Get the last segment as the type name
@@ -196,7 +196,7 @@ mod tests {
 
     /// Test helper that wraps the logic in a Salsa tracked function
     #[salsa::tracked]
-    fn test_lower_simple_function_impl<'db>(db: &'db dyn salsa::Database) -> bool {
+    fn test_lower_simple_function_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
         let span = Span::new(db, 0, 0);
         let node_id = NodeId::new(0, 0);
         let name = Symbol::new(db, "test_fn".to_string());
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_function_with_params_impl<'db>(db: &'db dyn salsa::Database) -> bool {
+    fn test_lower_function_with_params_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
         let span = Span::new(db, 0, 0);
         let node_id = NodeId::new(0, 0);
 
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_type_primitives_impl<'db>(db: &'db dyn salsa::Database) -> bool {
+    fn test_lower_type_primitives_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
         let span = Span::new(db, 0, 0);
         let node_id = NodeId::new(0, 0);
 
@@ -406,7 +406,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_module_impl<'db>(db: &'db dyn salsa::Database) -> bool {
+    fn test_lower_module_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
         let span = Span::new(db, 0, 0);
         let node_id = NodeId::new(0, 0);
 
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_empty_module_impl<'db>(db: &'db dyn salsa::Database) -> bool {
+    fn test_lower_empty_module_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
         let result = lower_module(db, "empty_module".to_string(), &[]);
         if result.is_err() {
             return false;

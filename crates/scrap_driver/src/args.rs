@@ -10,7 +10,7 @@ pub struct Args {
     pub entry_source_file: PathBuf,
 
     /// The source files to compile.
-    #[arg(value_parser = clap::value_parser!(PathBuf))]
+    #[arg(value_parser = clap::value_parser!(PathBuf), long, short = 'i')]
     pub source_files: Vec<PathBuf>,
 
     /// Set the name of the output crate.
