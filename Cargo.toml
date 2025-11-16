@@ -24,6 +24,7 @@ scrap_lexer = { path = "crates/scrap_lexer" }
 scrap_codegen = { path = "crates/scrap_codegen" }
 scrap_macros = { path = "crates/scrap_macros" }
 scrap_ir = { path = "crates/scrap_ir" }
+scrap_ast_lowering = { path = "crates/scrap_ast_lowering" }
 scrap_ast = { path = "crates/scrap_ast" }
 scrap_diagnostics = { path = "crates/scrap_diagnostics" }
 scrap_errors = { path = "crates/scrap_errors" }

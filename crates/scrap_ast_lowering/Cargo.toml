@@ -1,0 +1,18 @@
+[package]
+name = "scrap_ast_lowering"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scrap_ast.workspace = true
+scrap_span.workspace = true
+scrap_ir.workspace = true
+scrap_shared.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+salsa.workspace = true
+serde.workspace = true
+thin-vec.workspace = true
+
+[lints]
+workspace = true

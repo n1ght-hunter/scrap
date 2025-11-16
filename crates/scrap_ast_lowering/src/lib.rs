@@ -8,8 +8,7 @@ use scrap_ast::{
     typedef::{Ty, TyKind},
 };
 use scrap_span::Symbol;
-
-use crate::ir;
+use scrap_ir as ir;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -168,7 +167,7 @@ fn lower_type<'db>(db: &'db dyn salsa::Database, ast_type: &Ty<'db>) -> MResult<
                 "bool" => Ok(ir::Ty::Bool),
                 "String" => Ok(ir::Ty::Str),
                 _ => {
-                    let type_id = ir::TypeId::new(db, type_name.clone());
+                    let type_id = ir::TypeId::new(db, type_name);
                     Ok(ir::Ty::Adt(type_id))
                 }
             }

@@ -4,10 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-scrap_ast.workspace = true
 scrap_span.workspace = true
-rayon.workspace = true
-thiserror.workspace = true
 salsa.workspace = true
 scrap_shared.workspace = true
 serde.workspace = true

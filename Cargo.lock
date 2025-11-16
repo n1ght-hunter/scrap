@@ -999,6 +999,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrap_ast_lowering"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "salsa",
+ "scrap_ast",
+ "scrap_ir",
+ "scrap_shared",
+ "scrap_span",
+ "serde",
+ "thin-vec",
+ "thiserror",
+]
+
+[[package]]
 name = "scrap_codegen"
 version = "0.1.0"
 dependencies = [
@@ -1010,8 +1025,12 @@ dependencies = [
  "cranelift-object",
  "insta",
  "scrap_ast",
+ "scrap_ast_lowering",
+ "scrap_diagnostics",
  "scrap_ir",
  "scrap_lexer",
+ "scrap_shared",
+ "scrap_span",
  "target-lexicon",
  "thiserror",
 ]
@@ -1059,14 +1078,11 @@ dependencies = [
 name = "scrap_ir"
 version = "0.1.0"
 dependencies = [
- "rayon",
  "salsa",
- "scrap_ast",
  "scrap_shared",
  "scrap_span",
  "serde",
  "thin-vec",
- "thiserror",
 ]
 
 [[package]]

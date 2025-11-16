@@ -281,31 +281,6 @@ pub enum BinOp {
     Gt,
 }
 
-impl BinOp {
-    pub fn from_ast(kind: scrap_ast::operators::BinOpKind) -> Self {
-        match kind {
-            scrap_ast::operators::BinOpKind::Add => BinOp::Add,
-            scrap_ast::operators::BinOpKind::Sub => BinOp::Sub,
-            scrap_ast::operators::BinOpKind::Mul => BinOp::Mul,
-            scrap_ast::operators::BinOpKind::Div => BinOp::Div,
-            scrap_ast::operators::BinOpKind::Rem => BinOp::Rem,
-            scrap_ast::operators::BinOpKind::And => BinOp::And,
-            scrap_ast::operators::BinOpKind::Or => BinOp::Or,
-            scrap_ast::operators::BinOpKind::BitXor => BinOp::BitXor,
-            scrap_ast::operators::BinOpKind::BitAnd => BinOp::BitAnd,
-            scrap_ast::operators::BinOpKind::BitOr => BinOp::BitOr,
-            scrap_ast::operators::BinOpKind::Shl => BinOp::Shl,
-            scrap_ast::operators::BinOpKind::Shr => BinOp::Shr,
-            scrap_ast::operators::BinOpKind::Eq => BinOp::Eq,
-            scrap_ast::operators::BinOpKind::Lt => BinOp::Lt,
-            scrap_ast::operators::BinOpKind::Le => BinOp::Le,
-            scrap_ast::operators::BinOpKind::Ne => BinOp::Ne,
-            scrap_ast::operators::BinOpKind::Ge => BinOp::Ge,
-            scrap_ast::operators::BinOpKind::Gt => BinOp::Gt,
-        }
-    }
-}
-
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
