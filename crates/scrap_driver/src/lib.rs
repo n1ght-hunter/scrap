@@ -100,7 +100,7 @@ fn run(args: &args::Args, db: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Resu
         args.entry_source_file.to_path_buf(),
         metadata.modified()?,
     );
-    
+
     let input_file = scrap_shared::salsa::load_file(db, input_path);
     let lexed_tokens = scrap_lexer::lex_file(db, input_file);
     let parsed_file = scrap_parser::parse_tokens(db, input_file, lexed_tokens, true);
