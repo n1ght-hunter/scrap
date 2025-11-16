@@ -15,3 +15,6 @@ complex *args:
 
 complex_quick *args:
     ./target/release/scrap.exe E:/programming/rust/scrap/example/complex.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/complex/quick_cache {{args}}
+
+basic *args:
+    just run E:/programming/rust/scrap/tests/basic.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/basic_cache {{args}}

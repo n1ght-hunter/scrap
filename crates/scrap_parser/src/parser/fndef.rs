@@ -1,5 +1,5 @@
 use crate::PResult;
-use scrap_ast::fndef::{FnDef, Param};
+use scrap_ast::{fndef::{FnDef, Param}, typedef::Ty};
 use scrap_lexer::Token;
 use scrap_span::Span;
 use thin_vec::ThinVec;
@@ -15,6 +15,11 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         self.expect(Token::Fn)?;
         let ident = self.parse_ident()?;
         let params = self.parse_fn_params()?;
+        let ret_type = if self.eat(Token::Arrow) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
         let body = self.parse_block()?;
         let span = Span::new(self.db, start_span.start(self.db), body.span.end(self.db));
 
@@ -23,7 +28,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             self.state.new_node_id(),
             ident,
             params,
-            None,
+            ret_type,
             body,
             span,
         ))
@@ -47,7 +52,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 id: self.state.new_node_id(),
                 ident: param_ident,
                 ty: Box::new(param_type),
-                pat: Box::new(self.parse_pat()?),
+                pat: Box::new(self.parse_pat_empty()?),
             });
 
             if !self.eat(Token::Comma) {

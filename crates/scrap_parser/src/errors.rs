@@ -27,4 +27,13 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                 ),
         )
     }
+
+    pub fn raise_unexpected_token_error(&mut self) -> Group<'a> {
+        self.unexpected_token_error(
+            self.expected_token_types
+                .iter()
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+    }
 }

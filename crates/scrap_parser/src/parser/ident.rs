@@ -21,10 +21,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 span,
             })
         } else {
-            Err(Group::with_title(Level::ERROR.primary_title(format!(
-                "Expected identifier found `{}`",
-                self.token.node
-            ))))
+            Err(self.unexpected_token_error(&[Token::Ident]))
         }
     }
 }

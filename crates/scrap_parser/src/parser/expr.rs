@@ -42,16 +42,20 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         }
 
         if self.token.node.is_literal() {
-            let lit = self.parse_lit()?;
-            return Ok(ExprKind::Lit(lit));
+            if self.check(Token::Ident) {
+                let path = self.parse_path(Token::Eof)?;
+                return Ok(ExprKind::Path(path));
+            } else {
+                let lit = self.parse_lit()?;
+                return Ok(ExprKind::Lit(lit));
+            }
         }
 
-        Err(self.unexpected_token_error(&[
-            Token::LBrace,
-            Token::LBracket,
-            Token::Ident,
-            Token::Return,
-        ]))
+        if self.check(Token::If) {
+            return self.parse_if_expr();
+        }
+
+        Err(self.raise_unexpected_token_error())
     }
 
     fn function_call_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
@@ -112,6 +116,33 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             ),
             segments,
         })
+    }
+
+    fn parse_if_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        self.expect(Token::If)?;
+        let condition = self.parse_expr()?;
+        let then_block = self.parse_block()?;
+
+        let else_span_start = self.token.span.start(self.db);
+        let else_block = if self.eat(Token::Else) {
+            Some(Box::new(Expr {
+                id: self.state.new_node_id(),
+                kind: ExprKind::Block(Box::new(self.parse_block()?)),
+                span: Span::new(
+                    self.db,
+                    else_span_start,
+                    self.token.span.end(self.db),
+                ),
+            }))
+        } else {
+            None
+        };
+
+        Ok(ExprKind::If(
+            Box::new(condition),
+            Box::new(then_block),
+            else_block,
+        ))
     }
 }
 

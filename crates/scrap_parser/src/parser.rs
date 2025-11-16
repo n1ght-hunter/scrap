@@ -56,7 +56,7 @@ pub mod ty;
 pub struct Parser<'a, 'db> {
     pub(crate) source: &'a str,
     pub(crate) token_stream: TokenStreamCursor<'db>,
-    expected_token_types: TokenTypeSet,
+    pub(super) expected_token_types: TokenTypeSet,
     pub(crate) token: Spanned<'db, Token>,
     pub(crate) state: State<'a>,
     pub(crate) db: &'db dyn salsa::Database,

@@ -1,5 +1,5 @@
 fn foo(a: f64, b: f64) -> f64 {
-    let test = asdfasd
+    let test = asdfasd;
     let c: f64 = if a > 1.0 {
         a + b
     } else {
