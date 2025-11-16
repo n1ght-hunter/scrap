@@ -34,21 +34,15 @@ impl<'a> State<'a> {
 }
 
 pub mod block;
-// pub mod enumdef;
-// pub mod expr;
-// pub mod field;
+pub mod enumdef;
+pub mod expr;
 pub mod fndef;
 pub mod ident;
 pub mod item;
-// pub mod lit;
-// pub mod local;
-// pub mod operators;
-pub mod pat;
-// pub mod stmt;
-pub mod expr;
 pub mod lit;
 pub mod local;
 pub mod module;
+pub mod pat;
 pub mod stmt;
 pub mod structdef;
 pub mod ty;

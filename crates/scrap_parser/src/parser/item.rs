@@ -36,6 +36,9 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.check_struct_def() {
             return Ok(ItemKind::Struct(self.parse_struct_def()?));
         }
+        if self.check_enum_def() {
+            return Ok(ItemKind::Enum(self.parse_enum_def()?));
+        }
 
         if self.check(Token::Use) {
             let path = self.parse_use_item()?;
