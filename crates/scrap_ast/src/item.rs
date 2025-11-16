@@ -33,7 +33,7 @@ pub enum ItemKind<'db> {
     Fn(FnDef<'db>),
     Enum(EnumDef<'db>),
     Struct(StructDef<'db>),
-    Module(Ident<'db>, Module<'db>),
+    Module(Path<'db>, Module<'db>),
     Use(UseTree<'db>),
 }
 

@@ -2,11 +2,13 @@
 
 mod args;
 
-use std::ffi::OsString;
+use std::{ffi::OsString, sync::Arc};
 
 use args::UnPrettyOut;
 use clap::Parser;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{
+    IntoParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelExtend, ParallelIterator,
+};
 use salsa::Database;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;
@@ -28,8 +30,6 @@ where
     }
 
     let mut db = scrap_shared::salsa::ScrapDb::default();
-
-    db_par_iter(&db, std::iter::empty::<()>()).for_each(|(_, _)| {});
 
     if let Some(cache_path) = args.cache.as_ref() {
         let db_cache_path = cache_path.with_extension("json");
@@ -69,64 +69,48 @@ where
     }
 }
 
-fn run(args: &args::Args, db: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Result<()> {
-    let mut base_emiter = scrap_diagnostics::DiagnosticEmitter::new().with_auto_render(true);
+fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Result<()> {
+    let base_emiter = scrap_diagnostics::DiagnosticEmitter::new().with_auto_render(true);
+    let db = &*db_mut;
 
-    let source_files = args
+    let modules = args
         .source_files
         .par_iter()
-        .map(|path| (path, std::fs::metadata(path).and_then(|m| m.modified())))
-        .collect_vec_list()
-        .into_iter()
-        .flatten()
-        .flat_map(|(path, res)| match res {
-            Ok(modified) => Some(scrap_shared::salsa::get_input_path(
-                db,
-                path.to_path_buf(),
-                modified,
-            )),
-            Err(e) => {
-                base_emiter.emit(
-                    Level::ERROR
-                        .primary_title(format!("Failed to read source file: {}", path.display()))
-                        .element(Level::HELP.message(format!("I/O Error: {}", e))),
-                );
-                None
-            }
-        });
-    let _source_files = source_files.collect::<Vec<_>>();
+        .chain(rayon::iter::once(&args.entry_source_file))
+        .filter_map(|somthign| {
+            let db = db;
+            let modifed = match std::fs::metadata(somthign).and_then(|m| m.modified()) {
+                Ok(m) => m,
+                Err(e) => {
+                    base_emiter.render_single(
+                        Level::ERROR
+                            .primary_title(format!(
+                                "Failed to read source file: {}",
+                                somthign.display()
+                            ))
+                            .element(Level::HELP.message(format!("I/O Error: {}", e))),
+                    );
+                    return None;
+                }
+            };
+            let input_path =
+                scrap_shared::salsa::get_input_path(db, somthign.to_path_buf(), modifed);
+            let input_file = scrap_shared::salsa::load_file(db, input_path);
+            let lexed_tokens = scrap_lexer::lex_file(db, input_file);
+            let parsed_file =
+                scrap_parser::parse_tokens(db, input_file, lexed_tokens, true, "adsf".to_string());
+            Some(parsed_file)
+        })
+        .collect::<Vec<_>>();
 
-    let metadata = std::fs::metadata(&args.entry_source_file)?;
-    let input_path = scrap_shared::salsa::get_input_path(
-        db,
-        args.entry_source_file.to_path_buf(),
-        metadata.modified()?,
-    );
-
-    let input_file = scrap_shared::salsa::load_file(db, input_path);
-    let lexed_tokens = scrap_lexer::lex_file(db, input_file);
-    let parsed_file = scrap_parser::parse_tokens(db, input_file, lexed_tokens, true);
+    let entry_file = modules.last().expect("No entry file found");
 
     if let Some(UnPrettyOut::Ast) = args.unpretty_out {
         db.attach(|db| {
-            println!("{:#?}", parsed_file.ast(db));
+            println!("{:#?}", entry_file.ast(db));
         });
         return Ok(());
     }
 
     Ok(())
-}
-
-#[salsa::tracked(persist)]
-fn loading_step<'db>(
-    db: &'db dyn scrap_shared::Db,
-    input_path: scrap_shared::salsa::InputPath<'db>,
-) -> scrap_parser::ParsedFile<'db> {
-    let moved_db = db.clone();
-    rayon::spawn(move ||{
-        let _db = db;
-    });
-    let input_file = scrap_shared::salsa::load_file(db, input_path);
-    let lexed_tokens = scrap_lexer::lex_file(db, input_file);
-    scrap_parser::parse_tokens(db, input_file, lexed_tokens, true)
 }

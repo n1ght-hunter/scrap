@@ -39,4 +39,16 @@ impl<'db> Path<'db> {
             None
         }
     }
+
+    pub fn extend(&self, db: &'db dyn scrap_shared::Db, ident: Ident<'db>) -> Self {
+        let mut new_segments = self.segments.clone();
+        new_segments.push(PathSegment {
+            ident: ident,
+            id: ident.id,
+        });
+        Path {
+            span: Span::new(db, self.span.start(db), ident.span.end(db)),
+            segments: new_segments,
+        }
+    }
 }

@@ -66,3 +66,10 @@ pub struct Symbol<'db> {
     #[returns(ref)]
     pub text: String,
 }
+
+impl<'db> Symbol<'db> {
+    /// Get the string slice for this symbol.
+    pub fn dummy(db: &'db dyn scrap_shared::Db) -> Self {
+        Symbol::new(db, "<dummy>")
+    }
+}

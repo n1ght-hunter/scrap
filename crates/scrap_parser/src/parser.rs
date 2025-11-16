@@ -1,6 +1,11 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
+use scrap_ast::ident::Ident;
+use scrap_ast::path::Path;
 use scrap_lexer::Token;
 use scrap_shared::NodeId;
 
@@ -11,7 +16,7 @@ use scrap_span::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct State<'a> {
-    id: u32,
+    id: u16,
     file_hash: u64,
     pub(crate) file_name: &'a str,
 }
@@ -54,6 +59,7 @@ pub struct Parser<'a, 'db> {
     pub(crate) token: Spanned<'db, Token>,
     pub(crate) state: State<'a>,
     pub(crate) db: &'db dyn scrap_shared::Db,
+    pub(crate) current_module_path: Rc<RefCell<Path<'db>>>,
 }
 
 impl<'a, 'db> Parser<'a, 'db> {
@@ -62,6 +68,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         source: &'a str,
         token_stream: TokenStreamCursor<'db>,
         state: State<'a>,
+        name: Ident<'db>,
     ) -> Self {
         Self {
             token: token_stream
@@ -72,6 +79,7 @@ impl<'a, 'db> Parser<'a, 'db> {
             expected_token_types: TokenTypeSet::new(),
             state,
             db,
+            current_module_path: Rc::new(RefCell::new(Path::from_ident(name))),
         }
     }
 
@@ -207,6 +215,36 @@ impl<'a, 'db> Parser<'a, 'db> {
             })
         }
     }
+
+    pub fn push_current_module_path(&mut self, ident: Ident<'db>) {
+        let new_path = self.current_module_path.borrow().extend(self.db, ident);
+        *self.current_module_path.borrow_mut() = new_path;
+    }
+
+    pub fn guard_current_module_path(&mut self, ident: Ident<'db>) -> PopOnDrop<'db> {
+        self.push_current_module_path(ident);
+        PopOnDrop(Rc::clone(&self.current_module_path))
+    }
+
+    pub fn pop_current_module_path(&mut self) {
+        let segments = &mut self.current_module_path.borrow_mut().segments;
+        segments.pop();
+    }
+
+    pub fn current_module_path(
+        &self,
+    ) -> std::cell::Ref<'_, scrap_ast::path::Path<'db>> {
+        self.current_module_path.borrow()
+    }
+}
+
+struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_ast::path::Path<'db>>>);
+
+impl Drop for PopOnDrop<'_> {
+    fn drop(&mut self) {
+        let segments = &mut self.0.borrow_mut().segments;
+        segments.pop();
+    }
 }
 
 #[cfg(test)]
@@ -252,7 +290,13 @@ pub mod parse_test_utils {
     ) -> Parser<'a, 'db> {
         let token_stream = TokenStreamCursor::new(TokenStream::new(tokens));
         let state = State::new("test.sc");
-        Parser::new(db, source, token_stream, state)
+        Parser::new(
+            db,
+            source,
+            token_stream,
+            state,
+            Ident::dummy_with_name(db, "test"),
+        )
     }
 
     pub fn render(report: &[Group]) -> ! {

@@ -16,19 +16,22 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let start_span = self.token.span.start(self.db);
         self.expect(Token::Mod)?;
         let ident = self.parse_ident()?;
+        let _guard = self.guard_current_module_path(ident);
 
         if self.eat(Token::Semicolon) {
-            Ok(ItemKind::Module(ident, Module::Unloaded))
+            Ok(ItemKind::Module(
+                self.current_module_path().to_owned(),
+                Module::Unloaded,
+            ))
         } else if self.eat(Token::LBrace) {
             let items = self.parse_module_inner(Token::RBrace)?;
-            let end_span = self.token.span;
 
             Ok(ItemKind::Module(
-                ident,
+                self.current_module_path().to_owned(),
                 Module::Loaded(
                     items,
                     Inline::Yes,
-                    Span::new(self.db, start_span, end_span.end(self.db)),
+                    Span::new(self.db, start_span, self.token.span.end(self.db)),
                 ),
             ))
         } else {
@@ -76,7 +79,7 @@ mod tests {
         let item = parser.parse_module().unwrap_or_render();
         match item {
             ItemKind::Module(ident, module) => {
-                assert_eq!(ident.name.text(&db), "my_module");
+                assert_eq!(ident.segments.last().unwrap().ident.name.text(&db), "my_module");
                 match module {
                     Module::Loaded(items, inline, span) => {
                         assert_eq!(inline, Inline::Yes);

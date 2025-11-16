@@ -23,12 +23,15 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
+use hashbrown::HashMap;
+use ident::Ident;
+use path::Path;
 pub use shared::*;
 mod shared;
 
 pub use node_id::NodeId;
 
-use item::Item;
+use item::{Item, ItemKind};
 use thin_vec::ThinVec;
 
 #[derive(
@@ -37,4 +40,18 @@ use thin_vec::ThinVec;
 pub struct Can<'db> {
     pub id: NodeId,
     pub items: ThinVec<Box<Item<'db>>>,
+}
+
+impl<'db> Can<'db> {
+    pub fn iter_modules_mut(
+        &'db self,
+    ) -> impl Iterator<Item = (&'db Path<'db>, &'db module::Module<'db>)> + 'db {
+        self.items.iter().filter_map(|item| {
+            if let ItemKind::Module(path, module) = &item.kind {
+                Some((path, module))
+            } else {
+                None
+            }
+        })
+    }
 }

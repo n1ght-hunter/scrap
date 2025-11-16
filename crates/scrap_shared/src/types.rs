@@ -176,25 +176,32 @@ impl FloatTy {
 /// Every AST node that can be referenced has a unique NodeId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct NodeId {
-    id: u32,
+    id: i32,
     file_hash: u64,
 }
 
 impl NodeId {
     /// Get the raw ID value (useful for debugging and serialization)
-    pub fn as_u32(self) -> u32 {
+    pub fn as_i32(self) -> i32 {
         self.id
     }
 
-    /// Create a NodeId from a raw u32 value (should only be used for deserialization)
-    pub fn new(id: u32, file_hash: u64) -> Self {
-        NodeId { id, file_hash }
+    /// Create a NodeId from a u16 ID and a file hash
+    pub fn new(id: u16, file_hash: u64) -> Self {
+        NodeId { id: id as i32, file_hash }
     }
 
     /// Create a special invalid NodeId for error recovery cases
     pub fn invalid() -> Self {
         NodeId {
-            id: u32::MAX,
+            id: -1,
+            file_hash: 0,
+        }
+    }
+
+    pub fn dummy() -> Self {
+        NodeId {
+            id: -2,
             file_hash: 0,
         }
     }

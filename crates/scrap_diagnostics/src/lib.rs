@@ -49,9 +49,40 @@ impl<'a> DiagnosticEmitter<'a> {
         self.diagnostics.append(&mut other.diagnostics);
     }
 
+    pub fn render_single(&self, diag: Group<'a>) {
+        self.render(&[diag]);
+    }
+
     /// Renders a single Diagnostic into a formatted string.
-    pub fn render(&self, groups: Report<'_>) {
-        anstream::println!("{}", self.renderer.render(groups));
+    pub fn render(&self, groups: impl IntoDiagnosticGroup<'a>) {
+        anstream::println!("{}", self.renderer.render(groups.into_diagnostic_group()));
+    }
+}
+
+mod sealed {
+    pub trait Sealed {}
+}
+
+pub trait IntoDiagnosticGroup<'a>: sealed::Sealed {
+    fn into_diagnostic_group(self) -> Report<'a>;
+}
+
+impl<'a> sealed::Sealed for &'a [Group<'a>] {}
+
+impl<'a> IntoDiagnosticGroup<'a> for &'a [Group<'a>] {
+    fn into_diagnostic_group(self) -> Report<'a> {
+        self
+    }
+}
+
+impl<'a, T> sealed::Sealed for &'a T where T: AsRef<[Group<'a>]> {}
+
+impl<'a, T> IntoDiagnosticGroup<'a> for &'a T
+where
+    T: AsRef<[Group<'a>]>,
+{
+    fn into_diagnostic_group(self) -> Report<'a> {
+        self.as_ref()
     }
 }
 
