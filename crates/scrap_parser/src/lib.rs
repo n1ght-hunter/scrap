@@ -11,7 +11,7 @@
 )]
 
 use parser::{Parser, State};
-use scrap_ast::{ident::Ident, item::Item};
+use scrap_ast::{ident::Ident, item::Item, path::Path};
 use scrap_diagnostics::annotate_snippets::Group;
 use scrap_lexer::{Token, token_stream::TokenStreamCursor};
 use thin_vec::ThinVec;
@@ -42,7 +42,7 @@ pub fn parse_tokens<'db>(
     file: scrap_shared::salsa::InputFile<'db>,
     tokens: scrap_lexer::LexedTokens<'db>,
     is_root: bool,
-    can_name: String,
+    root_path: Vec<String>,
 ) -> ParsedFile<'db> {
     let tokens = tokens.tokens(db);
     let token_stream = TokenStreamCursor::new(tokens);
@@ -52,7 +52,7 @@ pub fn parse_tokens<'db>(
         file.content(db),
         token_stream,
         state,
-        Ident::dummy_with_name(db, &can_name),
+        Path::from_segments(db, &root_path),
     );
     let ast = if is_root {
         parser

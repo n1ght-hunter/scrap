@@ -32,6 +32,36 @@ impl<'db> Path<'db> {
         }
     }
 
+    pub fn from_segments(db: &'db dyn scrap_shared::Db, segments: &[String]) -> Self {
+        let mut path_segments = ThinVec::new();
+        let mut start = 0;
+        let mut end = 0;
+        for segment in segments {
+            end += segment.len();
+            let ident = Ident {
+                id: NodeId::dummy(),
+                name: scrap_span::Symbol::new(db, segment),
+                span: Span::new(db, start, end),
+            };
+            path_segments.push(PathSegment { ident, id: ident.id });
+            start = end + 2; // +2 for '::'
+            end = start;
+        }
+        Path {
+            span: Span::new(db, 0, end - 2), // -2 to remove last '::'
+            segments: path_segments,
+        }
+    }
+
+    pub fn from_segment(db: &'db dyn scrap_shared::Db, segment: &str) -> Self {
+        let ident = Ident {
+            id: NodeId::dummy(),
+            name: scrap_span::Symbol::new(db, segment),
+            span: Span::new_default(db),
+        };
+        Self::from_ident(ident)
+    }
+
     pub fn single_segment(&self) -> Option<&PathSegment<'db>> {
         if self.segments.len() == 1 {
             Some(&self.segments[0])
@@ -50,5 +80,14 @@ impl<'db> Path<'db> {
             span: Span::new(db, self.span.start(db), ident.span.end(db)),
             segments: new_segments,
         }
+    }
+
+    pub fn extend_segment(&self, db: &'db dyn scrap_shared::Db, segment: &str) -> Self {
+        let ident = Ident {
+            id: NodeId::dummy(),
+            name: scrap_span::Symbol::new(db, segment),
+            span: Span::new_default(db),
+        };
+        self.extend(db, ident)
     }
 }

@@ -42,7 +42,7 @@ clap = { version = "4", features = ["derive"] }
 salsa = { version = "0.24.0", features = ["persistence"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
-hashbrown = "0.16.0"
+pathdiff = "0.2.3"
 
 # diagnostics and error reporting
 tracing = "0.1.41"
@@ -61,6 +61,7 @@ parking_lot = "0.12.5"
 crossbeam = "0.8"
 rustc-hash = "2.1.1"
 crossbeam-channel = "0.5.15"
+hashbrown = "0.16.0"
 
 # testing
 insta = "1"

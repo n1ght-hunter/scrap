@@ -45,8 +45,11 @@ pub struct Args {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 pub enum UnPrettyOut {
+    /// Generate and print the abstract syntax tree (AST)
     Ast,
-    Mir,
+    /// Generate Scrap IR
+    SIR,
+    /// Generate unoptimized CraneLift IR
     CLIR,
 }
 

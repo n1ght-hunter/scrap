@@ -68,7 +68,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         source: &'a str,
         token_stream: TokenStreamCursor<'db>,
         state: State<'a>,
-        name: Ident<'db>,
+        root_path: Path<'db>,
     ) -> Self {
         Self {
             token: token_stream
@@ -79,7 +79,7 @@ impl<'a, 'db> Parser<'a, 'db> {
             expected_token_types: TokenTypeSet::new(),
             state,
             db,
-            current_module_path: Rc::new(RefCell::new(Path::from_ident(name))),
+            current_module_path: Rc::new(RefCell::new(root_path)),
         }
     }
 
@@ -293,7 +293,7 @@ pub mod parse_test_utils {
             source,
             token_stream,
             state,
-            Ident::dummy_with_name(db, "test"),
+            Path::from_segment(db, "test"),
         )
     }
 

@@ -13,6 +13,7 @@ scrap_span = { workspace = true }
 scrap_errors.workspace = true
 scrap_diagnostics.workspace = true
 crossbeam-channel = { workspace = true }
+pathdiff = { workspace = true }
 
 clap = { workspace = true, features = ["derive"] }
 salsa = { workspace = true }
