@@ -1,7 +1,7 @@
-mod extenal_module;
+mod external_module;
 use inline_module::greet;
 fn main() {
-    extenal_module::greet();
+    external_module::greet();
     use inline_module::greet;
     greet();
     print("Hello, world!");

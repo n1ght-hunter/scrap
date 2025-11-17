@@ -25,6 +25,7 @@ pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 
 #[salsa::tracked(debug, persist)]
 pub struct ParsedFile<'db> {
+    #[returns(ref)]
     pub ast: AstRoot<'db>,
 }
 
@@ -33,7 +34,23 @@ pub struct ParsedFile<'db> {
 )]
 pub enum AstRoot<'db> {
     Can(scrap_ast::Can<'db>),
-    Module(ThinVec<Box<Item<'db>>>),
+    Module(Path<'db>, ThinVec<Box<Item<'db>>>),
+}
+
+impl<'db> AstRoot<'db> {
+    pub fn unwrap_can(&self) -> &scrap_ast::Can<'db> {
+        match self {
+            AstRoot::Can(can) => can,
+            AstRoot::Module(_, _) => panic!("Expected Can, found Module"),
+        }
+    }
+
+    pub fn into_module(self) -> (Path<'db>, ThinVec<Box<Item<'db>>>) {
+        match self {
+            AstRoot::Module(path, items) => (path, items),
+            AstRoot::Can(_) => panic!("Expected Module, found Can"),
+        }
+    }
 }
 
 #[salsa::tracked(persist)]
@@ -47,13 +64,8 @@ pub fn parse_tokens<'db>(
     let tokens = tokens.tokens(db);
     let token_stream = TokenStreamCursor::new(tokens);
     let state = State::new(file.path(db).to_str().unwrap());
-    let mut parser = Parser::new(
-        db,
-        file.content(db),
-        token_stream,
-        state,
-        Path::from_segments(db, &root_path),
-    );
+    let path = Path::from_segments(db, &root_path);
+    let mut parser = Parser::new(db, file.content(db), token_stream, state, path.clone());
     let ast = if is_root {
         parser
             .parse_can()
@@ -61,7 +73,7 @@ pub fn parse_tokens<'db>(
     } else {
         parser
             .parse_module_inner(Token::Eof)
-            .map(|ast| ParsedFile::new(db, AstRoot::Module(ast)))
+            .map(|ast| ParsedFile::new(db, AstRoot::Module(path, ast)))
     };
     match ast {
         Ok(ast) => ast,

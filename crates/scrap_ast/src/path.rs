@@ -23,7 +23,31 @@ pub struct Path<'db> {
     pub segments: ThinVec<PathSegment<'db>>,
 }
 
+impl std::fmt::Display for Path<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let segment =
+            salsa::with_attached_database(|db| self.to_string_db(db)).unwrap_or_else(|| {
+                self.segments
+                    .iter()
+                    .map(|_| "<unknown>".to_string())
+                    .collect::<Vec<_>>()
+                    .join("::")
+            });
+
+        write!(f, "{}", segment)
+    }
+}
+
 impl<'db> Path<'db> {
+    pub fn to_string_db(&self, db: &'db dyn salsa::Database) -> String {
+        let segments: Vec<String> = self
+            .segments
+            .iter()
+            .map(|seg| seg.ident.name.text(db).to_string())
+            .collect();
+        segments.join("::")
+    }
+
     pub fn from_ident(ident: Ident<'db>) -> Self {
         let id = ident.id;
         Path {
@@ -43,7 +67,10 @@ impl<'db> Path<'db> {
                 name: scrap_span::Symbol::new(db, segment),
                 span: Span::new(db, start, end),
             };
-            path_segments.push(PathSegment { ident, id: ident.id });
+            path_segments.push(PathSegment {
+                ident,
+                id: ident.id,
+            });
             start = end + 2; // +2 for '::'
             end = start;
         }

@@ -72,14 +72,14 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let db = &*db_mut;
     let root_path = &args.entry_source_file;
 
-    let modules = args
+    let mut modules = args
         .source_files
         .par_iter()
         .chain(rayon::iter::once(&args.entry_source_file))
         .filter_map(|file_path| {
             let db = db;
 
-            let root_path_segments =
+            let (is_root, root_path_segments) =
                 compute_relative_path_segments(args, &base_emiter, root_path, file_path)?;
 
             let modifed = match std::fs::metadata(file_path).and_then(|m| m.modified()) {
@@ -104,18 +104,55 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                 db,
                 input_file,
                 lexed_tokens,
-                true,
+                is_root,
                 root_path_segments,
             );
             Some(parsed_file)
         })
         .collect::<Vec<_>>();
 
-    let entry_file = modules.last().expect("No entry file found");
+    let entry_file = modules.pop().expect("No entry file found");
 
     if let Some(UnPrettyOut::Ast) = args.unpretty_out {
-        db.attach(|db| {
-            println!("{:#?}", entry_file.ast(db));
+        let modules =
+            modules
+                .into_iter()
+                .fold(std::collections::HashMap::new(), |mut acc, parsed_file| {
+                    let (path, items) = parsed_file.ast(db).clone().into_module();
+                    acc.insert(path.to_string_db(db), items);
+                    acc
+                });
+        let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
+            iter.filter(|m| matches!(m.1, scrap_ast::module::Module::Unloaded))
+                .for_each(|(path, module)| {
+                    let path = path.to_string_db(db);
+                    if let Some(items) = modules.get(&path) {
+                        *module = scrap_ast::module::Module::Loaded(
+                            items.clone(),
+                            scrap_ast::module::Inline::No,
+                            scrap_span::new_dummy_span(db),
+                        );
+                    } else {
+                        base_emiter.render_single(
+                            Level::ERROR
+                                .primary_title(format!("Failed to load module '{}'", path))
+                                .element(Level::HELP.message(
+                                    "Module not found among provided source files.".to_string(),
+                                ))
+                                .element(Level::NOTE.message(format!(
+                                            "Available modules: {}",
+                                            modules
+                                                .keys()
+                                                .map(|p| p.to_string())
+                                                .collect::<Vec<_>>()
+                                                .join(", ")
+                                        ))),
+                        );
+                    }
+                })
+        });
+        db.attach(|_| {
+            println!("{:#?}", filled_entry_file);
         });
         return Ok(());
     }
@@ -128,7 +165,10 @@ fn compute_relative_path_segments<'a, 'db>(
     base_emiter: &scrap_diagnostics::DiagnosticEmitter<'a>,
     root_path: &std::path::PathBuf,
     file_path: &std::path::PathBuf,
-) -> Option<Vec<String>> {
+) -> Option<(bool, Vec<String>)> {
+    if root_path == file_path {
+        return Some((true, vec![args.crate_name.clone()]));
+    }
     if !is_beside_or_below(root_path.as_path(), file_path.as_path()) {
         base_emiter.render_single(
             Level::ERROR
@@ -181,7 +221,7 @@ fn compute_relative_path_segments<'a, 'db>(
             }
         }))
         .collect::<Vec<String>>();
-    Some(root_path_segments)
+    Some((false, root_path_segments))
 }
 
 fn is_beside_or_below(base_path: &std::path::Path, other_path: &std::path::Path) -> bool {

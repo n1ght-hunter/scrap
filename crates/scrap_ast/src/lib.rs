@@ -41,15 +41,19 @@ pub struct Can<'db> {
 }
 
 impl<'db> Can<'db> {
-    pub fn iter_modules_mut(
-        &'db self,
-    ) -> impl Iterator<Item = (&'db Path<'db>, &'db module::Module<'db>)> + 'db {
-        self.items.iter().filter_map(|item| {
-            if let ItemKind::Module(path, module) = &item.kind {
-                Some((path, module))
+    pub fn iter_modules_mut<F>(&'db self, f: F) -> Can<'db>
+    where
+        F: FnOnce(&mut dyn Iterator<Item = (&Path, &mut module::Module<'db>)>),
+    {
+        let mut this = self.clone();
+        let mut iter = this.items.iter_mut().filter_map(|item| {
+            if let ItemKind::Module(path, module) = &mut item.kind {
+                Some((&*path, module))
             } else {
                 None
             }
-        })
+        });
+        f(&mut iter);
+        this
     }
 }

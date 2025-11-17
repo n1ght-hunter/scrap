@@ -20,6 +20,15 @@ impl<'db> Span<'db> {
     }
 }
 
+#[salsa::tracked]
+pub fn new_span<'db>(db: &'db dyn scrap_shared::Db, start: usize, end: usize) -> Span<'db> {
+    Span::new(db, start, end)
+}
+
+pub fn new_dummy_span<'db>(db: &'db dyn scrap_shared::Db) -> Span<'db> {
+    new_span(db, 0, 0)
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
