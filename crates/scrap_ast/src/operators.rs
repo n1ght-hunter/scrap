@@ -18,6 +18,16 @@ pub enum AssocOp {
     Assign,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for AssocOp {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self {
+            AssocOp::Assign => write!(f, "="),
+            AssocOp::Binary(kind) => kind.pretty_print(f),
+            AssocOp::AssignOp(kind) => kind.pretty_print(f),
+        }
+    }
+}
+
 /// Assignment operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of assignment operations available in the language.
 #[derive(
@@ -44,6 +54,23 @@ pub enum AssignOpKind {
     ShlAssign,
     /// The `>>=` operator (shift right)
     ShrAssign,
+}
+
+impl AssignOpKind {
+    pub fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self {
+            AssignOpKind::AddAssign => write!(f, "+="),
+            AssignOpKind::SubAssign => write!(f, "-="),
+            AssignOpKind::MulAssign => write!(f, "*="),
+            AssignOpKind::DivAssign => write!(f, "/="),
+            AssignOpKind::RemAssign => write!(f, "%="),
+            AssignOpKind::BitXorAssign => write!(f, "^="),
+            AssignOpKind::BitAndAssign => write!(f, "&="),
+            AssignOpKind::BitOrAssign => write!(f, "|="),
+            AssignOpKind::ShlAssign => write!(f, "<<="),
+            AssignOpKind::ShrAssign => write!(f, ">>="),
+        }
+    }
 }
 
 /// Binary operator kinds, following Rust AST enum structure exactly.
@@ -88,6 +115,31 @@ pub enum BinOpKind {
     Ge,
     /// The `>` operator (greater than)
     Gt,
+}
+
+impl BinOpKind {
+    pub fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self {
+            BinOpKind::Add => write!(f, "+"),
+            BinOpKind::Sub => write!(f, "-"),
+            BinOpKind::Mul => write!(f, "*"),
+            BinOpKind::Div => write!(f, "/"),
+            BinOpKind::Rem => write!(f, "%"),
+            BinOpKind::And => write!(f, "&&"),
+            BinOpKind::Or => write!(f, "||"),
+            BinOpKind::BitXor => write!(f, "^"),
+            BinOpKind::BitAnd => write!(f, "&"),
+            BinOpKind::BitOr => write!(f, "|"),
+            BinOpKind::Shl => write!(f, "<<"),
+            BinOpKind::Shr => write!(f, ">>"),
+            BinOpKind::Eq => write!(f, "=="),
+            BinOpKind::Lt => write!(f, "<"),
+            BinOpKind::Le => write!(f, "<="),
+            BinOpKind::Ne => write!(f, "!="),
+            BinOpKind::Ge => write!(f, ">="),
+            BinOpKind::Gt => write!(f, ">"),
+        }
+    }
 }
 
 impl AssocOp {

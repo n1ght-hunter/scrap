@@ -1,3 +1,4 @@
+use scrap_shared::pretty_print::PrettyPrint;
 use scrap_span::Span;
 
 use crate::{ident::Ident, node_id::NodeId};
@@ -37,4 +38,33 @@ pub struct Pat<'db> {
     pub id: NodeId,
     pub kind: PatKind<'db>,
     pub span: Span<'db>,
+}
+
+impl<'db> PrettyPrint for Pat<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match &self.kind {
+            PatKind::Missing => write!(f, "_"),
+            PatKind::Ident(binding_mode, ident, subpat) => {
+                match binding_mode {
+                    BindingMode(ByRef::Yes(mutability), _) => {
+                        write!(f, "ref ")?;
+                        if *mutability == Mutability::Mut {
+                            write!(f, "mut ")?;
+                        }
+                    }
+                    BindingMode(ByRef::No, mutability) => {
+                        if *mutability == Mutability::Mut {
+                            write!(f, "mut ")?;
+                        }
+                    }
+                }
+                ident.pretty_print(f)?;
+                if let Some(subpat) = subpat {
+                    write!(f, " @ ")?;
+                    subpat.pretty_print(f)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }

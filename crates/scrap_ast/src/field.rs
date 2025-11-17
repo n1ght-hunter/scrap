@@ -12,3 +12,13 @@ pub struct FieldDef<'db> {
     pub ident: Option<Ident<'db>>,
     pub ty: Box<Ty<'db>>,
 }
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for FieldDef<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        if let Some(ident) = &self.ident {
+            ident.pretty_print(f)?;
+            write!(f, ": ")?;
+        }
+        self.ty.pretty_print(f)
+    }
+}

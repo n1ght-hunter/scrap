@@ -11,6 +11,14 @@ pub struct Ident<'db> {
     pub span: Span<'db>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Ident<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let name = salsa::with_attached_database(|db| self.name.text(db).to_owned())
+            .unwrap_or("<invalid>".to_string());
+        write!(f, "{}", name)
+    }
+}
+
 impl<'db> Ident<'db> {
     pub fn dummy(db: &'db dyn scrap_shared::Db) -> Self {
         Self {

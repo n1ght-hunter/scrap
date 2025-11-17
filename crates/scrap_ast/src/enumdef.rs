@@ -12,6 +12,22 @@ pub struct EnumDef<'db> {
     pub variants: Vec<Variant<'db>>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        write!(f, "enum {} {{\n", {
+            let mut s = String::new();
+            self.ident.pretty_print(&mut s).unwrap();
+            s
+        })?;
+        for variant in &self.variants {
+            write!(f, "    ")?;
+            variant.pretty_print(f)?;
+            write!(f, ",\n")?;
+        }
+        write!(f, "}}")
+    }
+}
+
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
@@ -21,6 +37,35 @@ pub struct Variant<'db> {
     // pub vis: Visibility,
     pub ident: Ident<'db>,
     pub data: VariantData<'db>,
+}
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Variant<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.ident.pretty_print(f)?;
+        match &self.data {
+            VariantData::Struct { fields } => {
+                write!(f, " {{ ")?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    field.pretty_print(f)?;
+                }
+                write!(f, " }}")
+            }
+            VariantData::Tuple(fields, _) => {
+                write!(f, "(")?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    field.pretty_print(f)?;
+                }
+                write!(f, ")")
+            }
+            VariantData::Unit(_) => Ok(()),
+        }
+    }
 }
 
 #[derive(

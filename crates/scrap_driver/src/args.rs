@@ -34,6 +34,11 @@ pub struct Args {
     /// Specify an external crate to link against.
     #[arg(long, value_name = "CRATENAME=PATH")]
     pub extern_crate: Vec<String>,
+
+    #[clap(long = "pretty-out")]
+    pub pretty_out: Option<PrettyOut>,
+
+
     /// The type of output to generate
     #[clap(long = "unpretty-out")]
     pub unpretty_out: Option<UnPrettyOut>,
@@ -41,6 +46,14 @@ pub struct Args {
     /// Enable verbose output
     #[arg(short, long)]
     pub verbose: bool,
+}
+
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
+pub enum PrettyOut {
+    /// Generate and print the abstract syntax tree (AST)
+    Ast,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]

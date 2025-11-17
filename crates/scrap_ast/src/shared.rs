@@ -13,6 +13,20 @@ pub struct Visibility<'db> {
     pub span: Span<'db>,
 }
 
+impl <'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match &self.kind {
+            VisibilityKind::Public => write!(f, "pub"),
+            VisibilityKind::Restricted { path, .. } => {
+                write!(f, "pub(")?;
+                path.pretty_print(f)?;
+                write!(f, ")")
+            }
+            VisibilityKind::Inherited => Ok(()),
+        }
+    }
+}
+
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]

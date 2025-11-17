@@ -40,7 +40,29 @@ pub struct Can<'db> {
     pub items: ThinVec<Box<Item<'db>>>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Can<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        for item in &self.items {
+            item.pretty_print(f)?;
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
+
 impl<'db> Can<'db> {
+    pub fn iter_modules(
+        &'db self,
+    ) -> impl Iterator<Item = (&'db Path<'db>, &'db module::Module<'db>)> {
+        self.items.iter().filter_map(|item| {
+            if let ItemKind::Module(path, module) = &item.kind {
+                Some((&*path, module))
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn iter_modules_mut<F>(&'db self, f: F) -> Can<'db>
     where
         F: FnOnce(&mut dyn Iterator<Item = (&Path, &mut module::Module<'db>)>),

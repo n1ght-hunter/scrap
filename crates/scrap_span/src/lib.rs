@@ -81,4 +81,8 @@ impl<'db> Symbol<'db> {
     pub fn dummy(db: &'db dyn scrap_shared::Db) -> Self {
         Symbol::new(db, "<dummy>")
     }
+
+    pub fn as_bits(&self) -> u64 {
+        self.0.as_bits()
+    }
 }

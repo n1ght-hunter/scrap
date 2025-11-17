@@ -19,6 +19,12 @@ pub struct Stmt<'db> {
     pub span: Span<'db>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Stmt<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.kind.pretty_print(f)
+    }
+}
+
 /// Statement kinds, following Rust AST enum structure exactly.
 /// This is a subset of the full Rust StmtKind enum.
 #[derive(
@@ -36,4 +42,20 @@ pub enum StmtKind<'db> {
     Semi(Box<Expr<'db>>),
     /// Just a trailing semi-colon.
     Empty,
+}
+
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for StmtKind<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self {
+            StmtKind::Let(local) => local.pretty_print(f),
+            StmtKind::Item(item) => item.pretty_print(f),
+            StmtKind::Expr(expr) => expr.pretty_print(f),
+            StmtKind::Semi(expr) => {
+                expr.pretty_print(f)?;
+                write!(f, ";")
+            }
+            StmtKind::Empty => write!(f, ";"),
+        }
+    }
 }

@@ -4,10 +4,12 @@ mod args;
 
 use std::ffi::OsString;
 
-use args::UnPrettyOut;
+use args::{PrettyOut, UnPrettyOut};
 use clap::Parser;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use salsa::Database;
+use scrap_ast::module::Module;
+use scrap_shared::pretty_print::PrettyPrint;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;
 
@@ -113,20 +115,17 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     let entry_file = modules.pop().expect("No entry file found");
 
-    if let Some(UnPrettyOut::Ast) = args.unpretty_out {
-        let modules =
-            modules
-                .into_iter()
-                .fold(std::collections::HashMap::new(), |mut acc, parsed_file| {
-                    let (path, items) = parsed_file.ast(db).clone().into_module();
-                    acc.insert(path.to_string_db(db), items);
-                    acc
-                });
+    if matches!(args.unpretty_out, Some(UnPrettyOut::Ast))
+        || matches!(args.pretty_out, Some(PrettyOut::Ast))
+    {
+        let mut modules_map = radix_trie::Trie::new();
+        index_modules(db, &mut modules_map, &modules, &args.crate_name);
         let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
             iter.filter(|m| matches!(m.1, scrap_ast::module::Module::Unloaded))
                 .for_each(|(path, module)| {
-                    let path = path.to_string_db(db);
-                    if let Some(items) = modules.get(&path) {
+                    if let Some(items) = modules_map.get(&path.to_key())
+                        && let scrap_parser::CanOrModule::Module(_, items) = items
+                    {
                         *module = scrap_ast::module::Module::Loaded(
                             items.clone(),
                             scrap_ast::module::Inline::No,
@@ -138,26 +137,96 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                                 .primary_title(format!("Failed to load module '{}'", path))
                                 .element(Level::HELP.message(
                                     "Module not found among provided source files.".to_string(),
-                                ))
-                                .element(Level::NOTE.message(format!(
-                                            "Available modules: {}",
-                                            modules
-                                                .keys()
-                                                .map(|p| p.to_string())
-                                                .collect::<Vec<_>>()
-                                                .join(", ")
-                                        ))),
+                                )),
                         );
                     }
                 })
         });
         db.attach(|_| {
-            println!("{:#?}", filled_entry_file);
+            if matches!(args.pretty_out, Some(PrettyOut::Ast)) {
+                filled_entry_file.print();
+                return;
+            }
+            if matches!(args.unpretty_out, Some(UnPrettyOut::Ast)) {
+                println!("{:#?}", filled_entry_file);
+                return;
+            }
         });
         return Ok(());
     }
 
     Ok(())
+}
+
+fn index_modules<'db>(
+    db: &'db dyn scrap_shared::Db,
+    map: &mut radix_trie::Trie<scrap_ast::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
+    parsed_files: &[scrap_parser::ParsedFile<'db>],
+    crate_name: &str,
+) {
+    for parsed_file in parsed_files {
+        let ast = parsed_file.ast(db);
+        match ast {
+            scrap_parser::CanOrModule::Can(can) => {
+                map.insert(
+                    scrap_ast::path::Path::from_ident(scrap_ast::ident::Ident {
+                        id: scrap_ast::node_id::NodeId::dummy(),
+                        name: scrap_span::Symbol::new(db, crate_name),
+                        span: scrap_span::new_dummy_span(db),
+                    })
+                    .to_key(),
+                    scrap_parser::CanOrModule::Can(can.clone()),
+                );
+                iter_index(map, &mut can.iter_modules());
+            }
+            scrap_parser::CanOrModule::Module(path, items) => {
+                map.insert(
+                    path.to_key(),
+                    scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
+                );
+                iter_index(
+                    map,
+                    &mut items.iter().filter_map(|item| {
+                        if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind
+                        {
+                            Some((sub_path, sub_module))
+                        } else {
+                            None
+                        }
+                    }),
+                );
+            }
+        }
+    }
+}
+
+fn iter_index<'db>(
+    map: &mut radix_trie::Trie<scrap_ast::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
+    items: &mut dyn Iterator<
+        Item = (
+            &'db scrap_ast::path::Path<'db>,
+            &'db scrap_ast::module::Module<'db>,
+        ),
+    >,
+) {
+    items.for_each(|(path, module)| {
+        if let Module::Loaded(items, _, _) = module {
+            map.insert(
+                path.to_key(),
+                scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
+            );
+            iter_index(
+                map,
+                &mut items.iter().filter_map(|item| {
+                    if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind {
+                        Some((sub_path, sub_module))
+                    } else {
+                        None
+                    }
+                }),
+            );
+        }
+    });
 }
 
 fn compute_relative_path_segments<'a, 'db>(

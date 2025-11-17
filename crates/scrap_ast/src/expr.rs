@@ -20,6 +20,12 @@ pub struct Expr<'db> {
     pub span: Span<'db>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Expr<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.kind.pretty_print(f)
+    }
+}
+
 /// Expression kinds - subset of Rust's ExprKind enum
 #[derive(
     Debug,
@@ -58,4 +64,30 @@ pub enum ExprKind<'db> {
     AssignOp(AssignOp<'db>, Box<Expr<'db>>, Box<Expr<'db>>),
     /// Error placeholder
     Err,
+}
+
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self {
+            ExprKind::Array(elements) => {
+                write!(f, "[")?;
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    elem.pretty_print(f)?;
+                }
+                write!(f, "]")
+            }
+            ExprKind::Lit(lit) => lit.pretty_print(f),
+            ExprKind::Path(path) => path.pretty_print(f),
+            ExprKind::Paren(expr) => {
+                write!(f, "(")?;
+                expr.pretty_print(f)?;
+                write!(f, ")")
+            }
+            _ => write!(f, "<expr>"), // Placeholder for other kinds
+        }
+    }
 }

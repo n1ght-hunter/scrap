@@ -26,29 +26,29 @@ pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 #[salsa::tracked(debug, persist)]
 pub struct ParsedFile<'db> {
     #[returns(ref)]
-    pub ast: AstRoot<'db>,
+    pub ast: CanOrModule<'db>,
 }
 
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum AstRoot<'db> {
+pub enum CanOrModule<'db> {
     Can(scrap_ast::Can<'db>),
     Module(Path<'db>, ThinVec<Box<Item<'db>>>),
 }
 
-impl<'db> AstRoot<'db> {
+impl<'db> CanOrModule<'db> {
     pub fn unwrap_can(&self) -> &scrap_ast::Can<'db> {
         match self {
-            AstRoot::Can(can) => can,
-            AstRoot::Module(_, _) => panic!("Expected Can, found Module"),
+            CanOrModule::Can(can) => can,
+            CanOrModule::Module(_, _) => panic!("Expected Can, found Module"),
         }
     }
 
     pub fn into_module(self) -> (Path<'db>, ThinVec<Box<Item<'db>>>) {
         match self {
-            AstRoot::Module(path, items) => (path, items),
-            AstRoot::Can(_) => panic!("Expected Module, found Can"),
+            CanOrModule::Module(path, items) => (path, items),
+            CanOrModule::Can(_) => panic!("Expected Module, found Can"),
         }
     }
 }
@@ -69,11 +69,11 @@ pub fn parse_tokens<'db>(
     let ast = if is_root {
         parser
             .parse_can()
-            .map(|ast| ParsedFile::new(db, AstRoot::Can(ast)))
+            .map(|ast| ParsedFile::new(db, CanOrModule::Can(ast)))
     } else {
         parser
             .parse_module_inner(Token::Eof)
-            .map(|ast| ParsedFile::new(db, AstRoot::Module(path, ast)))
+            .map(|ast| ParsedFile::new(db, CanOrModule::Module(path, ast)))
     };
     match ast {
         Ok(ast) => ast,

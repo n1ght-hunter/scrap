@@ -1,3 +1,4 @@
+use scrap_shared::pretty_print::PrettyPrint;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
@@ -21,6 +22,18 @@ pub struct Path<'db> {
     /// The segments in the path: the things separated by `::`.
     /// Global paths begin with `kw::PathRoot`.
     pub segments: ThinVec<PathSegment<'db>>,
+}
+
+impl<'db> PrettyPrint for Path<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        for (i, segment) in self.segments.iter().enumerate() {
+            if i > 0 {
+                write!(f, "::")?;
+            }
+            segment.ident.pretty_print(f)?;
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for Path<'_> {
@@ -116,5 +129,23 @@ impl<'db> Path<'db> {
             span: Span::new_default(db),
         };
         self.extend(db, ident)
+    }
+
+    pub fn to_key(&self) -> PathKey<'db> {
+        PathKey(self.segments.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PathKey<'db>(ThinVec<PathSegment<'db>>);
+
+impl radix_trie::TrieKey for PathKey<'_> {
+    fn encode_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(self.0.len() * std::mem::size_of::<u64>());
+        for segment in self.0.iter() {
+            let name = segment.ident.name.as_bits().to_le_bytes();
+            bytes.extend_from_slice(&name);
+        }
+        bytes
     }
 }

@@ -19,6 +19,19 @@ pub struct Lit<'db> {
     // pub suffix: Option<Symbol>, // Type suffix like "f32" in "1.0f32"
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Lit<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        match self.kind {
+            LitKind::Bool => write!(f, "<bool literal>"),
+            LitKind::Integer => write!(f, "<integer literal>"),
+            LitKind::Float => write!(f, "<float literal>"),
+            LitKind::Str => write!(f, "<string literal>"),
+        }
+    }
+}
+
+
+
 /// Literal kinds, following Rust AST enum structure.
 /// This is a simplified subset of the full Rust LitKind enum.
 ///

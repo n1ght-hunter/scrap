@@ -1,3 +1,4 @@
+use salsa::SalsaAsDeref;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
@@ -19,6 +20,35 @@ pub struct FnDef<'db> {
     pub span: Span<'db>,
 }
 
+impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let res = salsa::with_attached_database(|db| {
+            write!(f, "fn ")?;
+            self.ident(db).pretty_print(f)?;
+            write!(f, "(")?;
+            for (i, param) in self.args(db).iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                param.pretty_print(f)?;
+            }
+            write!(f, ")")?;
+            if let Some(ret_type) = &self.ret_type(db) {
+                write!(f, " -> ")?;
+                ret_type.pretty_print(f)?;
+            }
+            write!(f, " ")?;
+            self.body(db).pretty_print(f)?;
+
+            Ok(())
+        });
+        match res {
+            Some(r) => r,
+            None => write!(f, "<unable to pretty print function>"),
+        }
+    }
+}
+
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
@@ -28,4 +58,12 @@ pub struct Param<'db> {
     pub ty: Box<Ty<'db>>,
     pub pat: Box<Pat<'db>>,
     pub span: Span<'db>,
+}
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Param<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.ident.pretty_print(f)?;
+        write!(f, ": ")?;
+        self.ty.pretty_print(f)
+    }
 }
