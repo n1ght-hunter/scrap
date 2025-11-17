@@ -188,7 +188,10 @@ impl NodeId {
 
     /// Create a NodeId from a u16 ID and a file hash
     pub fn new(id: u16, file_hash: u64) -> Self {
-        NodeId { id: id as i32, file_hash }
+        NodeId {
+            id: id as i32,
+            file_hash,
+        }
     }
 
     /// Create a special invalid NodeId for error recovery cases

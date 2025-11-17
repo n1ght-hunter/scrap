@@ -65,7 +65,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_test_utils::{ExtendRes, parse_with};
+    use crate::parser::parse_test_utils::ExtendRes;
 
     use super::*;
 
@@ -79,7 +79,10 @@ mod tests {
         let item = parser.parse_module().unwrap_or_render();
         match item {
             ItemKind::Module(ident, module) => {
-                assert_eq!(ident.segments.last().unwrap().ident.name.text(&db), "my_module");
+                assert_eq!(
+                    ident.segments.last().unwrap().ident.name.text(&db),
+                    "my_module"
+                );
                 match module {
                     Module::Loaded(items, inline, span) => {
                         assert_eq!(inline, Inline::Yes);

@@ -154,7 +154,10 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Module(ident, module) => {
-                assert_eq!(ident.segments.last().unwrap().ident.name.text(&db), "my_module");
+                assert_eq!(
+                    ident.segments.last().unwrap().ident.name.text(&db),
+                    "my_module"
+                );
                 match module {
                     Module::Loaded(_, inline, span) => {
                         assert_eq!(inline, Inline::Yes);
@@ -174,7 +177,10 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Module(ident, module) => {
-                assert_eq!(ident.segments.last().unwrap().ident.name.text(&db), "my_module");
+                assert_eq!(
+                    ident.segments.last().unwrap().ident.name.text(&db),
+                    "my_module"
+                );
                 match module {
                     Module::Unloaded => {}
                     _ => panic!("Expected loaded module"),

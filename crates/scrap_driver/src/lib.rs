@@ -2,13 +2,11 @@
 
 mod args;
 
-use std::{ffi::OsString, sync::Arc};
+use std::ffi::OsString;
 
 use args::UnPrettyOut;
 use clap::Parser;
-use rayon::iter::{
-    IntoParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelExtend, ParallelIterator,
-};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use salsa::Database;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;

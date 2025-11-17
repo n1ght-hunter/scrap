@@ -83,9 +83,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_test_utils::{ExtendRes, parse_with};
-
-    use super::*;
+    use crate::parser::parse_test_utils::ExtendRes;
 
     #[test]
     fn test_parse_struct_def() {

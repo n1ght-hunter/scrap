@@ -1,6 +1,9 @@
 //! Atomic (primary) expression parsing.
 
-use scrap_ast::{expr::{Expr, ExprKind}, path::Path};
+use scrap_ast::{
+    expr::{Expr, ExprKind},
+    path::Path,
+};
 use scrap_lexer::Token;
 use scrap_span::Span;
 

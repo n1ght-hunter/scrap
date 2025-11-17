@@ -7,8 +7,8 @@ use scrap_ast::{
     stmt::StmtKind,
     typedef::{Ty, TyKind},
 };
-use scrap_span::Symbol;
 use scrap_ir as ir;
+use scrap_span::Symbol;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -110,7 +110,10 @@ fn lower_signature<'db>(
 }
 
 /// Lower function body
-fn lower_body<'db>(db: &'db dyn scrap_shared::Db, ast_block: &Block<'db>) -> MResult<ir::Body<'db>> {
+fn lower_body<'db>(
+    db: &'db dyn scrap_shared::Db,
+    ast_block: &Block<'db>,
+) -> MResult<ir::Body<'db>> {
     let mut blocks = Vec::new();
     let mut local_decls = Vec::new();
     let statements = Vec::new();

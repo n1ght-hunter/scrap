@@ -231,14 +231,12 @@ impl<'a, 'db> Parser<'a, 'db> {
         segments.pop();
     }
 
-    pub fn current_module_path(
-        &self,
-    ) -> std::cell::Ref<'_, scrap_ast::path::Path<'db>> {
+    pub fn current_module_path(&self) -> std::cell::Ref<'_, scrap_ast::path::Path<'db>> {
         self.current_module_path.borrow()
     }
 }
 
-struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_ast::path::Path<'db>>>);
+pub struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_ast::path::Path<'db>>>);
 
 impl Drop for PopOnDrop<'_> {
     fn drop(&mut self) {

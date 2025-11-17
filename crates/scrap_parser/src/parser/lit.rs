@@ -1,5 +1,5 @@
 use scrap_ast::lit::LitKind;
-use scrap_diagnostics::{Annotation, AnnotationKind, Level, Snippet, annotate_snippets::Group};
+use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 
 impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_lit(&mut self) -> crate::PResult<'a, scrap_ast::lit::Lit<'db>> {

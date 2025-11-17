@@ -23,8 +23,6 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
-use hashbrown::HashMap;
-use ident::Ident;
 use path::Path;
 pub use shared::*;
 mod shared;

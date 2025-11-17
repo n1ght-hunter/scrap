@@ -1,5 +1,4 @@
 use scrap_ast::ident::Ident;
-use scrap_diagnostics::{Level, annotate_snippets::Group};
 use scrap_lexer::Token;
 use scrap_span::Symbol;
 
@@ -30,8 +29,6 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 mod tests {
 
     use crate::parser::parse_test_utils::parse_with;
-
-    use super::*;
 
     #[test]
     fn test_parse_ident() {

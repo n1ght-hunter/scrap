@@ -1,8 +1,5 @@
 use crate::PResult;
-use scrap_ast::{
-    fndef::{FnDef, Param},
-    typedef::Ty,
-};
+use scrap_ast::fndef::{FnDef, Param};
 use scrap_lexer::Token;
 use scrap_span::Span;
 use thin_vec::ThinVec;

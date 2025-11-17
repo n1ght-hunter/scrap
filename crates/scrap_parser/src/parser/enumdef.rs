@@ -19,9 +19,9 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         while !self.check(Token::RBrace) {
             let variant_start = self.token.span.start(self.db);
             let variant_ident = self.parse_ident()?;
-            
+
             let data = self.parse_variant_data(Token::Comma)?;
-            
+
             let variant_end = self.token.span.end(self.db);
             let span = Span::new(self.db, variant_start, variant_end);
 
@@ -53,8 +53,8 @@ mod tests {
     // Tracked structs (like Span) can only be created inside tracked functions.
     // The enum parser is verified to work correctly via integration tests (see example/enums.sc).
     // This is a known limitation affecting all parser unit tests in this codebase.
-    
-    use crate::parser::parse_test_utils::{parse_with, ExtendRes};
+
+    use crate::parser::parse_test_utils::{ExtendRes, parse_with};
 
     #[test]
     #[should_panic]
