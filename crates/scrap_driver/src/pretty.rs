@@ -13,6 +13,8 @@ pub enum PpMode {
     DebugAst,
     /// Print the IR (Intermediate Representation) in debug format
     DebugIr,
+    /// Print the IR (Intermediate Representation) in a human-readable format
+    PrettyIr,
 }
 
 impl PpMode {
@@ -23,7 +25,7 @@ impl PpMode {
 
     /// Returns true if this mode requires IR to be available
     pub fn needs_ir(&self) -> bool {
-        matches!(self, PpMode::DebugIr)
+        matches!(self, PpMode::DebugIr | PpMode::PrettyIr)
     }
 }
 
@@ -44,6 +46,14 @@ pub fn print<'db>(
         PpMode::DebugIr => {
             if let Some(ir) = ir {
                 println!("{:#?}", ir.can(db));
+            } else {
+                eprintln!("Error: IR not available");
+            }
+        }
+        PpMode::PrettyIr => {
+            if let Some(ir) = ir {
+                let output = scrap_ir::print_can(db, ir.can(db));
+                print!("{}", output);
             } else {
                 eprintln!("Error: IR not available");
             }

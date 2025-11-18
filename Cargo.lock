@@ -1102,6 +1102,7 @@ dependencies = [
  "scrap_ast_lowering",
  "scrap_diagnostics",
  "scrap_errors",
+ "scrap_ir",
  "scrap_lexer",
  "scrap_parser",
  "scrap_shared",

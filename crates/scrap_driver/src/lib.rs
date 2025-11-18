@@ -102,6 +102,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 fn determine_pp_mode(args: &args::Args) -> Option<pretty::PpMode> {
     if matches!(args.pretty_out, Some(PrettyOut::Ast)) {
         Some(pretty::PpMode::PrettyAst)
+    } else if matches!(args.pretty_out, Some(PrettyOut::IR)) {
+        Some(pretty::PpMode::PrettyIr)
     } else if matches!(args.unpretty_out, Some(UnPrettyOut::Ast)) {
         Some(pretty::PpMode::DebugAst)
     } else if matches!(args.unpretty_out, Some(UnPrettyOut::SIR)) {

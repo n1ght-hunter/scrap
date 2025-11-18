@@ -160,6 +160,7 @@ fn lower_body<'db>(
     let statements = Vec::new();
     let mut terminator = ir::Terminator::Unreachable;
 
+    // Process statements
     for stmt in &ast_block.stmts {
         match &stmt.kind {
             StmtKind::Let(local) => {
@@ -172,7 +173,8 @@ fn lower_body<'db>(
                     let local_decl = ir::LocalDecl::new(db, Some(ident.name), ty);
                     local_decls.push(local_decl);
                 } else {
-                    return Err(BuilderError::LowerBodyError);
+                    // For now, skip non-ident patterns (like wildcards, tuples, etc.)
+                    continue;
                 }
             }
             StmtKind::Semi(expr) => {
@@ -181,11 +183,36 @@ fn lower_body<'db>(
                         terminator = ir::Terminator::Return;
                     }
                     _ => {
-                        // Other expressions can be handled here
+                        // Other expressions - ignore for now
                     }
                 }
             }
-            _ => return Err(BuilderError::LowerBodyError),
+            StmtKind::Expr(expr) => {
+                // Trailing expression - treat as implicit return
+                match &expr.kind {
+                    ExprKind::Return(_) => {
+                        terminator = ir::Terminator::Return;
+                    }
+                    _ => {
+                        // Other expressions as implicit return
+                        terminator = ir::Terminator::Return;
+                    }
+                }
+            }
+            _ => {
+                // Skip other statement kinds for now
+                continue;
+            }
+        }
+    }
+
+    // If no explicit terminator, assume unreachable
+    if matches!(terminator, ir::Terminator::Unreachable) && !ast_block.stmts.is_empty() {
+        // If the last statement is an expression, treat as return
+        if let Some(last_stmt) = ast_block.stmts.last() {
+            if matches!(last_stmt.kind, StmtKind::Expr(_)) {
+                terminator = ir::Terminator::Return;
+            }
         }
     }
 

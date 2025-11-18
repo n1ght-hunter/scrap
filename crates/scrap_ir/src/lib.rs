@@ -1,4 +1,5 @@
 pub mod ir;
+pub mod pretty;
 
 // Re-export main types for convenience
 pub use ir::{
@@ -6,3 +7,5 @@ pub use ir::{
     Function, FunctionId, Items, LocalDecl, LocalId, Module, Operand, Place, Rvalue, Signature,
     Statement, StatementKind, Struct, Terminator, Ty, TypeId, UnOp,
 };
+
+pub use pretty::print_can;
