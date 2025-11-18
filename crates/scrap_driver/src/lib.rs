@@ -1,6 +1,7 @@
 #![feature(try_blocks)]
 
 mod args;
+mod pretty;
 
 use std::ffi::OsString;
 
@@ -9,7 +10,6 @@ use clap::Parser;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use salsa::Database;
 use scrap_ast::module::Module;
-use scrap_shared::pretty_print::PrettyPrint;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;
 
@@ -72,6 +72,54 @@ where
 fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Result<()> {
     let base_emiter = scrap_diagnostics::DiagnosticEmitter::new().with_auto_render(true);
     let db = &*db_mut;
+
+    // Phase 1: Parse files
+    let (entry_file, other_files) = parse_input_files(args, db, &base_emiter)?;
+
+    // Phase 2: Pretty print if requested
+    if let Some(mode) = determine_pp_mode(args) {
+        if mode.needs_ir() {
+            // Resolve modules, lower to IR and print
+            let filled_entry_file = resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+            db.attach(|db| {
+                let lowered_ir = lower_to_ir(args, db, entry_file, &other_files);
+                pretty::print(db, mode, &filled_entry_file, Some(lowered_ir));
+            });
+        } else {
+            // Resolve modules and print AST
+            let filled_entry_file = resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+            db.attach(|db| {
+                pretty::print(db, mode, &filled_entry_file, None);
+            });
+        }
+        return Ok(());
+    }
+
+    Ok(())
+}
+
+/// Determine the pretty-print mode from command-line arguments
+fn determine_pp_mode(args: &args::Args) -> Option<pretty::PpMode> {
+    if matches!(args.pretty_out, Some(PrettyOut::Ast)) {
+        Some(pretty::PpMode::PrettyAst)
+    } else if matches!(args.unpretty_out, Some(UnPrettyOut::Ast)) {
+        Some(pretty::PpMode::DebugAst)
+    } else if matches!(args.unpretty_out, Some(UnPrettyOut::SIR)) {
+        Some(pretty::PpMode::DebugIr)
+    } else {
+        None
+    }
+}
+
+/// Parse all input files in parallel
+fn parse_input_files<'db>(
+    args: &args::Args,
+    db: &'db dyn scrap_shared::Db,
+    base_emiter: &scrap_diagnostics::DiagnosticEmitter<'_>,
+) -> anyhow::Result<(
+    scrap_parser::ParsedFile<'db>,
+    Vec<scrap_parser::ParsedFile<'db>>,
+)> {
     let root_path = &args.entry_source_file;
 
     let mut modules = args
@@ -79,10 +127,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         .par_iter()
         .chain(rayon::iter::once(&args.entry_source_file))
         .filter_map(|file_path| {
-            let db = db;
-
             let (is_root, root_path_segments) =
-                compute_relative_path_segments(args, &base_emiter, root_path, file_path)?;
+                compute_relative_path_segments(args, base_emiter, root_path, file_path)?;
 
             let modifed = match std::fs::metadata(file_path).and_then(|m| m.modified()) {
                 Ok(m) => m,
@@ -113,49 +159,60 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         })
         .collect::<Vec<_>>();
 
-    let entry_file = modules.pop().expect("No entry file found");
+    let entry_file = modules
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("No entry file found"))?;
+    Ok((entry_file, modules))
+}
 
-    if matches!(args.unpretty_out, Some(UnPrettyOut::Ast))
-        || matches!(args.pretty_out, Some(PrettyOut::Ast))
-    {
-        let mut modules_map = radix_trie::Trie::new();
-        index_modules(db, &mut modules_map, &modules, &args.crate_name);
-        let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
-            iter.filter(|m| matches!(m.1, scrap_ast::module::Module::Unloaded))
-                .for_each(|(path, module)| {
-                    if let Some(items) = modules_map.get(&path.to_key())
-                        && let scrap_parser::CanOrModule::Module(_, items) = items
-                    {
-                        *module = scrap_ast::module::Module::Loaded(
-                            items.clone(),
-                            scrap_ast::module::Inline::No,
-                            scrap_span::new_dummy_span(db),
-                        );
-                    } else {
-                        base_emiter.render_single(
-                            Level::ERROR
-                                .primary_title(format!("Failed to load module '{}'", path))
-                                .element(Level::HELP.message(
-                                    "Module not found among provided source files.".to_string(),
-                                )),
-                        );
-                    }
-                })
-        });
-        db.attach(|_| {
-            if matches!(args.pretty_out, Some(PrettyOut::Ast)) {
-                filled_entry_file.print();
-                return;
-            }
-            if matches!(args.unpretty_out, Some(UnPrettyOut::Ast)) {
-                println!("{:#?}", filled_entry_file);
-                return;
-            }
-        });
-        return Ok(());
-    }
+/// Resolve and fill in all module references
+fn resolve_modules<'db>(
+    args: &args::Args,
+    db: &'db dyn scrap_shared::Db,
+    base_emiter: &scrap_diagnostics::DiagnosticEmitter<'_>,
+    entry_file: scrap_parser::ParsedFile<'db>,
+    other_files: &[scrap_parser::ParsedFile<'db>],
+) -> anyhow::Result<scrap_ast::Can<'db>> {
+    // Index all parsed modules
+    let mut modules_map = radix_trie::Trie::new();
+    index_modules(db, &mut modules_map, other_files, &args.crate_name);
 
-    Ok(())
+    // Fill in unloaded modules in the entry file
+    let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
+        iter.filter(|m| matches!(m.1, scrap_ast::module::Module::Unloaded))
+            .for_each(|(path, module)| {
+                if let Some(items) = modules_map.get(&path.to_key())
+                    && let scrap_parser::CanOrModule::Module(_, items) = items
+                {
+                    *module = scrap_ast::module::Module::Loaded(
+                        items.clone(),
+                        scrap_ast::module::Inline::No,
+                        scrap_span::new_dummy_span(db),
+                    );
+                } else {
+                    base_emiter.render_single(
+                        Level::ERROR
+                            .primary_title(format!("Failed to load module '{}'", path))
+                            .element(Level::HELP.message(
+                                "Module not found among provided source files.".to_string(),
+                            )),
+                    );
+                }
+            })
+    });
+
+    Ok(filled_entry_file)
+}
+
+/// Lower AST to IR
+fn lower_to_ir<'db>(
+    args: &args::Args,
+    db: &'db dyn scrap_shared::Db,
+    entry_file: scrap_parser::ParsedFile<'db>,
+    other_files: &[scrap_parser::ParsedFile<'db>],
+) -> scrap_ast_lowering::LoweredIr<'db> {
+    let crate_name_symbol = scrap_span::Symbol::new(db, args.crate_name.clone());
+    scrap_ast_lowering::lower_parsed_files(db, entry_file, other_files.to_vec(), crate_name_symbol)
 }
 
 fn index_modules<'db>(

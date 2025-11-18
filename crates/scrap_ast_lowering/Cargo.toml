@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 scrap_ast.workspace = true
+scrap_parser.workspace = true
 scrap_span.workspace = true
 scrap_ir.workspace = true
 scrap_shared.workspace = true

@@ -35,20 +35,61 @@ pub struct LoweredIr<'db> {
     pub can: ir::Can<'db>,
 }
 
-/// Main entry point: lower parsed AST modules to IR
-pub fn lower_to_ir<'db>(
+/// Lower a single parsed file to an IR module (tracked function for parallelization)
+#[salsa::tracked]
+pub fn lower_parsed_file<'db>(
     db: &'db dyn scrap_shared::Db,
-    modules: Vec<(String, Vec<Item<'db>>)>,
-) -> Result<LoweredIr<'db>, BuilderError> {
+    file: scrap_parser::ParsedFile<'db>,
+    module_path: Symbol<'db>,
+) -> Option<ir::Module<'db>> {
+    let ast = file.ast(db);
+
+    let items: Vec<Item<'db>> = match ast {
+        scrap_parser::CanOrModule::Can(can) => can.items.iter().map(|b| (**b).clone()).collect(),
+        scrap_parser::CanOrModule::Module(_, items) => {
+            items.iter().map(|b| (**b).clone()).collect()
+        }
+    };
+
+    match lower_module(db, module_path.text(db).to_string(), &items) {
+        Ok(module) => Some(module),
+        Err(e) => {
+            eprintln!("Error lowering module '{}': {}", module_path.text(db), e);
+            None
+        }
+    }
+}
+
+/// Wrapper function to lower AST to IR in a tracked context
+/// Takes ParsedFile entries and converts them to IR
+/// Each file is lowered independently via tracked functions for better parallelization
+#[salsa::tracked]
+pub fn lower_parsed_files<'db>(
+    db: &'db dyn scrap_shared::Db,
+    entry_file: scrap_parser::ParsedFile<'db>,
+    other_files: Vec<scrap_parser::ParsedFile<'db>>,
+    crate_name: Symbol<'db>,
+) -> LoweredIr<'db> {
     let mut mir_modules = Vec::new();
 
-    for (path, items) in modules {
-        let module = lower_module(db, path, &items)?;
+    // Lower entry file
+    if let Some(module) = lower_parsed_file(db, entry_file, crate_name) {
         mir_modules.push(module);
     }
 
+    // Lower other files (Salsa will parallelize across invocations)
+    for file in &other_files {
+        let ast = file.ast(db);
+        if let scrap_parser::CanOrModule::Module(path, _) = ast {
+            let path_symbol = Symbol::new(db, path.to_string_db(db));
+            if let Some(module) = lower_parsed_file(db, *file, path_symbol) {
+                mir_modules.push(module);
+            }
+        }
+    }
+
     let can = ir::Can::new(db, mir_modules);
-    Ok(LoweredIr::new(db, can))
+    LoweredIr::new(db, can)
 }
 
 /// Lower a module with its items

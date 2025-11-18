@@ -13,7 +13,7 @@ pub struct Visibility<'db> {
     pub span: Span<'db>,
 }
 
-impl <'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
+impl<'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         match &self.kind {
             VisibilityKind::Public => write!(f, "pub"),

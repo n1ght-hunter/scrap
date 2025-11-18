@@ -10,7 +10,7 @@ pub struct ScrapDb {
 impl salsa::Database for ScrapDb {}
 
 #[salsa::db]
-pub trait Db: salsa::Database {}
+pub trait Db: salsa::Database + Sync {}
 
 #[salsa::db]
 impl Db for ScrapDb {}

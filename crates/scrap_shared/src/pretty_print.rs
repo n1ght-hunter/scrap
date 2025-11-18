@@ -1,5 +1,3 @@
-
-
 /// A trait for pretty-printing objects.
 /// This is used for outputing human-readable representations of AST nodes and other structures.
 pub trait PrettyPrint {

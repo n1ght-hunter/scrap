@@ -30,8 +30,6 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Lit<'db> {
     }
 }
 
-
-
 /// Literal kinds, following Rust AST enum structure.
 /// This is a simplified subset of the full Rust LitKind enum.
 ///

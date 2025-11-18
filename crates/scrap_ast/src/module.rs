@@ -24,7 +24,6 @@ pub enum Module<'db> {
     Unloaded,
 }
 
-
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Module<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         match self {

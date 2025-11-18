@@ -44,7 +44,6 @@ pub enum StmtKind<'db> {
     Empty,
 }
 
-
 impl<'db> scrap_shared::pretty_print::PrettyPrint for StmtKind<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         match self {

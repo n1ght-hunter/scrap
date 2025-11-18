@@ -30,7 +30,6 @@ pub enum TyKind<'db> {
     Err(ErrorGuaranteed),
 }
 
-
 impl<'db> PrettyPrint for TyKind<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         match self {

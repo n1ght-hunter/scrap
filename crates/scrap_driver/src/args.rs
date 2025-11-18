@@ -38,7 +38,6 @@ pub struct Args {
     #[clap(long = "pretty-out")]
     pub pretty_out: Option<PrettyOut>,
 
-
     /// The type of output to generate
     #[clap(long = "unpretty-out")]
     pub unpretty_out: Option<UnPrettyOut>,
@@ -47,8 +46,6 @@ pub struct Args {
     #[arg(short, long)]
     pub verbose: bool,
 }
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 pub enum PrettyOut {
