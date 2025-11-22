@@ -4,6 +4,7 @@ use scrap_ast::{
 };
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_lexer::Token;
+use scrap_shared::id::ModuleId;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
@@ -19,24 +20,23 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let _guard = self.guard_current_module_path(ident);
 
         if self.eat(Token::Semicolon) {
-            Ok(ItemKind::Module(
-                self.current_module_path().to_owned(),
-                Module::new(self.db, ModuleKind::Unloaded),
-            ))
+            Ok(ItemKind::Module(Module::new(
+                self.db,
+                ModuleId::new(self.db, self.current_module_path().to_owned()),
+                ModuleKind::Unloaded,
+            )))
         } else if self.eat(Token::LBrace) {
             let items = self.parse_module_inner(Token::RBrace)?;
 
-            Ok(ItemKind::Module(
-                self.current_module_path().to_owned(),
-                Module::new(
-                    self.db,
-                    ModuleKind::Loaded(
-                        items,
-                        Inline::Yes,
-                        Span::new(self.db, start_span, self.token.span.end(self.db)),
-                    ),
+            Ok(ItemKind::Module(Module::new(
+                self.db,
+                ModuleId::new(self.db, self.current_module_path().to_owned()),
+                ModuleKind::Loaded(
+                    items,
+                    Inline::Yes,
+                    Span::new(self.db, start_span, self.token.span.end(self.db)),
                 ),
-            ))
+            )))
         } else {
             Err(Level::ERROR
                 .primary_title("expected module body or semicolon")
@@ -81,9 +81,17 @@ mod tests {
         );
         let item = parser.parse_module().unwrap_or_render();
         match item {
-            ItemKind::Module(ident, module) => {
+            ItemKind::Module(module) => {
                 assert_eq!(
-                    ident.segments.last().unwrap().ident.name.text(&db),
+                    module
+                        .id(&db)
+                        .path(&db)
+                        .segments
+                        .last()
+                        .unwrap()
+                        .ident
+                        .name
+                        .text(&db),
                     "my_module"
                 );
                 match module.kind(&db) {

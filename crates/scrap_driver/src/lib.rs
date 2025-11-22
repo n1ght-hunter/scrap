@@ -183,11 +183,12 @@ fn resolve_modules<'db>(
 
     // Fill in unloaded modules in the entry file
     let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
-        iter.filter(|m| matches!(m.1.kind(db), scrap_ast::module::ModuleKind::Unloaded))
-            .for_each(|(path, module)| {
+        iter.filter(|m| matches!(m.kind(db), scrap_ast::module::ModuleKind::Unloaded))
+            .for_each(|module| {
                 if let Some(items) = modules_map.get(&path.to_key())
                     && let scrap_parser::CanOrModule::Module(_, items) = items
                 {
+                    module.
                     *module = scrap_ast::module::Module::new(
                         db,
                         scrap_ast::module::ModuleKind::Loaded(
@@ -224,7 +225,6 @@ fn lower_to_ir<'db>(
 
 fn index_modules<'db>(
     db: &'db dyn scrap_shared::Db,
-    map: &mut radix_trie::Trie<scrap_shared::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
     parsed_files: &[scrap_parser::ParsedFile<'db>],
     crate_name: &str,
 ) {

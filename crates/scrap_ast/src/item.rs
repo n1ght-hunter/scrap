@@ -40,7 +40,7 @@ pub enum ItemKind<'db> {
     Fn(FnDef<'db>),
     Enum(EnumDef<'db>),
     Struct(StructDef<'db>),
-    Module(Path<'db>, Module<'db>),
+    Module(Module<'db>),
     Use(UseTree<'db>),
 }
 
@@ -50,12 +50,11 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
             ItemKind::Fn(fndef) => fndef.pretty_print(f),
             ItemKind::Enum(enumdef) => enumdef.pretty_print(f),
             ItemKind::Struct(structdef) => structdef.pretty_print(f),
-            ItemKind::Module(path, module) => {
-                write!(f, "mod {} ", {
-                    let mut s = String::new();
-                    path.pretty_print(&mut s).unwrap();
-                    s
-                })?;
+            ItemKind::Module(module) => {
+                salsa::with_attached_database(|db| {
+                    write!(f, "mod {} ", { module.id(db).path(db).pretty_to_string() })
+                })
+                .unwrap_or_else(|| write!(f, "mod <no db> "))?;
                 module.pretty_print(f)
             }
             ItemKind::Use(use_tree) => {

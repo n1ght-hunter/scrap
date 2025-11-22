@@ -1,3 +1,4 @@
+use scrap_shared::id::ModuleId;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
@@ -13,6 +14,7 @@ pub enum Inline {
 
 #[salsa::tracked(debug, persist)]
 pub struct Module<'db> {
+    pub id: ModuleId<'db>,
     #[returns(ref)]
     pub kind: ModuleKind<'db>,
 }

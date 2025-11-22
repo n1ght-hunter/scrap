@@ -246,6 +246,7 @@ impl Drop for PopOnDrop<'_> {
 #[cfg(test)]
 pub mod parse_test_utils {
     use scrap_diagnostics::annotate_snippets::Group;
+    use scrap_lexer::LexedTokens;
     use scrap_lexer::Logos;
     use scrap_lexer::token_stream::TokenStream;
     use scrap_lexer::token_stream::TokenStreamCursor;
@@ -255,36 +256,31 @@ pub mod parse_test_utils {
     use crate::parser::State;
 
     pub fn parse_with<'a, 'db>(db: &'db dyn scrap_shared::Db, source: &'a str) -> Parser<'a, 'db> {
-        let (token_iter, lex_errs) = scrap_lexer::Token::lexer(source).spanned().fold(
-            (Vec::new(), Vec::new()),
-            |(mut tokens, mut token_errors), (new_tok, new_span)| {
-                let span = Span::new(db, new_span.start, new_span.end);
-                match new_tok {
-                    Ok(new_tok) => tokens.push(Spanned::new(new_tok, span)),
-                    Err(e) => {
-                        token_errors.push(e);
-                    }
-                }
-                (tokens, token_errors)
-            },
-        );
-
-        if !lex_errs.is_empty() {
-            lex_errs.into_iter().for_each(|e| {
-                println!("Lexing error: {:?}", e);
-            });
-            panic!("Lexing errors encountered");
-        }
+        let file = wrap_file(db, WrapFile::new(db, source.into()));
+        let token_iter = scrap_lexer::lex_file(db, file);
 
         test_parser(db, source, token_iter)
+    }
+
+    #[salsa::input]
+    struct WrapFile {
+        source: String,
+    }
+
+    #[salsa::tracked]
+    fn wrap_file<'db>(
+        db: &'db dyn scrap_shared::Db,
+        source: WrapFile,
+    ) -> scrap_shared::salsa::InputFile<'db> {
+        scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.source(db))
     }
 
     pub fn test_parser<'a, 'db>(
         db: &'db dyn scrap_shared::Db,
         source: &'a str,
-        tokens: Vec<Spanned<'db, Token>>,
+        tokens: LexedTokens<'db>,
     ) -> Parser<'a, 'db> {
-        let token_stream = TokenStreamCursor::new(TokenStream::new(tokens));
+        let token_stream = TokenStreamCursor::new(tokens.tokens(db));
         let state = State::new("test.sc");
         Parser::new(
             db,

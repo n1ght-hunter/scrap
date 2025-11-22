@@ -153,9 +153,9 @@ mod tests {
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module { }");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
-            ItemKind::Module(ident, module) => {
+            ItemKind::Module(module) => {
                 assert_eq!(
-                    ident.segments.last().unwrap().ident.name.text(&db),
+                    module.id(&db).path(&db).segments.last().unwrap().ident.name.text(&db),
                     "my_module"
                 );
                 match module.kind(&db) {
@@ -176,9 +176,9 @@ mod tests {
         let mut parser = crate::parser::parse_test_utils::parse_with(&db, "mod my_module;");
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
-            ItemKind::Module(ident, module) => {
+            ItemKind::Module(module) => {
                 assert_eq!(
-                    ident.segments.last().unwrap().ident.name.text(&db),
+                    module.id(&db).path(&db).segments.last().unwrap().ident.name.text(&db),
                     "my_module"
                 );
                 match module.kind(&db) {
