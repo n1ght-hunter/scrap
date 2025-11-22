@@ -1,10 +1,8 @@
 //! Atomic (primary) expression parsing.
 
-use scrap_ast::{
-    expr::{Expr, ExprKind},
-    path::Path,
-};
+use scrap_ast::expr::{Expr, ExprKind};
 use scrap_lexer::Token;
+use scrap_shared::path::Path;
 use scrap_span::Span;
 
 impl<'a, 'db> crate::parser::Parser<'a, 'db> {
@@ -154,7 +152,7 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
         while !self.check(term) {
             let ident = self.parse_ident()?;
-            segments.push(scrap_ast::path::PathSegment {
+            segments.push(scrap_shared::path::PathSegment {
                 id: self.state.new_node_id(),
                 ident,
             });

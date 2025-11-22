@@ -218,13 +218,13 @@ fn lower_to_ir<'db>(
     entry_file: scrap_parser::ParsedFile<'db>,
     other_files: &[scrap_parser::ParsedFile<'db>],
 ) -> scrap_ast_lowering::LoweredIr<'db> {
-    let crate_name_symbol = scrap_span::Symbol::new(db, args.crate_name.clone());
+    let crate_name_symbol = scrap_shared::ident::Symbol::new(db, args.crate_name.clone());
     scrap_ast_lowering::lower_parsed_files(db, entry_file, other_files.to_vec(), crate_name_symbol)
 }
 
 fn index_modules<'db>(
     db: &'db dyn scrap_shared::Db,
-    map: &mut radix_trie::Trie<scrap_ast::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
+    map: &mut radix_trie::Trie<scrap_shared::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
     parsed_files: &[scrap_parser::ParsedFile<'db>],
     crate_name: &str,
 ) {
@@ -233,9 +233,9 @@ fn index_modules<'db>(
         match ast {
             scrap_parser::CanOrModule::Can(can) => {
                 map.insert(
-                    scrap_ast::path::Path::from_ident(scrap_ast::ident::Ident {
-                        id: scrap_ast::node_id::NodeId::dummy(),
-                        name: scrap_span::Symbol::new(db, crate_name),
+                    scrap_shared::path::Path::from_ident(scrap_shared::ident::Ident {
+                        id: scrap_shared::NodeId::dummy(),
+                        name: scrap_shared::ident::Symbol::new(db, crate_name),
                         span: scrap_span::new_dummy_span(db),
                     })
                     .to_key(),
@@ -267,10 +267,10 @@ fn index_modules<'db>(
 
 fn iter_index<'db>(
     db: &'db dyn scrap_shared::Db,
-    map: &mut radix_trie::Trie<scrap_ast::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
+    map: &mut radix_trie::Trie<scrap_shared::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
     items: &mut dyn Iterator<
         Item = (
-            &'db scrap_ast::path::Path<'db>,
+            &'db scrap_shared::path::Path<'db>,
             &'db scrap_ast::module::Module<'db>,
         ),
     >,

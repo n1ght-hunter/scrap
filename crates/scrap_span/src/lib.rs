@@ -11,21 +11,21 @@ pub struct Span<'db> {
 }
 
 impl<'db> Span<'db> {
-    pub fn new_default(db: &'db dyn scrap_shared::Db) -> Self {
+    pub fn new_default(db: &'db dyn salsa::Database) -> Self {
         Self::new(db, 0, 0)
     }
 
-    pub fn to_range(&self, db: &'db dyn scrap_shared::Db) -> std::ops::Range<usize> {
+    pub fn to_range(&self, db: &'db dyn salsa::Database) -> std::ops::Range<usize> {
         self.start(db)..self.end(db)
     }
 }
 
 #[salsa::tracked]
-pub fn new_span<'db>(db: &'db dyn scrap_shared::Db, start: usize, end: usize) -> Span<'db> {
+pub fn new_span<'db>(db: &'db dyn salsa::Database, start: usize, end: usize) -> Span<'db> {
     Span::new(db, start, end)
 }
 
-pub fn new_dummy_span<'db>(db: &'db dyn scrap_shared::Db) -> Span<'db> {
+pub fn new_dummy_span<'db>(db: &'db dyn salsa::Database) -> Span<'db> {
     new_span(db, 0, 0)
 }
 
@@ -66,23 +66,5 @@ impl<'db, T: salsa::Update> Deref for Spanned<'db, T> {
 impl<'db, T: salsa::Update> DerefMut for Spanned<'db, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.node
-    }
-}
-
-/// A symbol represents an interned string.
-#[salsa::interned(debug, persist)]
-pub struct Symbol<'db> {
-    #[returns(ref)]
-    pub text: String,
-}
-
-impl<'db> Symbol<'db> {
-    /// Get the string slice for this symbol.
-    pub fn dummy(db: &'db dyn scrap_shared::Db) -> Self {
-        Symbol::new(db, "<dummy>")
-    }
-
-    pub fn as_bits(&self) -> u64 {
-        self.0.as_bits()
     }
 }

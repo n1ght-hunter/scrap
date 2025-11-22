@@ -1,7 +1,8 @@
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{field::FieldDef, ident::Ident, node_id::NodeId};
+use crate::{field::FieldDef, node_id::NodeId};
+use scrap_shared::ident::Ident;
 
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,

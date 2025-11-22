@@ -7,8 +7,8 @@ use crate::{
     lit::Lit,
     node_id::NodeId,
     operators::{AssignOp, BinOp},
-    path::Path,
 };
+use scrap_shared::path::Path;
 
 /// An expression node in the AST
 #[derive(

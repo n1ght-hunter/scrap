@@ -11,8 +11,9 @@
 )]
 
 use parser::{Parser, State};
-use scrap_ast::{ident::Ident, item::Item, path::Path};
+use scrap_ast::item::Item;
 use scrap_diagnostics::annotate_snippets::Group;
+use scrap_shared::{ident::Ident, path::Path};
 use scrap_lexer::{Token, token_stream::TokenStreamCursor};
 use thin_vec::ThinVec;
 

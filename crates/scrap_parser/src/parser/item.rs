@@ -1,7 +1,7 @@
 use scrap_ast::{
     item::{Item, ItemKind, ItemKindDiscriminants, UseTree, UseTreeKind},
-    path::{Path, PathSegment},
 };
+use scrap_shared::path::{Path, PathSegment};
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_lexer::Token;
 use scrap_span::Span;

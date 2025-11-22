@@ -4,10 +4,8 @@ use std::rc::Rc;
 use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
-use scrap_ast::ident::Ident;
-use scrap_ast::path::Path;
 use scrap_lexer::Token;
-use scrap_shared::NodeId;
+use scrap_shared::{NodeId, ident::Ident, path::Path};
 
 use scrap_lexer::token_stream::TokenStreamCursor;
 use scrap_lexer::token_stream::TokenTypeSet;
@@ -231,12 +229,12 @@ impl<'a, 'db> Parser<'a, 'db> {
         segments.pop();
     }
 
-    pub fn current_module_path(&self) -> std::cell::Ref<'_, scrap_ast::path::Path<'db>> {
+    pub fn current_module_path(&self) -> std::cell::Ref<'_, scrap_shared::path::Path<'db>> {
         self.current_module_path.borrow()
     }
 }
 
-pub struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_ast::path::Path<'db>>>);
+pub struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_shared::path::Path<'db>>>);
 
 impl Drop for PopOnDrop<'_> {
     fn drop(&mut self) {

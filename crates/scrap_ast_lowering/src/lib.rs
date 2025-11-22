@@ -8,7 +8,7 @@ use scrap_ast::{
     typedef::{Ty, TyKind},
 };
 use scrap_ir as ir;
-use scrap_span::Symbol;
+use scrap_shared::ident::Symbol;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -255,14 +255,12 @@ mod tests {
         Visibility, VisibilityKind,
         block::Block,
         fndef::FnDef,
-        ident::Ident,
         item::Item,
         pat::{BindingMode, ByRef, Pat, PatKind},
-        path::Path,
         typedef::Ty,
     };
-    use scrap_shared::{Mutability, NodeId, salsa::ScrapDb};
-    use scrap_span::{Span, Symbol};
+    use scrap_shared::{Mutability, NodeId, salsa::ScrapDb, ident::{Ident, Symbol}, path::Path};
+    use scrap_span::Span;
     use thin_vec::ThinVec;
 
     /// Test helper that wraps the logic in a Salsa tracked function
@@ -323,7 +321,7 @@ mod tests {
         let int_sym = Symbol::new(db, "int".to_string());
         let int_path = Path {
             span,
-            segments: ThinVec::from([scrap_ast::path::PathSegment {
+            segments: ThinVec::from([scrap_shared::path::PathSegment {
                 ident: Ident {
                     id: node_id,
                     name: int_sym,
@@ -409,7 +407,7 @@ mod tests {
         let int_name = Symbol::new(db, "int".to_string());
         let int_path = Path {
             span,
-            segments: ThinVec::from([scrap_ast::path::PathSegment {
+            segments: ThinVec::from([scrap_shared::path::PathSegment {
                 ident: Ident {
                     id: node_id,
                     name: int_name,
@@ -431,7 +429,7 @@ mod tests {
         let bool_name = Symbol::new(db, "bool".to_string());
         let bool_path = Path {
             span,
-            segments: ThinVec::from([scrap_ast::path::PathSegment {
+            segments: ThinVec::from([scrap_shared::path::PathSegment {
                 ident: Ident {
                     id: node_id,
                     name: bool_name,
@@ -453,7 +451,7 @@ mod tests {
         let string_name = Symbol::new(db, "String".to_string());
         let string_path = Path {
             span,
-            segments: ThinVec::from([scrap_ast::path::PathSegment {
+            segments: ThinVec::from([scrap_shared::path::PathSegment {
                 ident: Ident {
                     id: node_id,
                     name: string_name,

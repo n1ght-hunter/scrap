@@ -3,9 +3,10 @@ use strum_macros::{EnumDiscriminants, EnumIter};
 use thin_vec::ThinVec;
 
 use crate::{
-    Visibility, enumdef::EnumDef, fndef::FnDef, ident::Ident, module::Module, node_id::NodeId,
-    path::Path, structdef::StructDef,
+    Visibility, enumdef::EnumDef, fndef::FnDef, module::Module, node_id::NodeId,
+    structdef::StructDef,
 };
+use scrap_shared::{ident::Ident, path::Path};
 
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,

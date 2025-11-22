@@ -1,5 +1,6 @@
-use scrap_span::Symbol;
 use std::marker::PhantomData;
+
+use scrap_shared::ident::Symbol;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,

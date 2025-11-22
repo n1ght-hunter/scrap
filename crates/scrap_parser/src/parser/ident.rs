@@ -1,6 +1,5 @@
-use scrap_ast::ident::Ident;
 use scrap_lexer::Token;
-use scrap_span::Symbol;
+use scrap_shared::ident::{Ident, Symbol};
 
 impl<'a, 'db> super::Parser<'a, 'db> {
     /// Check if the current token is an identifier

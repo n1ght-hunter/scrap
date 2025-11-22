@@ -1200,7 +1200,9 @@ name = "scrap_shared"
 version = "0.1.0"
 dependencies = [
  "salsa",
+ "scrap_span",
  "serde",
+ "thin-vec",
  "tracing",
 ]
 
@@ -1209,7 +1211,6 @@ name = "scrap_span"
 version = "0.1.0"
 dependencies = [
  "salsa",
- "scrap_shared",
  "serde",
 ]
 

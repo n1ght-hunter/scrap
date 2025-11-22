@@ -1,7 +1,8 @@
 use scrap_shared::pretty_print::PrettyPrint;
 use scrap_span::Span;
 
-use crate::{ident::Ident, node_id::NodeId};
+use crate::node_id::NodeId;
+use scrap_shared::ident::Ident;
 
 pub use scrap_shared::Mutability;
 

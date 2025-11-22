@@ -2,7 +2,8 @@ use salsa::SalsaAsDeref;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{block::Block, ident::Ident, node_id::NodeId, pat::Pat, typedef::Ty};
+use crate::{block::Block, node_id::NodeId, pat::Pat, typedef::Ty};
+use scrap_shared::ident::Ident;
 
 #[salsa::tracked(debug, persist)]
 pub struct FnDef<'db> {

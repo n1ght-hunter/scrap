@@ -10,7 +10,6 @@ pub mod enumdef;
 pub mod expr;
 pub mod field;
 pub mod fndef;
-pub mod ident;
 pub mod item;
 pub mod lit;
 pub mod local;
@@ -18,12 +17,10 @@ pub mod module;
 pub mod node_id;
 pub mod operators;
 pub mod pat;
-pub mod path;
 pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
-use path::Path;
 pub use shared::*;
 mod shared;
 
@@ -53,7 +50,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Can<'db> {
 impl<'db> Can<'db> {
     pub fn iter_modules(
         &'db self,
-    ) -> impl Iterator<Item = (&'db Path<'db>, &'db module::Module<'db>)> {
+    ) -> impl Iterator<Item = (&'db scrap_shared::path::Path<'db>, &'db module::Module<'db>)> {
         self.items.iter().filter_map(|item| {
             if let ItemKind::Module(path, module) = &item.kind {
                 Some((&*path, module))
@@ -65,7 +62,7 @@ impl<'db> Can<'db> {
 
     pub fn iter_modules_mut<F>(&'db self, f: F) -> Can<'db>
     where
-        F: FnOnce(&mut dyn Iterator<Item = (&Path, &mut module::Module<'db>)>),
+        F: FnOnce(&mut dyn Iterator<Item = (&scrap_shared::path::Path, &mut module::Module<'db>)>),
     {
         let mut this = self.clone();
         let mut iter = this.items.iter_mut().filter_map(|item| {
