@@ -11,6 +11,7 @@ scrap_span.workspace = true
 salsa.workspace = true
 scrap_shared.workspace = true
 serde.workspace = true
+scrap_diagnostics.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

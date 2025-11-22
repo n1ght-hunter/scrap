@@ -12,6 +12,7 @@ use salsa::Database;
 use scrap_ast::module::Module;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;
+use scrap_shared::Db;
 
 #[salsa::tracked(debug)]
 struct TrackedArgs<'db> {
@@ -70,31 +71,44 @@ where
 }
 
 fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::Result<()> {
-    let base_emiter = scrap_diagnostics::DiagnosticEmitter::new().with_auto_render(true);
     let db = &*db_mut;
 
     // Phase 1: Parse files
-    let (entry_file, other_files) = parse_input_files(args, db, &base_emiter)?;
+    let (entry_file, other_files) = parse_input_files(args, db)?;
+
+    if db.dcx().has_errors() {
+        db.dcx().render_all();
+        let (errors, warnings, _) = db.dcx().counts();
+        if warnings > 0 {
+            anyhow::bail!(
+                "Compilation completed with {} warnings and {} errors.",
+                warnings,
+                errors
+            );
+        } else {
+            anyhow::bail!("Compilation failed with {} errors.", errors);
+        }
+    }
 
     // Phase 2: Pretty print if requested
     if let Some(mode) = determine_pp_mode(args) {
-        if mode.needs_ir() {
-            // Resolve modules, lower to IR and print
-            let filled_entry_file =
-                resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
-            db.attach(|db| {
-                let lowered_ir = lower_to_ir(args, db, entry_file, &other_files);
-                pretty::print(db, mode, &filled_entry_file, Some(lowered_ir));
-            });
-        } else {
-            // Resolve modules and print AST
-            let filled_entry_file =
-                resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
-            db.attach(|db| {
-                pretty::print(db, mode, &filled_entry_file, None);
-            });
-        }
-        return Ok(());
+        // if mode.needs_ir() {
+        //     // Resolve modules, lower to IR and print
+        //     let filled_entry_file =
+        //         resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+        //     db.attach(|db| {
+        //         let lowered_ir = lower_to_ir(args, db, entry_file, &other_files);
+        //         pretty::print(db, mode, &filled_entry_file, Some(lowered_ir));
+        //     });
+        // } else {
+        //     // Resolve modules and print AST
+        //     let filled_entry_file =
+        //         resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+        //     db.attach(|db| {
+        //         pretty::print(db, mode, &filled_entry_file, None);
+        //     });
+        // }
+        // return Ok(());
     }
 
     Ok(())
@@ -119,7 +133,6 @@ fn determine_pp_mode(args: &args::Args) -> Option<pretty::PpMode> {
 fn parse_input_files<'db>(
     args: &args::Args,
     db: &'db dyn scrap_shared::Db,
-    base_emiter: &scrap_diagnostics::DiagnosticEmitter<'_>,
 ) -> anyhow::Result<(
     scrap_parser::ParsedFile<'db>,
     Vec<scrap_parser::ParsedFile<'db>>,
@@ -132,12 +145,12 @@ fn parse_input_files<'db>(
         .chain(rayon::iter::once(&args.entry_source_file))
         .filter_map(|file_path| {
             let (is_root, root_path_segments) =
-                compute_relative_path_segments(args, base_emiter, root_path, file_path)?;
+                compute_relative_path_segments(args, db, root_path, file_path)?;
 
             let modifed = match std::fs::metadata(file_path).and_then(|m| m.modified()) {
                 Ok(m) => m,
                 Err(e) => {
-                    base_emiter.render_single(
+                    db.dcx().emit_err(
                         Level::ERROR
                             .primary_title(format!(
                                 "Failed to read source file: {}",
@@ -150,15 +163,15 @@ fn parse_input_files<'db>(
             };
             let input_path =
                 scrap_shared::salsa::get_input_path(db, file_path.to_path_buf(), modifed);
-            let input_file = scrap_shared::salsa::load_file(db, input_path);
-            let lexed_tokens = scrap_lexer::lex_file(db, input_file);
+            let input_file = scrap_shared::salsa::load_file(db, input_path)?;
+            let lexed_tokens = scrap_lexer::lex_file(db, input_file)?;
             let parsed_file = scrap_parser::parse_tokens(
                 db,
                 input_file,
                 lexed_tokens,
                 is_root,
                 root_path_segments,
-            );
+            )?;
             Some(parsed_file)
         })
         .collect::<Vec<_>>();
@@ -169,136 +182,9 @@ fn parse_input_files<'db>(
     Ok((entry_file, modules))
 }
 
-/// Resolve and fill in all module references
-fn resolve_modules<'db>(
-    args: &args::Args,
-    db: &'db dyn scrap_shared::Db,
-    base_emiter: &scrap_diagnostics::DiagnosticEmitter<'_>,
-    entry_file: scrap_parser::ParsedFile<'db>,
-    other_files: &[scrap_parser::ParsedFile<'db>],
-) -> anyhow::Result<scrap_ast::Can<'db>> {
-    // Index all parsed modules
-    let mut modules_map = radix_trie::Trie::new();
-    index_modules(db, &mut modules_map, other_files, &args.crate_name);
-
-    // Fill in unloaded modules in the entry file
-    let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
-        iter.filter(|m| matches!(m.kind(db), scrap_ast::module::ModuleKind::Unloaded))
-            .for_each(|module| {
-                if let Some(items) = modules_map.get(&path.to_key())
-                    && let scrap_parser::CanOrModule::Module(_, items) = items
-                {
-                    module.
-                    *module = scrap_ast::module::Module::new(
-                        db,
-                        scrap_ast::module::ModuleKind::Loaded(
-                            items.clone(),
-                            scrap_ast::module::Inline::No,
-                            scrap_span::new_dummy_span(db),
-                        ),
-                    );
-                } else {
-                    base_emiter.render_single(
-                        Level::ERROR
-                            .primary_title(format!("Failed to load module '{}'", path))
-                            .element(Level::HELP.message(
-                                "Module not found among provided source files.".to_string(),
-                            )),
-                    );
-                }
-            })
-    });
-
-    Ok(filled_entry_file)
-}
-
-/// Lower AST to IR
-fn lower_to_ir<'db>(
-    args: &args::Args,
-    db: &'db dyn scrap_shared::Db,
-    entry_file: scrap_parser::ParsedFile<'db>,
-    other_files: &[scrap_parser::ParsedFile<'db>],
-) -> scrap_ast_lowering::LoweredIr<'db> {
-    let crate_name_symbol = scrap_shared::ident::Symbol::new(db, args.crate_name.clone());
-    scrap_ast_lowering::lower_parsed_files(db, entry_file, other_files.to_vec(), crate_name_symbol)
-}
-
-fn index_modules<'db>(
-    db: &'db dyn scrap_shared::Db,
-    parsed_files: &[scrap_parser::ParsedFile<'db>],
-    crate_name: &str,
-) {
-    for parsed_file in parsed_files {
-        let ast = parsed_file.ast(db);
-        match ast {
-            scrap_parser::CanOrModule::Can(can) => {
-                map.insert(
-                    scrap_shared::path::Path::from_ident(scrap_shared::ident::Ident {
-                        id: scrap_shared::NodeId::dummy(),
-                        name: scrap_shared::ident::Symbol::new(db, crate_name),
-                        span: scrap_span::new_dummy_span(db),
-                    })
-                    .to_key(),
-                    scrap_parser::CanOrModule::Can(can.clone()),
-                );
-                iter_index(db, map, &mut can.iter_modules());
-            }
-            scrap_parser::CanOrModule::Module(path, items) => {
-                map.insert(
-                    path.to_key(),
-                    scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
-                );
-                iter_index(
-                    db,
-                    map,
-                    &mut items.iter().filter_map(|item| {
-                        if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind
-                        {
-                            Some((sub_path, sub_module))
-                        } else {
-                            None
-                        }
-                    }),
-                );
-            }
-        }
-    }
-}
-
-fn iter_index<'db>(
-    db: &'db dyn scrap_shared::Db,
-    map: &mut radix_trie::Trie<scrap_shared::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
-    items: &mut dyn Iterator<
-        Item = (
-            &'db scrap_shared::path::Path<'db>,
-            &'db scrap_ast::module::Module<'db>,
-        ),
-    >,
-) {
-    items.for_each(|(path, module)| {
-        if let scrap_ast::module::ModuleKind::Loaded(items, _, _) = module.kind(db) {
-            map.insert(
-                path.to_key(),
-                scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
-            );
-            iter_index(
-                db,
-                map,
-                &mut items.iter().filter_map(|item| {
-                    if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind {
-                        Some((sub_path, sub_module))
-                    } else {
-                        None
-                    }
-                }),
-            );
-        }
-    });
-}
-
 fn compute_relative_path_segments<'a, 'db>(
     args: &args::Args,
-    base_emiter: &scrap_diagnostics::DiagnosticEmitter<'a>,
+    db: &'db dyn scrap_shared::Db,
     root_path: &std::path::PathBuf,
     file_path: &std::path::PathBuf,
 ) -> Option<(bool, Vec<String>)> {
@@ -306,7 +192,7 @@ fn compute_relative_path_segments<'a, 'db>(
         return Some((true, vec![args.crate_name.clone()]));
     }
     if !is_beside_or_below(root_path.as_path(), file_path.as_path()) {
-        base_emiter.render_single(
+        db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
                     "Source file '{}' is not beside or below the entry source file '{}'",
@@ -320,7 +206,7 @@ fn compute_relative_path_segments<'a, 'db>(
         return None;
     }
     let Some(diff) = pathdiff::diff_paths(file_path, root_path) else {
-        base_emiter.render_single(
+        db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
                     "Failed to compute relative path for file: {}",
@@ -343,7 +229,7 @@ fn compute_relative_path_segments<'a, 'db>(
                     Some(s.to_string())
                 }
             } else {
-                base_emiter.render_single(
+                db.dcx().emit_err(
                     Level::ERROR
                         .primary_title(format!(
                             "Non-unicode path segment in file path: {}",

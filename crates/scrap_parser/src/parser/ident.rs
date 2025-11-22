@@ -29,17 +29,16 @@ mod tests {
 
     use crate::parser::parse_test_utils::parse_with;
 
-    #[test]
-    fn test_parse_ident() {
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = parse_with(&db, "my_variable");
+    #[scrap_macros::salsa_test]
+    fn test_parse_ident(db: &dyn scrap_shared::Db) {
+        let mut parser = parse_with(db, "my_variable");
         let ident = match parser.parse_ident() {
             Ok(ident) => ident,
             Err(e) => {
                 panic!("Failed to parse ident: {:?}", e);
             }
         };
-        assert_eq!(ident.name.text(&db), "my_variable");
-        assert_eq!(ident.span.to_range(&db), 0..11);
+        assert_eq!(ident.name.text(db), "my_variable");
+        assert_eq!(ident.span.to_range(db), 0..11);
     }
 }

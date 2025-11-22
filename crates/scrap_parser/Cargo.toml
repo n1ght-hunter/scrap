@@ -26,6 +26,7 @@ serde.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+scrap_macros.workspace = true
 
 [lints]
 workspace = true

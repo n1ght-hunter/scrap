@@ -8,7 +8,7 @@ use scrap_ast::{
     typedef::{Ty, TyKind},
 };
 use scrap_ir as ir;
-use scrap_shared::ident::Symbol;
+use scrap_shared::{id::ModuleId, ident::Symbol};
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -40,65 +40,39 @@ pub struct LoweredIr<'db> {
 pub fn lower_parsed_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_parser::ParsedFile<'db>,
-    module_path: Symbol<'db>,
+    module_id: ModuleId<'db>,
 ) -> Option<ir::Module<'db>> {
     let ast = file.ast(db);
 
     let items: Vec<Item<'db>> = match ast {
-        scrap_parser::CanOrModule::Can(can) => can.items.iter().map(|b| (**b).clone()).collect(),
-        scrap_parser::CanOrModule::Module(_, items) => {
-            items.iter().map(|b| (**b).clone()).collect()
+        scrap_parser::CanOrModule::Can(can) => {
+            can.items(db).iter().map(|b| (**b).clone()).collect()
+        }
+        scrap_parser::CanOrModule::Module(module) => {
+            if let scrap_ast::module::ModuleKind::Loaded(items, _, _) = module.kind(db) {
+                items.iter().map(|b| (**b).clone()).collect()
+            } else {
+                eprintln!("Module '{}' is not loaded", module_id.path(db));
+                return None;
+            }
         }
     };
 
-    match lower_module(db, module_path.text(db).to_string(), &items) {
+    match lower_module(db, module_id, &items) {
         Ok(module) => Some(module),
         Err(e) => {
-            eprintln!("Error lowering module '{}': {}", module_path.text(db), e);
+            eprintln!("Error lowering module '{}': {}", module_id.path(db), e);
             None
         }
     }
 }
 
-/// Wrapper function to lower AST to IR in a tracked context
-/// Takes ParsedFile entries and converts them to IR
-/// Each file is lowered independently via tracked functions for better parallelization
-#[salsa::tracked]
-pub fn lower_parsed_files<'db>(
-    db: &'db dyn scrap_shared::Db,
-    entry_file: scrap_parser::ParsedFile<'db>,
-    other_files: Vec<scrap_parser::ParsedFile<'db>>,
-    crate_name: Symbol<'db>,
-) -> LoweredIr<'db> {
-    let mut mir_modules = Vec::new();
-
-    // Lower entry file
-    if let Some(module) = lower_parsed_file(db, entry_file, crate_name) {
-        mir_modules.push(module);
-    }
-
-    // Lower other files (Salsa will parallelize across invocations)
-    for file in &other_files {
-        let ast = file.ast(db);
-        if let scrap_parser::CanOrModule::Module(path, _) = ast {
-            let path_symbol = Symbol::new(db, path.to_string_db(db));
-            if let Some(module) = lower_parsed_file(db, *file, path_symbol) {
-                mir_modules.push(module);
-            }
-        }
-    }
-
-    let can = ir::Can::new(db, mir_modules);
-    LoweredIr::new(db, can)
-}
-
 /// Lower a module with its items
 fn lower_module<'db>(
     db: &'db dyn scrap_shared::Db,
-    path: String,
+    module_id: ModuleId<'db>,
     ast_items: &[Item<'db>],
 ) -> MResult<ir::Module<'db>> {
-    let path_symbol = Symbol::new(db, path);
     let mut items = Vec::new();
 
     for item in ast_items {
@@ -114,7 +88,7 @@ fn lower_module<'db>(
         }
     }
 
-    Ok(ir::Module::new(db, path_symbol, items))
+    Ok(ir::Module::new(db, module_id, items))
 }
 
 /// Lower a function definition
@@ -259,7 +233,12 @@ mod tests {
         pat::{BindingMode, ByRef, Pat, PatKind},
         typedef::Ty,
     };
-    use scrap_shared::{Mutability, NodeId, salsa::ScrapDb, ident::{Ident, Symbol}, path::Path};
+    use scrap_shared::{
+        Mutability, NodeId,
+        ident::{Ident, Symbol},
+        path::Path,
+        salsa::ScrapDb,
+    };
     use scrap_span::Span;
     use thin_vec::ThinVec;
 
@@ -473,9 +452,8 @@ mod tests {
         let db = ScrapDb::default();
         assert!(test_lower_type_primitives_impl(&db));
     }
-
-    #[salsa::tracked]
-    fn test_lower_module_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
+    #[scrap_macros::salsa_test]
+    fn test_lower_module(db: &dyn scrap_shared::Db) {
         let span = Span::new(db, 0, 0);
         let node_id = NodeId::new(0, 0);
 
@@ -501,37 +479,21 @@ mod tests {
                 span,
             },
         };
+        let module_id = ModuleId::new(db, Path::from_segment(db, "test_module"));
 
-        let result = lower_module(db, "test_module".to_string(), &[item]);
-        if result.is_err() {
-            return false;
-        }
+        let module = lower_module(db, module_id, &[item]).unwrap();
 
-        let module = result.unwrap();
-        module.path(db).text(db) == "test_module" && module.items(db).len() == 1
+        assert_eq!(module.id(db), module_id);
+        assert_eq!(module.items(db).len(), 1);
     }
 
-    #[test]
-    fn test_lower_module() {
-        let db = ScrapDb::default();
-        assert!(test_lower_module_impl(&db));
-    }
+    #[scrap_macros::salsa_test]
+    fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
+        let module_id = ModuleId::new(db, Path::from_segment(db, "empty_module"));
+        let module = lower_module(db, module_id, &[]).unwrap();
 
-    #[salsa::tracked]
-    fn test_lower_empty_module_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
-        let result = lower_module(db, "empty_module".to_string(), &[]);
-        if result.is_err() {
-            return false;
-        }
-
-        let module = result.unwrap();
-        module.path(db).text(db) == "empty_module" && module.items(db).len() == 0
-    }
-
-    #[test]
-    fn test_lower_empty_module() {
-        let db = ScrapDb::default();
-        assert!(test_lower_empty_module_impl(&db));
+        assert_eq!(module.id(db), module_id);
+        assert!(module.items(db).is_empty());
     }
 
     #[test]

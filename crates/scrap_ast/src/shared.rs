@@ -1,6 +1,6 @@
 use scrap_errors::ErrorGuaranteed;
-use scrap_span::Span;
 use scrap_shared::path::Path;
+use scrap_span::Span;
 
 pub use scrap_shared::NodeId;
 

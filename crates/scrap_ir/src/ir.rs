@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use scrap_shared::ident::Symbol;
+use scrap_shared::{id::ModuleId, ident::Symbol};
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
@@ -36,7 +36,7 @@ pub struct Can<'db> {
 #[salsa::tracked(debug, persist)]
 /// A module containing a list of items (functions, structs, enums, etc.) in a single namespace.
 pub struct Module<'db> {
-    pub path: Symbol<'db>,
+    pub id: ModuleId<'db>,
     #[tracked]
     #[returns(ref)]
     pub items: Vec<Items<'db>>,

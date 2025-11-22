@@ -13,20 +13,22 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             scrap_lexer::Literal::Bool => LitKind::Bool,
             scrap_lexer::Literal::Ident => {
                 let ident_str = &self.source[self.token.span.to_range(self.db)];
-                return Err(Level::ERROR
-                    .primary_title(format!(
-                        "Unexpected identifier '{}' where a literal was expected",
-                        ident_str
-                    ))
-                    .element(
-                        Snippet::source(self.source)
-                            .annotation(
-                                AnnotationKind::Primary
-                                    .span(self.token.span.to_range(self.db))
-                                    .label("expected a literal here"),
-                            )
-                            .path(self.state.file_name),
-                    ));
+                return Err(self.db.dcx().emit_err(
+                    Level::ERROR
+                        .primary_title(format!(
+                            "Unexpected identifier '{}' where a literal was expected",
+                            ident_str
+                        ))
+                        .element(
+                            Snippet::source(self.source)
+                                .annotation(
+                                    AnnotationKind::Primary
+                                        .span(self.token.span.to_range(self.db))
+                                        .label("expected a literal here"),
+                                )
+                                .path(self.state.file_name),
+                        ),
+                ));
             }
         };
 

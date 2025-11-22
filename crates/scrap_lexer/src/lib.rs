@@ -1,4 +1,5 @@
 pub use logos::Logos;
+use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_macros::expand_tokens;
 use scrap_span::Spanned;
 
@@ -193,7 +194,7 @@ pub struct LexedTokens<'db> {
 pub fn lex_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_shared::salsa::InputFile<'db>,
-) -> LexedTokens<'db> {
+) -> Option<LexedTokens<'db>> {
     let content = file.content(db);
     let (token_iter, mut lex_errs) = Token::lexer(content).spanned().fold(
         (Vec::new(), Vec::new()),
@@ -210,9 +211,25 @@ pub fn lex_file<'db>(
         eprintln!("Lexing errors in file {}:", file.path(db).display());
         for (err, span) in lex_errs.drain(..) {
             eprintln!("  Error at {}-{}: {}", span.start(db), span.end(db), err);
+            db.dcx().emit_err(
+                Level::ERROR.primary_title(err.to_string()).element(
+                    Snippet::source(content)
+                        .path(file.path(db).to_string_lossy())
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(db))
+                                .label(err.to_string()),
+                        ),
+                ),
+            );
         }
+
+        return None;
     }
-    LexedTokens::new(db, token_stream::TokenStream::new(token_iter))
+    Some(LexedTokens::new(
+        db,
+        token_stream::TokenStream::new(token_iter),
+    ))
 }
 
 #[cfg(test)]

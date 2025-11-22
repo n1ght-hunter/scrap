@@ -22,7 +22,6 @@ serde.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
-radix_trie.workspace = true
 rayon.workspace = true
 
 [lints]

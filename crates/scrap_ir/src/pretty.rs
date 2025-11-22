@@ -32,7 +32,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         writeln!(
             self.output,
             "module {} {{",
-            module.path(self.db).text(self.db)
+            module.id(self.db).path(self.db)
         )
         .unwrap();
         self.indent += 1;

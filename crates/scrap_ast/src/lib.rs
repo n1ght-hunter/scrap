@@ -32,13 +32,14 @@ use thin_vec::ThinVec;
 #[salsa::tracked(debug, persist)]
 pub struct Can<'db> {
     pub id: NodeId,
+    #[returns(ref)]
     pub items: ThinVec<Box<Item<'db>>>,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Can<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         salsa::with_attached_database(|db| {
-            for item in &self.items(db) {
+            for item in self.items(db) {
                 item.pretty_print(f)?;
                 write!(f, "\n")?;
             }
@@ -54,29 +55,13 @@ impl<'db> Can<'db> {
     pub fn iter_modules(
         &'db self,
         db: &'db dyn scrap_shared::Db,
-    ) -> impl Iterator<Item = &'db module::Module<'db>> + 'db {
+    ) -> impl Iterator<Item = module::Module<'db>> {
         self.items(db).iter().filter_map(|item| {
-            if let ItemKind::Module(module) = &item.kind {
+            if let ItemKind::Module(module) = item.kind {
                 Some(module)
             } else {
                 None
             }
         })
-    }
-
-    pub fn iter_modules_mut<F>(&'db self, f: F) -> Can<'db>
-    where
-        F: FnOnce(&mut dyn Iterator<Item = &mut module::Module<'db>>),
-    {
-        let mut this = self.clone();
-        let mut iter = this.items.iter_mut().filter_map(|item| {
-            if let ItemKind::Module(module) = &mut item.kind {
-                Some(module)
-            } else {
-                None
-            }
-        });
-        f(&mut iter);
-        this
     }
 }

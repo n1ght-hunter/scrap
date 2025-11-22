@@ -71,25 +71,23 @@ mod tests {
 
     use crate::parser::parse_test_utils::{ExtendRes, parse_with};
 
-    #[test]
-    fn empty_fn() {
+    #[scrap_macros::salsa_test]
+    fn empty_fn(db: &dyn scrap_shared::Db) {
         let source = "fn my_function() {}";
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = parse_with(&db, source);
+        let mut parser = parse_with(db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
-        assert_eq!(fn_def.ident(&db).name.text(&db), "my_function");
-        assert_eq!(fn_def.ident(&db).span.to_range(&db), 3..14);
+        assert_eq!(fn_def.ident(db).name.text(db), "my_function");
+        assert_eq!(fn_def.ident(db).span.to_range(db), 3..14);
     }
 
-    #[test]
-    fn fn_with_params() {
+    #[scrap_macros::salsa_test]
+    fn fn_with_params(db: &dyn scrap_shared::Db) {
         let source = "fn add(a: i32, b: i32) {}";
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = parse_with(&db, source);
+        let mut parser = parse_with(db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
-        assert_eq!(fn_def.ident(&db).name.text(&db), "add");
-        assert_eq!(fn_def.args(&db).len(), 2);
-        assert_eq!(fn_def.args(&db)[0].ident.name.text(&db), "a");
-        assert_eq!(fn_def.args(&db)[1].ident.name.text(&db), "b");
+        assert_eq!(fn_def.ident(db).name.text(db), "add");
+        assert_eq!(fn_def.args(db).len(), 2);
+        assert_eq!(fn_def.args(db)[0].ident.name.text(db), "a");
+        assert_eq!(fn_def.args(db)[1].ident.name.text(db), "b");
     }
 }

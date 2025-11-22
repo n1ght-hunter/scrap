@@ -11,17 +11,21 @@
 )]
 
 use parser::{Parser, State};
-use scrap_ast::item::Item;
+use scrap_ast::{
+    item::Item,
+    module::{Module, ModuleKind},
+};
 use scrap_diagnostics::annotate_snippets::Group;
-use scrap_shared::{ident::Ident, path::Path};
+use scrap_errors::ErrorGuaranteed;
 use scrap_lexer::{Token, token_stream::TokenStreamCursor};
+use scrap_shared::{ident::Ident, path::Path};
 use thin_vec::ThinVec;
 
 mod errors;
 pub mod parser;
 mod utils;
 
-pub type PResult<'a, T> = std::result::Result<T, Group<'a>>;
+pub type PResult<'a, T> = std::result::Result<T, ErrorGuaranteed>;
 pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 
 #[salsa::tracked(debug, persist)]
@@ -35,20 +39,20 @@ pub struct ParsedFile<'db> {
 )]
 pub enum CanOrModule<'db> {
     Can(scrap_ast::Can<'db>),
-    Module(Path<'db>, ThinVec<Box<Item<'db>>>),
+    Module(scrap_ast::module::Module<'db>),
 }
 
 impl<'db> CanOrModule<'db> {
     pub fn unwrap_can(&self) -> &scrap_ast::Can<'db> {
         match self {
             CanOrModule::Can(can) => can,
-            CanOrModule::Module(_, _) => panic!("Expected Can, found Module"),
+            CanOrModule::Module(_) => panic!("Expected Can, found Module"),
         }
     }
 
-    pub fn into_module(self) -> (Path<'db>, ThinVec<Box<Item<'db>>>) {
+    pub fn unwrap_module(&self) -> &scrap_ast::module::Module<'db> {
         match self {
-            CanOrModule::Module(path, items) => (path, items),
+            CanOrModule::Module(module) => module,
             CanOrModule::Can(_) => panic!("Expected Module, found Can"),
         }
     }
@@ -61,28 +65,34 @@ pub fn parse_tokens<'db>(
     tokens: scrap_lexer::LexedTokens<'db>,
     is_root: bool,
     root_path: Vec<String>,
-) -> ParsedFile<'db> {
+) -> Option<ParsedFile<'db>> {
     let tokens = tokens.tokens(db);
     let token_stream = TokenStreamCursor::new(tokens);
     let state = State::new(file.path(db).to_str().unwrap());
     let path = Path::from_segments(db, &root_path);
+    let id = scrap_shared::id::ModuleId::new(db, path.clone());
     let mut parser = Parser::new(db, file.content(db), token_stream, state, path.clone());
     let ast = if is_root {
         parser
             .parse_can()
             .map(|ast| ParsedFile::new(db, CanOrModule::Can(ast)))
     } else {
-        parser
-            .parse_module_inner(Token::Eof)
-            .map(|ast| ParsedFile::new(db, CanOrModule::Module(path, ast)))
+        parser.parse_module_inner(Token::Eof).map(|ast| {
+            ParsedFile::new(
+                db,
+                CanOrModule::Module(Module::new(
+                    db,
+                    id,
+                    ModuleKind::Loaded(
+                        ast,
+                        scrap_ast::module::Inline::No,
+                        scrap_span::new_dummy_span(db),
+                    ),
+                )),
+            )
+        })
     };
-    match ast {
-        Ok(ast) => ast,
-        Err(report) => {
-            scrap_diagnostics::DiagnosticEmitter::new().render(&[report]);
-            scrap_errors::FatalError.raise()
-        }
-    }
+    ast.ok()
 }
 
 #[cfg(target_arch = "wasm32")]

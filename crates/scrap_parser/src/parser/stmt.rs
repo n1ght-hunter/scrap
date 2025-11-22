@@ -30,7 +30,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             });
         }
 
-        let expr = self.parse_expr().unwrap_or_render();
+        let expr = self.parse_expr()?;
         return Ok(Stmt {
             id: self.state.new_node_id(),
             span: expr.span,

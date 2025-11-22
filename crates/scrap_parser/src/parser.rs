@@ -195,7 +195,7 @@ impl<'a, 'db> Parser<'a, 'db> {
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
         let id = self.state.new_node_id();
         let items = self.parse_module_inner(Token::Eof)?;
-        Ok(Can { items, id })
+        Ok(Can::new(self.db, id, items))
     }
 
     pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility<'db>> {
@@ -247,8 +247,6 @@ impl Drop for PopOnDrop<'_> {
 pub mod parse_test_utils {
     use scrap_diagnostics::annotate_snippets::Group;
     use scrap_lexer::LexedTokens;
-    use scrap_lexer::Logos;
-    use scrap_lexer::token_stream::TokenStream;
     use scrap_lexer::token_stream::TokenStreamCursor;
 
     use super::*;
@@ -256,23 +254,10 @@ pub mod parse_test_utils {
     use crate::parser::State;
 
     pub fn parse_with<'a, 'db>(db: &'db dyn scrap_shared::Db, source: &'a str) -> Parser<'a, 'db> {
-        let file = wrap_file(db, WrapFile::new(db, source.into()));
-        let token_iter = scrap_lexer::lex_file(db, file);
+        let file = scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.into());
+        let token_iter = scrap_lexer::lex_file(db, file).unwrap();
 
         test_parser(db, source, token_iter)
-    }
-
-    #[salsa::input]
-    struct WrapFile {
-        source: String,
-    }
-
-    #[salsa::tracked]
-    fn wrap_file<'db>(
-        db: &'db dyn scrap_shared::Db,
-        source: WrapFile,
-    ) -> scrap_shared::salsa::InputFile<'db> {
-        scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.source(db))
     }
 
     pub fn test_parser<'a, 'db>(
@@ -305,7 +290,7 @@ pub mod parse_test_utils {
         fn unwrap_or_render(self) -> T {
             match self {
                 Ok(v) => v,
-                Err(report) => render(&[report]),
+                Err(e) => e.raise_fatal(),
             }
         }
 

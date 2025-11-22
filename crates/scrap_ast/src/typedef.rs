@@ -1,6 +1,6 @@
 use crate::node_id::NodeId;
 use scrap_errors::ErrorGuaranteed;
-use scrap_shared::{pretty_print::PrettyPrint, path::Path};
+use scrap_shared::{path::Path, pretty_print::PrettyPrint};
 use scrap_span::Span;
 use thin_vec::ThinVec;
 

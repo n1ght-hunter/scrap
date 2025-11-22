@@ -85,37 +85,34 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 mod tests {
     use crate::parser::parse_test_utils::ExtendRes;
 
-    #[test]
-    fn test_parse_struct_def() {
-        let db = scrap_shared::salsa::ScrapDb::default();
+    #[scrap_macros::salsa_test]
+    fn test_parse_struct_def(db: &dyn scrap_shared::Db) {
         let mut parser = crate::parser::parse_test_utils::parse_with(
-            &db,
+            db,
             "struct MyStruct { pub field1: i32, field2: bool }",
         );
         let struct_def = parser.parse_struct_def().unwrap_or_render();
-        assert_eq!(struct_def.ident.name.text(&db), "MyStruct");
+        assert_eq!(struct_def.ident.name.text(db), "MyStruct");
         let data = struct_def.data.unwrap_struct();
         assert_eq!(data.len(), 2);
-        assert_eq!(data[0].ident.as_ref().unwrap().name.text(&db), "field1");
-        assert_eq!(data[1].ident.as_ref().unwrap().name.text(&db), "field2");
+        assert_eq!(data[0].ident.as_ref().unwrap().name.text(db), "field1");
+        assert_eq!(data[1].ident.as_ref().unwrap().name.text(db), "field2");
     }
 
-    #[test]
+    #[scrap_macros::salsa_test]
     #[should_panic]
-    fn test_parse_struct_def_missing_brace() {
-        let db = scrap_shared::salsa::ScrapDb::default();
+    fn test_parse_struct_def_missing_brace(db: &dyn scrap_shared::Db) {
         let mut parser = crate::parser::parse_test_utils::parse_with(
-            &db,
+            db,
             "struct MyStruct { field1: i32, field2: bool ",
         );
         parser.parse_struct_def().should_panic();
     }
 
-    #[test]
+    #[scrap_macros::salsa_test]
     #[should_panic]
-    fn test_parse_struct_def_missing_colon() {
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = crate::parser::parse_test_utils::parse_with(&db, "struct MyStruct,");
+    fn test_parse_struct_def_missing_colon(db: &dyn scrap_shared::Db) {
+        let mut parser = crate::parser::parse_test_utils::parse_with(db, "struct MyStruct,");
         parser.parse_struct_def().unwrap_or_render();
     }
 }

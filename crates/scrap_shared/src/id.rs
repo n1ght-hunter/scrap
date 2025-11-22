@@ -1,7 +1,5 @@
 use crate::path::Path;
 
-
-
 #[salsa::interned(debug, persist)]
 pub struct ModuleId {
     #[returns(ref)]

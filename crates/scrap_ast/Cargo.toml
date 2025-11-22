@@ -14,7 +14,6 @@ strum_macros.workspace = true
 salsa.workspace = true
 serde.workspace = true
 hashbrown.workspace = true
-radix_trie.workspace = true
 
 
 [lints]

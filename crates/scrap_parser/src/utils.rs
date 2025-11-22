@@ -6,18 +6,10 @@ pub fn render(report: &[Group]) -> ! {
 }
 
 pub trait ExtendRes<T> {
-    fn unwrap_or_render(self) -> T;
     fn should_panic(self) -> T;
 }
 
 impl<'a, T> ExtendRes<T> for crate::PResult<'a, T> {
-    fn unwrap_or_render(self) -> T {
-        match self {
-            Ok(v) => v,
-            Err(report) => render(&[report]),
-        }
-    }
-
     fn should_panic(self) -> T {
         match self {
             Ok(v) => v,

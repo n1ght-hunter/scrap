@@ -17,20 +17,18 @@ mod tests {
 
     use crate::parser::parse_test_utils::{ExtendRes, parse_with};
 
-    #[test]
-    fn parse_return() {
+    #[scrap_macros::salsa_test]
+    fn parse_return(db: &dyn scrap_shared::Db) {
         let source = "return;";
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = parse_with(&db, source);
+        let mut parser = parse_with(db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         assert!(matches!(expr.kind, ExprKind::Return(None)));
     }
 
-    #[test]
-    fn parse_return_with_expr() {
+    #[scrap_macros::salsa_test]
+    fn parse_return_with_expr(db: &dyn scrap_shared::Db) {
         let source = "return 42;";
-        let db = scrap_shared::salsa::ScrapDb::default();
-        let mut parser = parse_with(&db, source);
+        let mut parser = parse_with(db, source);
         let expr = parser.parse_expr().unwrap_or_render();
         match expr.kind {
             ExprKind::Return(Some(ret_expr)) => {

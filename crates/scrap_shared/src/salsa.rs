@@ -1,19 +1,40 @@
 use std::path::PathBuf;
 
+use scrap_diagnostics::Level;
+
 #[salsa::db]
 #[derive(Clone, Default)]
 pub struct ScrapDb {
     storage: salsa::Storage<Self>,
+    emitter: scrap_diagnostics::DiagnosticEmitter<'static>,
 }
 
 #[salsa::db]
 impl salsa::Database for ScrapDb {}
 
 #[salsa::db]
-pub trait Db: salsa::Database + Sync {}
+pub trait Db: salsa::Database + Sync {
+    /// get dignostic handler
+    fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a>;
+}
 
 #[salsa::db]
-impl Db for ScrapDb {}
+impl Db for ScrapDb {
+    fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a> {
+        // SAFETY: 'a is tied to self, so this is safe
+        #[allow(unsafe_code)]
+        unsafe { std::mem::transmute(&self.emitter)}
+    }
+}
+
+impl Drop for  ScrapDb {
+    fn drop(&mut self) {
+        // clear to make sure all inner references are dropped first
+        // may or maynot be necessary because of the transmute above
+        self.emitter.clear();
+    }
+    
+}
 
 #[salsa::tracked(debug, persist)]
 pub struct InputFile<'db> {
@@ -41,10 +62,20 @@ pub fn get_input_path(
 }
 
 #[salsa::tracked(persist)]
-pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> InputFile<'db> {
+pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> Option<InputFile<'db>> {
     tracing::debug!("Loading file: {}", input_path.path(db).display());
     let path = input_path.path(db);
-    let content = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("Failed to read file {}: {}", path.display(), e));
-    InputFile::new(db, path.clone(), content)
+    match std::fs::read_to_string(path) {
+        Ok(content) => return Some(InputFile::new(db, path.clone(), content)),
+        Err(e) => {
+            db.dcx().emit_err(Level::ERROR.primary_title("Failed to read file").element(
+                Level::HELP.message(format!(
+                    "Could not read file '{}': {}",
+                    path.display(),
+                    e
+                )),
+            ));
+            return None;
+        }
+    };
 }
