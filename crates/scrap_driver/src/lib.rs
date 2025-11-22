@@ -80,14 +80,16 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if let Some(mode) = determine_pp_mode(args) {
         if mode.needs_ir() {
             // Resolve modules, lower to IR and print
-            let filled_entry_file = resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+            let filled_entry_file =
+                resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
             db.attach(|db| {
                 let lowered_ir = lower_to_ir(args, db, entry_file, &other_files);
                 pretty::print(db, mode, &filled_entry_file, Some(lowered_ir));
             });
         } else {
             // Resolve modules and print AST
-            let filled_entry_file = resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
+            let filled_entry_file =
+                resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
             db.attach(|db| {
                 pretty::print(db, mode, &filled_entry_file, None);
             });
@@ -181,15 +183,18 @@ fn resolve_modules<'db>(
 
     // Fill in unloaded modules in the entry file
     let filled_entry_file = entry_file.ast(db).unwrap_can().iter_modules_mut(|iter| {
-        iter.filter(|m| matches!(m.1, scrap_ast::module::Module::Unloaded))
+        iter.filter(|m| matches!(m.1.kind(db), scrap_ast::module::ModuleKind::Unloaded))
             .for_each(|(path, module)| {
                 if let Some(items) = modules_map.get(&path.to_key())
                     && let scrap_parser::CanOrModule::Module(_, items) = items
                 {
-                    *module = scrap_ast::module::Module::Loaded(
-                        items.clone(),
-                        scrap_ast::module::Inline::No,
-                        scrap_span::new_dummy_span(db),
+                    *module = scrap_ast::module::Module::new(
+                        db,
+                        scrap_ast::module::ModuleKind::Loaded(
+                            items.clone(),
+                            scrap_ast::module::Inline::No,
+                            scrap_span::new_dummy_span(db),
+                        ),
                     );
                 } else {
                     base_emiter.render_single(
@@ -236,7 +241,7 @@ fn index_modules<'db>(
                     .to_key(),
                     scrap_parser::CanOrModule::Can(can.clone()),
                 );
-                iter_index(map, &mut can.iter_modules());
+                iter_index(db, map, &mut can.iter_modules());
             }
             scrap_parser::CanOrModule::Module(path, items) => {
                 map.insert(
@@ -244,6 +249,7 @@ fn index_modules<'db>(
                     scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
                 );
                 iter_index(
+                    db,
                     map,
                     &mut items.iter().filter_map(|item| {
                         if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind
@@ -260,6 +266,7 @@ fn index_modules<'db>(
 }
 
 fn iter_index<'db>(
+    db: &'db dyn scrap_shared::Db,
     map: &mut radix_trie::Trie<scrap_ast::path::PathKey<'db>, scrap_parser::CanOrModule<'db>>,
     items: &mut dyn Iterator<
         Item = (
@@ -269,12 +276,13 @@ fn iter_index<'db>(
     >,
 ) {
     items.for_each(|(path, module)| {
-        if let Module::Loaded(items, _, _) = module {
+        if let scrap_ast::module::ModuleKind::Loaded(items, _, _) = module.kind(db) {
             map.insert(
                 path.to_key(),
                 scrap_parser::CanOrModule::Module(path.clone(), items.clone()),
             );
             iter_index(
+                db,
                 map,
                 &mut items.iter().filter_map(|item| {
                     if let scrap_ast::item::ItemKind::Module(sub_path, sub_module) = &item.kind {

@@ -158,9 +158,9 @@ mod tests {
                     ident.segments.last().unwrap().ident.name.text(&db),
                     "my_module"
                 );
-                match module {
-                    Module::Loaded(_, inline, span) => {
-                        assert_eq!(inline, Inline::Yes);
+                match module.kind(&db) {
+                    scrap_ast::module::ModuleKind::Loaded(_, inline, span) => {
+                        assert_eq!(*inline, Inline::Yes);
                         assert_eq!(span.to_range(&db), 0..17);
                     }
                     _ => panic!("Expected loaded module"),
@@ -181,8 +181,8 @@ mod tests {
                     ident.segments.last().unwrap().ident.name.text(&db),
                     "my_module"
                 );
-                match module {
-                    Module::Unloaded => {}
+                match module.kind(&db) {
+                    scrap_ast::module::ModuleKind::Unloaded => {}
                     _ => panic!("Expected loaded module"),
                 }
             }

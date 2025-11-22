@@ -11,30 +11,40 @@ pub enum Inline {
     No,
 }
 
-#[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
-)]
-pub enum Module<'db> {
-    /// Module with inlined definition `mod foo { ... }`,
-    /// or with definition outlined to a separate file `mod foo;` and already loaded from it.
-    /// The inner span is from the `mod` to the `}`,
-    /// or from the first to the last token in the loaded file.
-    Loaded(ThinVec<Box<Item<'db>>>, Inline, Span<'db>),
-
-    Unloaded,
+#[salsa::tracked(debug, persist)]
+pub struct Module<'db> {
+    #[returns(ref)]
+    pub kind: ModuleKind<'db>,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Module<'db> {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        salsa::with_attached_database(|db| self.kind(db).pretty_print(f))
+            .unwrap_or_else(|| f.write_str("<no db>"))?;
+
+        Ok(())
+    }
+}
+
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub enum ModuleKind<'db> {
+    Loaded(ThinVec<Box<Item<'db>>>, Inline, Span<'db>),
+    Unloaded,
+}
+
+impl<'db> scrap_shared::pretty_print::PrettyPrint for ModuleKind<'db> {
+    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         match self {
-            Module::Loaded(items, _, _) => {
+            ModuleKind::Loaded(items, _, _) => {
                 write!(f, "{{")?;
                 for item in items.iter() {
                     item.pretty_print(f)?;
                 }
                 write!(f, "}}")
             }
-            Module::Unloaded => write!(f, "<unloaded module>"),
+            ModuleKind::Unloaded => write!(f, "<unloaded module>"),
         }
     }
 }

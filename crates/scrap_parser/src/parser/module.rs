@@ -1,6 +1,6 @@
 use scrap_ast::{
     item::{Item, ItemKind},
-    module::{Inline, Module},
+    module::{Inline, Module, ModuleKind},
 };
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_lexer::Token;
@@ -21,17 +21,20 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.eat(Token::Semicolon) {
             Ok(ItemKind::Module(
                 self.current_module_path().to_owned(),
-                Module::Unloaded,
+                Module::new(self.db, ModuleKind::Unloaded),
             ))
         } else if self.eat(Token::LBrace) {
             let items = self.parse_module_inner(Token::RBrace)?;
 
             Ok(ItemKind::Module(
                 self.current_module_path().to_owned(),
-                Module::Loaded(
-                    items,
-                    Inline::Yes,
-                    Span::new(self.db, start_span, self.token.span.end(self.db)),
+                Module::new(
+                    self.db,
+                    ModuleKind::Loaded(
+                        items,
+                        Inline::Yes,
+                        Span::new(self.db, start_span, self.token.span.end(self.db)),
+                    ),
                 ),
             ))
         } else {
@@ -83,9 +86,9 @@ mod tests {
                     ident.segments.last().unwrap().ident.name.text(&db),
                     "my_module"
                 );
-                match module {
-                    Module::Loaded(items, inline, span) => {
-                        assert_eq!(inline, Inline::Yes);
+                match module.kind(&db) {
+                    scrap_ast::module::ModuleKind::Loaded(items, inline, span) => {
+                        assert_eq!(*inline, Inline::Yes);
                         assert_eq!(span.to_range(&db), 0..37);
                         assert_eq!(items.len(), 1);
                         match &items[0].kind {
