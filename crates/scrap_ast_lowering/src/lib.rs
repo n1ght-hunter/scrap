@@ -8,7 +8,7 @@ use scrap_ast::{
     typedef::{Ty, TyKind},
 };
 use scrap_ir as ir;
-use scrap_shared::{id::ModuleId, ident::Symbol};
+use scrap_shared::id::ModuleId;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {

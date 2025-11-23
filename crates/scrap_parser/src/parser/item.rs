@@ -103,7 +103,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
 #[cfg(test)]
 mod tests {
-    use scrap_ast::module::{Inline, Module};
+    use scrap_ast::module::Inline;
 
     use crate::parser::parse_test_utils::ExtendRes;
 

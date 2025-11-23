@@ -11,15 +11,10 @@
 )]
 
 use parser::{Parser, State};
-use scrap_ast::{
-    item::Item,
-    module::{Module, ModuleKind},
-};
-use scrap_diagnostics::annotate_snippets::Group;
+use scrap_ast::module::{Module, ModuleKind};
 use scrap_errors::ErrorGuaranteed;
 use scrap_lexer::{Token, token_stream::TokenStreamCursor};
-use scrap_shared::{ident::Ident, path::Path};
-use thin_vec::ThinVec;
+use scrap_shared::path::Path;
 
 mod errors;
 pub mod parser;

@@ -1,4 +1,4 @@
-use scrap_diagnostics::{Level, annotate_snippets::Group};
+use scrap_diagnostics::Level;
 use scrap_errors::ErrorGuaranteed;
 use scrap_lexer::Token;
 

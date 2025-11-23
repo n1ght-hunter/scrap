@@ -23,17 +23,18 @@ impl Db for ScrapDb {
     fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a> {
         // SAFETY: 'a is tied to self, so this is safe
         #[allow(unsafe_code)]
-        unsafe { std::mem::transmute(&self.emitter)}
+        unsafe {
+            std::mem::transmute(&self.emitter)
+        }
     }
 }
 
-impl Drop for  ScrapDb {
+impl Drop for ScrapDb {
     fn drop(&mut self) {
         // clear to make sure all inner references are dropped first
         // may or maynot be necessary because of the transmute above
         self.emitter.clear();
     }
-    
 }
 
 #[salsa::tracked(debug, persist)]
@@ -68,13 +69,10 @@ pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> Option<Inp
     match std::fs::read_to_string(path) {
         Ok(content) => return Some(InputFile::new(db, path.clone(), content)),
         Err(e) => {
-            db.dcx().emit_err(Level::ERROR.primary_title("Failed to read file").element(
-                Level::HELP.message(format!(
-                    "Could not read file '{}': {}",
-                    path.display(),
-                    e
-                )),
-            ));
+            db.dcx()
+                .emit_err(Level::ERROR.primary_title("Failed to read file").element(
+                    Level::HELP.message(format!("Could not read file '{}': {}", path.display(), e)),
+                ));
             return None;
         }
     };

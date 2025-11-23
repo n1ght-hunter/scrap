@@ -8,8 +8,6 @@ use std::ffi::OsString;
 use args::{PrettyOut, UnPrettyOut};
 use clap::Parser;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use salsa::Database;
-use scrap_ast::module::Module;
 use scrap_diagnostics::Level;
 use scrap_errors::SimpleError;
 use scrap_shared::Db;
@@ -74,7 +72,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let db = &*db_mut;
 
     // Phase 1: Parse files
-    let (entry_file, other_files) = parse_input_files(args, db)?;
+    let (_entry_file, _other_files) = parse_input_files(args, db)?;
 
     if db.dcx().has_errors() {
         db.dcx().render_all();
@@ -91,7 +89,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     }
 
     // Phase 2: Pretty print if requested
-    if let Some(mode) = determine_pp_mode(args) {
+    if let Some(_mode) = determine_pp_mode(args) {
         // if mode.needs_ir() {
         //     // Resolve modules, lower to IR and print
         //     let filled_entry_file =

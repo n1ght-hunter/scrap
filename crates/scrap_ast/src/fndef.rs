@@ -1,4 +1,3 @@
-use salsa::SalsaAsDeref;
 use scrap_span::Span;
 use thin_vec::ThinVec;
 

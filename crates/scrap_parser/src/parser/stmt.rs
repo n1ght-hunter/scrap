@@ -1,8 +1,6 @@
 use scrap_ast::stmt::{Stmt, StmtKind};
 use scrap_lexer::Token;
 
-use crate::utils::ExtendRes;
-
 impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_stmt(&mut self) -> crate::PResult<'a, Stmt<'db>> {
         if self.check(Token::Let) {

@@ -221,7 +221,7 @@ mod tests {
         let source = "let x = 5;\nlet y = x + ;\n";
         let file_name = "test.sc";
 
-        let mut emitter = DiagnosticEmitter::new().with_auto_render(true);
+        let emitter = DiagnosticEmitter::new().with_auto_render(true);
 
         emitter.emit_err(
             Level::ERROR
