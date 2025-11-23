@@ -21,8 +21,8 @@ pub struct Expr<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Expr<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        self.kind.pretty_print(f)
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
+        self.kind.pretty_print_indent(f, indent)
     }
 }
 
@@ -67,7 +67,7 @@ pub enum ExprKind<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         match self {
             ExprKind::Array(elements) => {
                 write!(f, "[")?;
@@ -75,18 +75,68 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    elem.pretty_print(f)?;
+                    elem.pretty_print_indent(f, indent)?;
                 }
                 write!(f, "]")
             }
-            ExprKind::Lit(lit) => lit.pretty_print(f),
-            ExprKind::Path(path) => path.pretty_print(f),
-            ExprKind::Paren(expr) => {
+            ExprKind::Call(callee, args) => {
+                callee.pretty_print_indent(f, indent)?;
                 write!(f, "(")?;
-                expr.pretty_print(f)?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    arg.pretty_print_indent(f, indent)?;
+                }
                 write!(f, ")")
             }
-            _ => write!(f, "<expr>"), // Placeholder for other kinds
+            ExprKind::Binary(op, left, right) => {
+                left.pretty_print_indent(f, indent)?;
+                write!(f, " ")?;
+                op.node.pretty_print(f)?;
+                write!(f, " ")?;
+                right.pretty_print_indent(f, indent)
+            }
+            ExprKind::Lit(lit) => lit.pretty_print_indent(f, indent),
+            ExprKind::If(cond, then_block, else_expr) => {
+                write!(f, "if ")?;
+                cond.pretty_print_indent(f, indent)?;
+                write!(f, " ")?;
+                then_block.pretty_print_indent(f, indent)?;
+                if let Some(else_expr) = else_expr {
+                    write!(f, " else ")?;
+                    else_expr.pretty_print_indent(f, indent)?;
+                }
+                Ok(())
+            }
+            ExprKind::Block(block) => block.pretty_print_indent(f, indent),
+            ExprKind::Path(path) => path.pretty_print_indent(f, indent),
+            ExprKind::Paren(expr) => {
+                write!(f, "(")?;
+                expr.pretty_print_indent(f, indent)?;
+                write!(f, ")")
+            }
+            ExprKind::Return(expr) => {
+                write!(f, "return")?;
+                if let Some(expr) = expr {
+                    write!(f, " ")?;
+                    expr.pretty_print_indent(f, indent)?;
+                }
+                Ok(())
+            }
+            ExprKind::Assign(lhs, rhs, _span) => {
+                lhs.pretty_print_indent(f, indent)?;
+                write!(f, " = ")?;
+                rhs.pretty_print_indent(f, indent)
+            }
+            ExprKind::AssignOp(op, lhs, rhs) => {
+                lhs.pretty_print_indent(f, indent)?;
+                write!(f, " ")?;
+                op.node.pretty_print(f)?;
+                write!(f, " ")?;
+                rhs.pretty_print_indent(f, indent)
+            }
+            ExprKind::Err => write!(f, "<error>"),
         }
     }
 }

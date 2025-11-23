@@ -14,7 +14,7 @@ pub struct EnumDef<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "enum {} {{\n", {
             let mut s = String::new();
             self.ident.pretty_print(&mut s).unwrap();
@@ -41,7 +41,7 @@ pub struct Variant<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Variant<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.ident.pretty_print(f)?;
         match &self.data {
             VariantData::Struct { fields } => {

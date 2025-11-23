@@ -20,8 +20,8 @@ pub struct Module<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Module<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        salsa::with_attached_database(|db| self.kind(db).pretty_print(f))
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
+        salsa::with_attached_database(|db| self.kind(db).pretty_print_indent(f, indent))
             .unwrap_or_else(|| f.write_str("<no db>"))?;
 
         Ok(())
@@ -37,13 +37,15 @@ pub enum ModuleKind<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ModuleKind<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         match self {
             ModuleKind::Loaded(items, _, _) => {
-                write!(f, "{{")?;
+                writeln!(f, "{{")?;
                 for item in items.iter() {
-                    item.pretty_print(f)?;
+                    item.pretty_print_indent(f, indent + 1)?;
+                    writeln!(f)?;
                 }
+                Self::write_indent(f, indent)?;
                 write!(f, "}}")
             }
             ModuleKind::Unloaded => write!(f, "<unloaded module>"),

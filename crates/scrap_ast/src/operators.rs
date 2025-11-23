@@ -19,7 +19,7 @@ pub enum AssocOp {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for AssocOp {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self {
             AssocOp::Assign => write!(f, "="),
             AssocOp::Binary(kind) => kind.pretty_print(f),

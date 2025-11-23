@@ -15,7 +15,7 @@ pub struct FieldDef<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for FieldDef<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         if let Some(ident) = &self.ident {
             ident.pretty_print(f)?;
             write!(f, ": ")?;

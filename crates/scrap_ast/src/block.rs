@@ -14,11 +14,13 @@ pub struct Block<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Block<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        write!(f, "{{")?;
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
+        writeln!(f, "{{")?;
         for stmt in &self.stmts {
-            stmt.pretty_print(f)?;
+            stmt.pretty_print_indent(f, indent + 1)?;
+            writeln!(f)?;
         }
+        Self::write_indent(f, indent)?;
         write!(f, "}}")
     }
 }

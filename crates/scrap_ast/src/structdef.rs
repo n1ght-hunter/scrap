@@ -11,7 +11,7 @@ pub struct StructDef<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for StructDef<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "struct {} ", self.ident.pretty_to_string())?;
         match &self.data {
             VariantData::Struct { fields } => {

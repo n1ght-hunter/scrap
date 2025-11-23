@@ -14,7 +14,7 @@ pub struct Ty<'db> {
 }
 
 impl<'db> PrettyPrint for Ty<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.kind.pretty_print(f)
     }
 }
@@ -31,7 +31,7 @@ pub enum TyKind<'db> {
 }
 
 impl<'db> PrettyPrint for TyKind<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self {
             TyKind::Path(path) => path.pretty_print(f),
             TyKind::Tup(types) => {

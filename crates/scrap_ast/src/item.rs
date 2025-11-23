@@ -19,8 +19,9 @@ pub struct Item<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Item<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        self.kind.pretty_print(f)
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
+        Self::write_indent(f, indent)?;
+        self.kind.pretty_print_indent(f, indent)
     }
 }
 
@@ -45,21 +46,22 @@ pub enum ItemKind<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         match self {
-            ItemKind::Fn(fndef) => fndef.pretty_print(f),
-            ItemKind::Enum(enumdef) => enumdef.pretty_print(f),
-            ItemKind::Struct(structdef) => structdef.pretty_print(f),
+            ItemKind::Fn(fndef) => fndef.pretty_print_indent(f, indent),
+            ItemKind::Enum(enumdef) => enumdef.pretty_print_indent(f, indent),
+            ItemKind::Struct(structdef) => structdef.pretty_print_indent(f, indent),
             ItemKind::Module(module) => {
                 salsa::with_attached_database(|db| {
                     write!(f, "mod {} ", { module.id(db).path(db).pretty_to_string() })
                 })
                 .unwrap_or_else(|| write!(f, "mod <no db> "))?;
-                module.pretty_print(f)
+                module.pretty_print_indent(f, indent)
             }
             ItemKind::Use(use_tree) => {
                 write!(f, "use ")?;
-                use_tree.pretty_print(f)
+                use_tree.pretty_print_indent(f, indent)?;
+                write!(f, ";")
             }
         }
     }
@@ -75,13 +77,13 @@ pub struct UseTree<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for UseTree<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        self.prefix.pretty_print(f)?;
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
+        self.prefix.pretty_print_indent(f, 0)?;
         match &self.kind {
             UseTreeKind::Simple(alias) => {
                 if let Some(alias_ident) = alias {
                     write!(f, " as ")?;
-                    alias_ident.pretty_print(f)?;
+                    alias_ident.pretty_print_indent(f, 0)?;
                 }
                 Ok(())
             }
@@ -91,7 +93,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for UseTree<'db> {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    item.pretty_print(f)?;
+                    item.pretty_print_indent(f, 0)?;
                 }
                 write!(f, "}}")
             }

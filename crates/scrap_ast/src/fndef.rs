@@ -21,24 +21,24 @@ pub struct FnDef<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         let res = salsa::with_attached_database(|db| {
             write!(f, "fn ")?;
-            self.ident(db).pretty_print(f)?;
+            self.ident(db).pretty_print_indent(f, 0)?;
             write!(f, "(")?;
             for (i, param) in self.args(db).iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                param.pretty_print(f)?;
+                param.pretty_print_indent(f, 0)?;
             }
             write!(f, ")")?;
             if let Some(ret_type) = &self.ret_type(db) {
                 write!(f, " -> ")?;
-                ret_type.pretty_print(f)?;
+                ret_type.pretty_print_indent(f, 0)?;
             }
             write!(f, " ")?;
-            self.body(db).pretty_print(f)?;
+            self.body(db).pretty_print_indent(f, indent)?;
 
             Ok(())
         });
@@ -61,9 +61,9 @@ pub struct Param<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Param<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        self.ident.pretty_print(f)?;
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
+        self.ident.pretty_print_indent(f, 0)?;
         write!(f, ": ")?;
-        self.ty.pretty_print(f)
+        self.ty.pretty_print_indent(f, 0)
     }
 }

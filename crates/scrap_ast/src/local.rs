@@ -16,18 +16,18 @@ pub struct Local<'db> {
 }
 
 impl<'db> PrettyPrint for Local<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "let ")?;
-        self.pat.pretty_print(f)?;
+        self.pat.pretty_print_indent(f, 0)?;
         if let Some(ty) = &self.ty {
             write!(f, ": ")?;
-            ty.pretty_print(f)?;
+            ty.pretty_print_indent(f, 0)?;
         }
         match &self.kind {
             LocalKind::Decl => {}
             LocalKind::Init(expr) => {
                 write!(f, " = ")?;
-                expr.pretty_print(f)?;
+                expr.pretty_print_indent(f, 0)?;
             }
         }
         write!(f, ";")

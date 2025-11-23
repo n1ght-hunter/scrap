@@ -12,7 +12,7 @@ pub struct Ident<'db> {
 }
 
 impl<'db> PrettyPrint for Ident<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         let name = salsa::with_attached_database(|db| self.name.text(db).to_owned())
             .unwrap_or("<invalid>".to_string());
         write!(f, "{}", name)

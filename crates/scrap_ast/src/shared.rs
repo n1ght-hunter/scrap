@@ -13,12 +13,12 @@ pub struct Visibility<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match &self.kind {
             VisibilityKind::Public => write!(f, "pub"),
             VisibilityKind::Restricted { path, .. } => {
                 write!(f, "pub(")?;
-                path.pretty_print(f)?;
+                path.pretty_print_indent(f, 0)?;
                 write!(f, ")")
             }
             VisibilityKind::Inherited => Ok(()),

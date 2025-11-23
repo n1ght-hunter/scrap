@@ -20,7 +20,7 @@ pub struct Lit<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Lit<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self.kind {
             LitKind::Bool => write!(f, "<bool literal>"),
             LitKind::Integer => write!(f, "<integer literal>"),

@@ -42,7 +42,7 @@ pub struct Pat<'db> {
 }
 
 impl<'db> PrettyPrint for Pat<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match &self.kind {
             PatKind::Missing => write!(f, "_"),
             PatKind::Ident(binding_mode, ident, subpat) => {

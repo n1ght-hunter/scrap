@@ -40,11 +40,11 @@ pub struct Can<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Can<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         salsa::with_attached_database(|db| {
             for item in self.items(db) {
-                item.pretty_print(f)?;
-                write!(f, "\n")?;
+                item.pretty_print_indent(f, indent)?;
+                writeln!(f)?;
             }
             Ok(())
         })

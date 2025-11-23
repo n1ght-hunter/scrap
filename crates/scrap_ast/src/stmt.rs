@@ -20,8 +20,9 @@ pub struct Stmt<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Stmt<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
-        self.kind.pretty_print(f)
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
+        Self::write_indent(f, indent)?;
+        self.kind.pretty_print_indent(f, indent)
     }
 }
 
@@ -45,13 +46,13 @@ pub enum StmtKind<'db> {
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for StmtKind<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         match self {
-            StmtKind::Let(local) => local.pretty_print(f),
-            StmtKind::Item(item) => item.pretty_print(f),
-            StmtKind::Expr(expr) => expr.pretty_print(f),
+            StmtKind::Let(local) => local.pretty_print_indent(f, indent),
+            StmtKind::Item(item) => item.pretty_print_indent(f, 0),
+            StmtKind::Expr(expr) => expr.pretty_print_indent(f, indent),
             StmtKind::Semi(expr) => {
-                expr.pretty_print(f)?;
+                expr.pretty_print_indent(f, indent)?;
                 write!(f, ";")
             }
             StmtKind::Empty => write!(f, ";"),

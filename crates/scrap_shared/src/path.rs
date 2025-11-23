@@ -28,12 +28,12 @@ pub struct Path<'db> {
 }
 
 impl<'db> PrettyPrint for Path<'db> {
-    fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         for (i, segment) in self.segments.iter().enumerate() {
             if i > 0 {
                 write!(f, "::")?;
             }
-            segment.ident.pretty_print(f)?;
+            segment.ident.pretty_print_indent(f, 0)?;
         }
         Ok(())
     }
