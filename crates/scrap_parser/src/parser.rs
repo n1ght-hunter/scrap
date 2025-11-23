@@ -5,6 +5,7 @@ use scrap_ast::Can;
 use scrap_ast::Recovered;
 use scrap_ast::Visibility;
 use scrap_lexer::Token;
+use scrap_shared::id::ModuleId;
 use scrap_shared::{NodeId, ident::Ident, path::Path};
 
 use scrap_lexer::token_stream::TokenStreamCursor;
@@ -58,6 +59,8 @@ pub struct Parser<'a, 'db> {
     pub(crate) state: State<'a>,
     pub(crate) db: &'db dyn scrap_shared::Db,
     pub(crate) current_module_path: Rc<RefCell<Path<'db>>>,
+    /// All inlined modules parsed so far
+    pub modules: Vec<scrap_ast::module::Module<'db>>,
 }
 
 impl<'a, 'db> Parser<'a, 'db> {
@@ -78,6 +81,7 @@ impl<'a, 'db> Parser<'a, 'db> {
             state,
             db,
             current_module_path: Rc::new(RefCell::new(root_path)),
+            modules: Vec::new(),
         }
     }
 
@@ -194,8 +198,9 @@ impl<'a, 'db> Parser<'a, 'db> {
 
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
         let id = self.state.new_node_id();
+        let name = ModuleId::new(self.db, self.current_module_path.borrow().clone());
         let items = self.parse_module_inner(Token::Eof)?;
-        Ok(Can::new(self.db, id, items))
+        Ok(Can::new(self.db, id, name, items))
     }
 
     pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility<'db>> {

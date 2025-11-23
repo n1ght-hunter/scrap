@@ -21,6 +21,7 @@ pub mod stmt;
 pub mod structdef;
 pub mod typedef;
 
+use scrap_shared::id::ModuleId;
 pub use shared::*;
 mod shared;
 
@@ -32,6 +33,8 @@ use thin_vec::ThinVec;
 #[salsa::tracked(debug, persist)]
 pub struct Can<'db> {
     pub id: NodeId,
+    #[returns(ref)]
+    pub name: ModuleId<'db>,
     #[returns(ref)]
     pub items: ThinVec<Box<Item<'db>>>,
 }

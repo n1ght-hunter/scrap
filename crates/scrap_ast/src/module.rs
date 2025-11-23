@@ -5,7 +5,7 @@ use thin_vec::ThinVec;
 use crate::item::Item;
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum Inline {
     Yes,

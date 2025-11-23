@@ -27,6 +27,8 @@ pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 pub struct ParsedFile<'db> {
     #[returns(ref)]
     pub ast: CanOrModule<'db>,
+    #[returns(ref)]
+    pub modules: Vec<scrap_ast::module::Module<'db>>,
 }
 
 #[derive(
@@ -51,6 +53,23 @@ impl<'db> CanOrModule<'db> {
             CanOrModule::Can(_) => panic!("Expected Module, found Can"),
         }
     }
+
+    pub fn to_module(&self, db: &'db dyn scrap_shared::Db) -> scrap_ast::module::Module<'db> {
+        match self {
+            CanOrModule::Module(module) => module.clone(),
+            CanOrModule::Can(can) => {
+                scrap_ast::module::Module::new(
+                    db,
+                    can.name(db).clone(),
+                    ModuleKind::Loaded(
+                        can.items(db).clone(),
+                        scrap_ast::module::Inline::Yes,
+                        scrap_span::new_dummy_span(db),
+                    ),
+                )
+            }
+        }
+    }
 }
 
 #[salsa::tracked(persist)]
@@ -68,9 +87,13 @@ pub fn parse_tokens<'db>(
     let id = scrap_shared::id::ModuleId::new(db, path.clone());
     let mut parser = Parser::new(db, file.content(db), token_stream, state, path.clone());
     let ast = if is_root {
-        parser
-            .parse_can()
-            .map(|ast| ParsedFile::new(db, CanOrModule::Can(ast)))
+        parser.parse_can().map(|ast| {
+            ParsedFile::new(
+                db,
+                CanOrModule::Can(ast),
+                std::mem::take(&mut parser.modules),
+            )
+        })
     } else {
         parser.parse_module_inner(Token::Eof).map(|ast| {
             ParsedFile::new(
@@ -84,6 +107,7 @@ pub fn parse_tokens<'db>(
                         scrap_span::new_dummy_span(db),
                     ),
                 )),
+                std::mem::take(&mut parser.modules),
             )
         })
     };

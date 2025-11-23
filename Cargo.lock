@@ -1072,6 +1072,7 @@ dependencies = [
  "anyhow",
  "clap",
  "crossbeam-channel",
+ "hashbrown 0.16.1",
  "pathdiff",
  "rayon",
  "salsa",
@@ -1086,6 +1087,7 @@ dependencies = [
  "scrap_span",
  "serde",
  "serde_json",
+ "thin-vec",
  "tracing",
 ]
 

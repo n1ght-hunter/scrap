@@ -108,8 +108,8 @@ impl<'a> DiagnosticInner<'a> {
         )
     }
 
-    fn all_non_rendered(&self, render: impl Fn(Report) + Sync + Send) {
-        let render = |input: &parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>| {
+    fn all_non_rendered(&self, render: impl Fn(Level, Report) + Sync + Send) {
+        let render = |level: Level, input: &parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>| {
             let mut guard = input.lock();
             let report = guard
                 .par_iter_mut()
@@ -123,13 +123,14 @@ impl<'a> DiagnosticInner<'a> {
                 })
                 .collect::<Vec<_>>();
             if !report.is_empty() {
-                render(&report);
+                render(level, &report);
             }
         };
         rayon::scope(|s| {
-            s.spawn(|_| render(&self.errors));
-            s.spawn(|_| render(&self.warnings));
-            s.spawn(|_| render(&self.others));
+            s.spawn(|_| render(Level::ERROR, &self.errors));
+            s.spawn(|_| render(Level::WARNING, &self.warnings));
+            // info is used for "other" diagnostics
+            s.spawn(|_| render(Level::INFO, &self.others));
         });
     }
 }
@@ -189,14 +190,21 @@ impl<'a> DiagnosticEmitter<'a> {
     }
 
     pub fn render_all(&self) {
-        self.diagnostics.all_non_rendered(|report| {
-            self.render(report);
-        });
+        self.diagnostics
+            .all_non_rendered(|level, report| match level {
+                Level::ERROR | Level::WARNING => self.render(report),
+                _ => self.render_stderr(report),
+            });
     }
 
-    /// Renders a single Diagnostic into a formatted string.
-    pub fn render(&self, report: Report) {
-        anstream::println!("{}", self.renderer.render(report));
+    /// Renders a single Diagnostic into a formatted string and prints it to stderr.
+    pub fn render_stderr(&self, report: Report) {
+        anstream::eprintln!("{}", self.renderer.render(report));
+    }
+
+    /// Renders multiple Diagnostics into formatted strings and prints them to stderr.
+    pub fn render(&self, reports: Report) {
+        anstream::eprintln!("{}", self.renderer.render(reports));
     }
 }
 

@@ -27,8 +27,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             )))
         } else if self.eat(Token::LBrace) {
             let items = self.parse_module_inner(Token::RBrace)?;
-
-            Ok(ItemKind::Module(Module::new(
+            let module = Module::new(
                 self.db,
                 ModuleId::new(self.db, self.current_module_path().to_owned()),
                 ModuleKind::Loaded(
@@ -36,7 +35,10 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                     Inline::Yes,
                     Span::new(self.db, start_span, self.token.span.end(self.db)),
                 ),
-            )))
+            );
+            self.modules.push(module.clone());
+
+            Ok(ItemKind::Module(module))
         } else {
             Err(self.db.dcx().emit_err(
                 Level::ERROR
