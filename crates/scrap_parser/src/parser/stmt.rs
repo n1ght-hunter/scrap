@@ -12,7 +12,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             });
         }
 
-        if let Ok(item) = self.parse_item() {
+        if self.check_item() {
+            let item = self.parse_item()?;
             return Ok(Stmt {
                 id: self.state.new_node_id(),
                 span: item.span,

@@ -6,6 +6,18 @@ use scrap_span::Span;
 use strum::IntoEnumIterator;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
+    pub fn check_item(&mut self) -> bool {
+        let current_idx = self.position();
+        let _ = self.parse_visibility();
+        let res = self.check_fn_def()
+            || self.check_module()
+            || self.check_struct_def()
+            || self.check_enum_def()
+            || self.check(Token::Use);
+        self.set_position(current_idx);
+        res
+    }
+
     pub fn parse_item(&mut self) -> crate::PResult<'a, Box<Item<'db>>> {
         let start_span = self.token.span;
         let vis = self.parse_visibility()?;
