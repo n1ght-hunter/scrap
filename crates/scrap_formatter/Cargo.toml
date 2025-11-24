@@ -1,0 +1,19 @@
+[package]
+name = "scrap_formatter"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scrap_lexer = { workspace = true }
+scrap_parser_rowan = { workspace = true }
+scrap_shared = { workspace = true }
+pretty = { workspace = true }
+rowan = { workspace = true }
+salsa = { workspace = true }
+
+[dev-dependencies]
+expect-test = "1.4"
+
+[[bin]]
+name = "scrap-fmt"
+path = "src/bin/scrap-fmt.rs"

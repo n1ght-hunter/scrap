@@ -1,0 +1,16 @@
+[package]
+name = "scrap_parser_rowan"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rowan = { workspace = true }
+text-size = { workspace = true }
+scrap_lexer = { workspace = true }
+scrap_span = { workspace = true }
+scrap_shared = { workspace = true }
+salsa = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+expect-test = "1.4"

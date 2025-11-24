@@ -116,22 +116,59 @@ pub struct TokenStreamCursor<'db> {
 impl<'db> TokenStreamCursor<'db> {
     #[inline]
     pub fn new(stream: TokenStream<'db>) -> Self {
-        TokenStreamCursor { stream, index: 0 }
+        let mut cursor = TokenStreamCursor { stream, index: 0 };
+        // Skip initial trivia tokens
+        cursor.skip_trivia();
+        cursor
+    }
+
+    /// Skip trivia tokens (whitespace and comments)
+    fn skip_trivia(&mut self) {
+        while let Some(token) = self.stream.get(self.index) {
+            if token.node.is_trivia() {
+                self.index += 1;
+            } else {
+                break;
+            }
+        }
     }
 
     #[inline]
-    /// Get the current token.
+    /// Get the current token (skips trivia).
     pub fn curr(&self) -> Option<Spanned<'db, Token>> {
         self.stream.get(self.index).copied()
     }
 
+    /// Get the current token including trivia (for Rowan parser).
+    pub fn curr_with_trivia(&self) -> Option<Spanned<'db, Token>> {
+        self.stream.get(self.index).copied()
+    }
+
     pub fn look_ahead(&self, n: usize) -> Option<&Spanned<'db, Token>> {
-        self.stream.get(self.index + n)
+        // Look ahead skipping trivia
+        let mut count = 0;
+        let mut idx = self.index;
+        while count <= n {
+            if let Some(token) = self.stream.get(idx) {
+                if !token.node.is_trivia() {
+                    if count == n {
+                        return Some(token);
+                    }
+                    count += 1;
+                }
+                idx += 1;
+            } else {
+                return None;
+            }
+        }
+        None
     }
 
     #[inline]
     pub fn bump(&mut self) {
         self.index += 1;
+        // Skip trivia after bumping
+        self.skip_trivia();
     }
 
     pub fn eof(&self) -> bool {

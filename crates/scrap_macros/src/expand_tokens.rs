@@ -147,13 +147,6 @@ pub(crate) fn expand_tokens_impl(input: TokenStream) -> TokenStream {
 
     let mut token_enum = token_enum.unwrap();
 
-    // Remove processed attributes from Token enum variants but keep enum-level attributes
-    for variant in &mut token_enum.variants {
-        variant
-            .attrs
-            .retain(|attr| !attr.path().is_ident("display"));
-    }
-
     let all_name = all_variants.iter().map(|v| &v.ident).collect::<Vec<_>>();
 
     // Generate is_* methods for each sub-enum
@@ -236,6 +229,13 @@ pub(crate) fn expand_tokens_impl(input: TokenStream) -> TokenStream {
     } else {
         quote! {}
     };
+
+    // Remove processed attributes from Token enum variants but keep enum-level attributes
+    for variant in &mut token_enum.variants {
+        variant
+            .attrs
+            .retain(|attr| !attr.path().is_ident("display"));
+    }
 
     quote! {
         #(#items)*

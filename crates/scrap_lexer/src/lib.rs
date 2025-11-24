@@ -157,22 +157,26 @@ pub enum Visibility {
     Pub,
 }
 
-#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
-#[logos(error(LexingError, LexingError::from_lexer))]
-pub enum Token {
-    // Skip whitespace
-    #[regex(r"[ \t\r\n\f]+", logos::skip)]
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Trivia {
+      // Preserve whitespace (for Rowan parser)
+    #[regex(r"[ \t\r\n\f]+")]
     #[display("<whitespace>")]
     Whitespace,
 
-    // Skip comments
-    #[regex(r"//[^\r\n]*", logos::skip)]
-    #[display("<comment>")]
-    Comment,
-    #[regex(r"///[^\r\n]*", logos::skip)]
+    // Preserve comments (for Rowan parser)
+    #[regex(r"///[^\r\n]*")]
     #[display("<doc_comment>")]
     DocComment,
+    #[regex(r"//[^\r\n]*")]
+    #[display("<comment>")]
+    Comment,
+}
 
+#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[logos(error(LexingError, LexingError::from_lexer))]
+pub enum Token {
     Dummy,
     Eof,
 }
