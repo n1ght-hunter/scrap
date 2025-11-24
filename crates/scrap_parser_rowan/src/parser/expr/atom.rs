@@ -59,7 +59,10 @@ impl<'db> Parser<'db> {
             }
             Some(Token::LBrace) => self.parse_block_expr(),
             _ => {
-                self.error(format!("Expected expression, found {:?}", self.current_kind()));
+                self.error(format!(
+                    "Expected expression, found {:?}",
+                    self.current_kind()
+                ));
             }
         }
     }

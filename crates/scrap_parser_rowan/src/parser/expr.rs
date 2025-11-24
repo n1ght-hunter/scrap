@@ -96,10 +96,19 @@ fn infix_binding_power(op: Token) -> Option<(u8, u8)> {
         Token::Shl | Token::Shr => (13, 14),
         Token::Add | Token::Sub => (15, 16),
         Token::Mul | Token::Div | Token::Rem => (17, 18),
-        Token::Assign | Token::AddAssign | Token::SubAssign | Token::MulAssign
-        | Token::DivAssign | Token::RemAssign | Token::AndAssign | Token::OrAssign
-        | Token::BitXorAssign | Token::BitAndAssign | Token::BitOrAssign
-        | Token::ShlAssign | Token::ShrAssign => (1, 2),
+        Token::Assign
+        | Token::AddAssign
+        | Token::SubAssign
+        | Token::MulAssign
+        | Token::DivAssign
+        | Token::RemAssign
+        | Token::AndAssign
+        | Token::OrAssign
+        | Token::BitXorAssign
+        | Token::BitAndAssign
+        | Token::BitOrAssign
+        | Token::ShlAssign
+        | Token::ShrAssign => (1, 2),
         _ => return None,
     })
 }

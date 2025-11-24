@@ -1,6 +1,5 @@
 use pretty::{Arena, DocAllocator, DocBuilder};
-use rowan::ast::AstNode;
-use scrap_parser_rowan::{ScrapLanguage, SyntaxKind, SyntaxNode, SyntaxToken};
+use scrap_parser_rowan::{SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Configuration for the formatter
 #[derive(Debug, Clone)]
@@ -19,7 +18,7 @@ impl Default for FormatterConfig {
 }
 
 /// Format a source file from text
-pub fn format_file(source: &str, config: &FormatterConfig) -> String {
+pub fn format_file(source: &str, _config: &FormatterConfig) -> String {
     // For a standalone formatter, we would need to create a database
     // and parse the file. For now, this is a placeholder.
     source.to_string()
@@ -101,7 +100,7 @@ fn format_function<'a>(
     let mut docs = Vec::new();
 
     // Visibility
-    if let Some(vis) = node.children().find(|n| n.kind() == SyntaxKind::VISIBILITY) {
+    if let Some(_vis) = node.children().find(|n| n.kind() == SyntaxKind::VISIBILITY) {
         docs.push(arena.text("pub "));
     }
 
@@ -166,7 +165,10 @@ fn format_param<'a>(
     }
 
     // Type annotation
-    if let Some(type_ann) = node.children().find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION) {
+    if let Some(type_ann) = node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION)
+    {
         docs.push(arena.text(": "));
         if let Some(ty) = type_ann.children().next() {
             docs.push(format_node(arena, &ty, config));
@@ -248,7 +250,10 @@ fn format_field<'a>(
     }
 
     // Type annotation
-    if let Some(type_ann) = node.children().find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION) {
+    if let Some(type_ann) = node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION)
+    {
         docs.push(arena.text(": "));
         if let Some(ty) = type_ann.children().next() {
             docs.push(format_node(arena, &ty, config));
@@ -279,7 +284,10 @@ fn format_enum_def<'a>(
     }
 
     // Variants
-    if let Some(variants) = node.children().find(|n| n.kind() == SyntaxKind::VARIANT_LIST) {
+    if let Some(variants) = node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::VARIANT_LIST)
+    {
         docs.push(arena.space());
         docs.push(format_variant_list(arena, &variants, config));
     }
@@ -320,7 +328,7 @@ fn format_variant_list<'a>(
 fn format_variant<'a>(
     arena: &'a Arena<'a>,
     node: &SyntaxNode,
-    config: &FormatterConfig,
+    _config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
     let mut docs = Vec::new();
 
@@ -339,7 +347,7 @@ fn format_variant<'a>(
 fn format_module<'a>(
     arena: &'a Arena<'a>,
     node: &SyntaxNode,
-    config: &FormatterConfig,
+    _config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
     let mut docs = Vec::new();
 
@@ -356,9 +364,9 @@ fn format_module<'a>(
     }
 
     // Check if it's a semicolon or block module
-    let has_semicolon = node
-        .children_with_tokens()
-        .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::SEMICOLON));
+    let has_semicolon = node.children_with_tokens().any(
+        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::SEMICOLON),
+    );
 
     if has_semicolon {
         docs.push(arena.text(";"));
@@ -371,7 +379,7 @@ fn format_module<'a>(
 fn format_use_tree<'a>(
     arena: &'a Arena<'a>,
     node: &SyntaxNode,
-    config: &FormatterConfig,
+    _config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
     let mut docs = Vec::new();
 
@@ -607,7 +615,10 @@ fn format_let_stmt<'a>(
     }
 
     // Type annotation
-    if let Some(type_ann) = node.children().find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION) {
+    if let Some(type_ann) = node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::TYPE_ANNOTATION)
+    {
         docs.push(arena.text(": "));
         if let Some(ty) = type_ann.children().next() {
             docs.push(format_node(arena, &ty, config));
@@ -622,7 +633,7 @@ fn format_let_stmt<'a>(
     if has_eq {
         docs.push(arena.text(" = "));
         // Find the expression after the equals
-        let mut found_eq = false;
+        let found_eq = false;
         for child in node.children() {
             if found_eq {
                 docs.push(format_node(arena, &child, config));
@@ -649,9 +660,9 @@ fn format_expr_stmt<'a>(
     }
 
     // Check if it has a semicolon
-    let has_semicolon = node
-        .children_with_tokens()
-        .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::SEMICOLON));
+    let has_semicolon = node.children_with_tokens().any(
+        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::SEMICOLON),
+    );
 
     if has_semicolon {
         docs.push(arena.text(";"));

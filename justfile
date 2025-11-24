@@ -4,6 +4,9 @@
 run *args:
     cargo run -- {{args}}
 
+fmt *args:
+    cargo run -p scrap_formatter -- {{args}}
+
 build:
     cargo build -r
 

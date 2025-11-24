@@ -1,68 +1,25 @@
+use clap::Parser;
 use std::fs;
-use std::io::{self, Read};
 use std::path::PathBuf;
 use std::process;
 
+/// Scrap language code formatter
+#[derive(Parser, Debug)]
+#[command(name = "scrap-fmt")]
+#[command(about = "Scrap language code formatter", long_about = None)]
+#[command(version)]
 struct Args {
-    files: Vec<PathBuf>,
+    /// Check if files are formatted without modifying them
+    #[arg(long)]
     check: bool,
+
+    /// Enable verbose output
+    #[arg(short, long)]
     verbose: bool,
-}
 
-fn parse_args() -> Result<Args, String> {
-    let mut files = Vec::new();
-    let mut check = false;
-    let mut verbose = false;
-
-    let args: Vec<_> = std::env::args().skip(1).collect();
-
-    if args.is_empty() {
-        return Err("No files specified. Usage: scrap-fmt [OPTIONS] <files>...".to_string());
-    }
-
-    for arg in args {
-        match arg.as_str() {
-            "--check" => check = true,
-            "--verbose" | "-v" => verbose = true,
-            "--help" | "-h" => {
-                print_help();
-                process::exit(0);
-            }
-            _ => {
-                if arg.starts_with("--") {
-                    return Err(format!("Unknown option: {}", arg));
-                }
-                files.push(PathBuf::from(arg));
-            }
-        }
-    }
-
-    if files.is_empty() {
-        return Err("No files specified".to_string());
-    }
-
-    Ok(Args {
-        files,
-        check,
-        verbose,
-    })
-}
-
-fn print_help() {
-    println!("scrap-fmt - Scrap language code formatter");
-    println!();
-    println!("USAGE:");
-    println!("    scrap-fmt [OPTIONS] <files>...");
-    println!();
-    println!("OPTIONS:");
-    println!("    --check        Check if files are formatted without modifying them");
-    println!("    --verbose, -v  Enable verbose output");
-    println!("    --help, -h     Print this help message");
-    println!();
-    println!("EXAMPLES:");
-    println!("    scrap-fmt main.sc");
-    println!("    scrap-fmt --check src/*.sc");
-    println!("    scrap-fmt --verbose lib.sc");
+    /// Files to format
+    #[arg(required = true)]
+    files: Vec<PathBuf>,
 }
 
 fn format_file(path: &PathBuf, check: bool, verbose: bool) -> Result<bool, String> {
@@ -110,15 +67,7 @@ fn format_file(path: &PathBuf, check: bool, verbose: bool) -> Result<bool, Strin
 }
 
 fn main() {
-    let args = match parse_args() {
-        Ok(args) => args,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            eprintln!();
-            print_help();
-            process::exit(1);
-        }
-    };
+    let args = Args::parse();
 
     let mut all_formatted = true;
 

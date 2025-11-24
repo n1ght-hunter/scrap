@@ -92,7 +92,6 @@ fn is_beside_or_below(base_path: &std::path::Path, other_path: &std::path::Path)
     is_below && base_path != other_path
 }
 
-
 #[salsa::tracked]
 pub fn collect_modules<'db>(
     db: &'db dyn scrap_shared::Db,

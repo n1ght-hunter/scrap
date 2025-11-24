@@ -1166,6 +1166,7 @@ dependencies = [
 name = "scrap_formatter"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "expect-test",
  "pretty",
  "rowan",

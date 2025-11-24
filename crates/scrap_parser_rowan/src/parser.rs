@@ -24,7 +24,11 @@ pub struct Parser<'db> {
 }
 
 impl<'db> Parser<'db> {
-    pub fn new(db: &'db dyn scrap_shared::Db, source: String, lexed_tokens: &LexedTokens<'db>) -> Self {
+    pub fn new(
+        db: &'db dyn scrap_shared::Db,
+        source: String,
+        lexed_tokens: &LexedTokens<'db>,
+    ) -> Self {
         let tokens: Vec<_> = lexed_tokens.tokens(db).iter().cloned().collect();
         Parser {
             tokens,
@@ -87,7 +91,11 @@ impl<'db> Parser<'db> {
             self.bump();
             true
         } else {
-            self.error(format!("Expected {:?}, found {:?}", token, self.current_kind()));
+            self.error(format!(
+                "Expected {:?}, found {:?}",
+                token,
+                self.current_kind()
+            ));
             false
         }
     }
