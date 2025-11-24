@@ -31,12 +31,6 @@ impl<'db> Parser<'db> {
         self.expect(Token::LBrace);
 
         while !self.at(Token::RBrace) && !self.at_eof() {
-            // Skip trivia
-            if self.current_kind().map_or(false, |k| k.is_trivia()) {
-                self.bump();
-                continue;
-            }
-
             self.parse_variant();
 
             if self.at(Token::Comma) {

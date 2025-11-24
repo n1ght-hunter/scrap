@@ -17,11 +17,6 @@ impl<'db> Parser<'db> {
 
         // Parse infix operators
         while let Some(kind) = self.current_kind() {
-            if kind.is_trivia() {
-                self.bump();
-                continue;
-            }
-
             if let Some((l_bp, r_bp)) = infix_binding_power(kind) {
                 if l_bp < min_bp {
                     break;
@@ -65,11 +60,6 @@ impl<'db> Parser<'db> {
         self.expect(Token::LParen);
 
         while !self.at(Token::RParen) && !self.at_eof() {
-            if self.current_kind().map_or(false, |k| k.is_trivia()) {
-                self.bump();
-                continue;
-            }
-
             self.parse_expr();
 
             if self.at(Token::Comma) {

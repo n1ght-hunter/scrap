@@ -12,12 +12,6 @@ impl<'db> Parser<'db> {
 
         self.start_node(SyntaxKind::STMT_LIST);
         while !self.at(Token::RBrace) && !self.at_eof() {
-            // Skip trivia
-            if self.current_kind().map_or(false, |k| k.is_trivia()) {
-                self.bump();
-                continue;
-            }
-
             self.parse_stmt();
         }
         self.finish_node(); // STMT_LIST

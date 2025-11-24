@@ -12,14 +12,21 @@ impl<'db> Parser<'db> {
                 self.finish_node();
             }
             Some(Token::Ident) => {
-                self.start_node(SyntaxKind::PATH_EXPR);
-                self.parse_path();
-                self.finish_node();
+                // Lookahead to see if this is a function call
+                let is_call = self.nth_at(1, Token::LParen);
 
-                // Check for function call
-                if self.at(Token::LParen) {
+                if is_call {
+                    // Parse as CALL_EXPR containing PATH_EXPR
                     self.start_node(SyntaxKind::CALL_EXPR);
+                    self.start_node(SyntaxKind::PATH_EXPR);
+                    self.parse_path();
+                    self.finish_node(); // PATH_EXPR
                     self.parse_arg_list();
+                    self.finish_node(); // CALL_EXPR
+                } else {
+                    // Just a PATH_EXPR
+                    self.start_node(SyntaxKind::PATH_EXPR);
+                    self.parse_path();
                     self.finish_node();
                 }
             }
@@ -34,10 +41,6 @@ impl<'db> Parser<'db> {
                 self.start_node(SyntaxKind::ARRAY_EXPR);
                 self.bump(); // [
                 while !self.at(Token::RBracket) && !self.at_eof() {
-                    if self.current_kind().map_or(false, |k| k.is_trivia()) {
-                        self.bump();
-                        continue;
-                    }
                     self.parse_expr();
                     if self.at(Token::Comma) {
                         self.bump();

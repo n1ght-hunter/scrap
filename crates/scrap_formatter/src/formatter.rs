@@ -2,7 +2,7 @@ use pretty::{Arena, DocAllocator, DocBuilder};
 use scrap_parser_rowan::{SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Configuration for the formatter
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FormatterConfig {
     pub indent_width: usize,
     pub line_width: usize,
@@ -18,10 +18,40 @@ impl Default for FormatterConfig {
 }
 
 /// Format a source file from text
-pub fn format_file(source: &str, _config: &FormatterConfig) -> String {
-    // For a standalone formatter, we would need to create a database
-    // and parse the file. For now, this is a placeholder.
-    source.to_string()
+pub fn format_file(source: &str, config: &FormatterConfig) -> String {
+    // Create a database for parsing
+    let db = scrap_shared::salsa::ScrapDb::default();
+
+    // Use a helper tracked function to create tracked structs
+    format_file_impl(&db, source, config)
+}
+
+/// Helper function to format a file within a tracked function context
+#[salsa::tracked]
+fn format_file_impl<'db>(
+    db: &'db dyn scrap_shared::Db,
+    source: &'db str,
+    config: &'db FormatterConfig,
+) -> String {
+    use scrap_shared::InputFile;
+
+    // Create an input file from the source
+    let file = InputFile::new(db, std::path::PathBuf::from("<format>"), source.to_string());
+
+    // Lex the file
+    let tokens = match scrap_lexer::lex_file(db, file) {
+        Some(tokens) => tokens,
+        None => return source.to_string(), // Return original on lex error
+    };
+
+    // Parse the file using the Rowan parser
+    let parsed = scrap_parser_rowan::parse_file(db, file, tokens);
+
+    // Debug
+    eprintln!("=== SYNTAX TREE ===\n{:#?}\n===", parsed.syntax(db));
+
+    // Format the syntax tree
+    format_syntax_tree(&parsed.syntax(db), config)
 }
 
 /// Format a syntax tree
