@@ -47,9 +47,6 @@ fn format_file_impl<'db>(
     // Parse the file using the Rowan parser
     let parsed = scrap_parser_rowan::parse_file(db, file, tokens);
 
-    // Debug
-    eprintln!("=== SYNTAX TREE ===\n{:#?}\n===", parsed.syntax(db));
-
     // Format the syntax tree
     format_syntax_tree(&parsed.syntax(db), config)
 }
