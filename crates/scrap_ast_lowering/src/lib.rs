@@ -1,3 +1,8 @@
+mod cfg_builder;
+mod expr_lowering;
+#[cfg(test)]
+mod test_helpers;
+
 use scrap_ast::{
     block::Block,
     expr::ExprKind,
@@ -24,6 +29,8 @@ pub enum BuilderError {
     LowerSignatureError,
     #[error("Failed to lower type")]
     LowerTypeError,
+    #[error("Failed to lower expression")]
+    LowerExpressionError,
 }
 
 type Error = BuilderError;
