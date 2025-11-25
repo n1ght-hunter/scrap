@@ -1,5 +1,5 @@
 [package]
-name = "scrap"
+name = "scrapc"
 version.workspace = true
 edition.workspace = true
 
@@ -45,6 +45,7 @@ salsa = { version = "0.24.0", features = ["persistence"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
 pathdiff = "0.2.3"
+toml = "0.9"
 
 # diagnostics and error reporting
 tracing = "0.1.41"
