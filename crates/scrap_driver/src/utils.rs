@@ -113,3 +113,13 @@ pub fn collect_modules<'db>(
 
     modules
 }
+
+
+#[salsa::tracked(persist)]
+pub fn lower_to_ir<'db>(
+    db: &'db dyn scrap_shared::Db,
+    can: scrap_parser::ParsedFile<'db>,
+    modules: Vec<scrap_parser::ParsedFile<'db>>,
+) -> scrap_ir::CanIr<'db> {
+    scrap_ir::lower_can_to_ir(db, can)
+}

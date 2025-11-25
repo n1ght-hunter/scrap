@@ -65,15 +65,16 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     let modules = utils::collect_modules(db, &entry_file, &other_files);
 
-    // Phase 2: Pretty print if requested
-    if let Some(mode) = pretty::PpMode::determine_pp_mode(args) {
-        if mode.needs_ast() {
-            let filled_entry_file = parsing::resolve_modules(db, &modules, entry_file)
-                .context("failed to resolve modules")?;
-            db.attach(|db| {
-                pretty::print(db, mode, &filled_entry_file, None);
-            });
-        }
+    let mode = pretty::PpMode::determine_pp_mode(args);
+
+    if let Some(mode) = mode
+        && mode.needs_ast()
+    {
+        let filled_entry_file = parsing::resolve_modules(db, &modules, entry_file)
+            .context("failed to resolve modules")?;
+        db.attach(|db| {
+            pretty::print(db, mode, &filled_entry_file, None);
+        });
         // if mode.needs_ir() {
         //     // Resolve modules, lower to IR and print
         //     let filled_entry_file =
@@ -91,6 +92,17 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         //     });
         // }
         // return Ok(());
+    }
+
+    let (entry_ir, modules_ir) = utils::collect_modules_ir(db, &modules);
+
+    if let Some(mode) = mode
+        && mode.needs_ir()
+    {
+        let lowered_ir = utils::lower_to_ir(db, entry_file, other_files);
+        db.attach(|db| {
+            pretty::print(db, mode, &filled_entry_file, Some(&lowered_ir));
+        });
     }
 
     Ok(())
