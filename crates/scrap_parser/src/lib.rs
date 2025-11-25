@@ -26,8 +26,10 @@ pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
 #[salsa::tracked(debug, persist)]
 pub struct ParsedFile<'db> {
     #[returns(ref)]
+    /// The AST representation of this file (either a Can or a Module)
     pub ast: CanOrModule<'db>,
     #[returns(ref)]
+    /// All modules defined in this file
     pub modules: Vec<scrap_ast::module::Module<'db>>,
 }
 

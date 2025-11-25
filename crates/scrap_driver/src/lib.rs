@@ -49,19 +49,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     // Phase 1: Parse files
     let (entry_file, other_files) = parsing::parse_input_files(args, db)?;
 
-    if db.dcx().has_errors() {
-        db.dcx().render_all();
-        let (errors, warnings, _) = db.dcx().counts();
-        if warnings > 0 {
-            anyhow::bail!(
-                "Compilation completed with {} warnings and {} errors.",
-                warnings,
-                errors
-            );
-        } else {
-            anyhow::bail!("Compilation failed with {} errors.", errors);
-        }
-    }
+    handle_diagnostics(db)?;
 
     let modules = utils::collect_modules(db, &entry_file, &other_files);
 
@@ -73,37 +61,43 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         let filled_entry_file = parsing::resolve_modules(db, &modules, entry_file)
             .context("failed to resolve modules")?;
         db.attach(|db| {
-            pretty::print(db, mode, &filled_entry_file, None);
+            pretty::print(db, mode, pretty::CompilationOutput::Ast(filled_entry_file));
         });
-        // if mode.needs_ir() {
-        //     // Resolve modules, lower to IR and print
-        //     let filled_entry_file =
-        //         resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
-        //     db.attach(|db| {
-        //         let lowered_ir = lower_to_ir(args, db, entry_file, &other_files);
-        //         pretty::print(db, mode, &filled_entry_file, Some(lowered_ir));
-        //     });
-        // } else {
-        //     // Resolve modules and print AST
-        //     let filled_entry_file =
-        //         resolve_modules(args, db, &base_emiter, entry_file, &other_files)?;
-        //     db.attach(|db| {
-        //         pretty::print(db, mode, &filled_entry_file, None);
-        //     });
-        // }
-        // return Ok(());
     }
 
-    let (entry_ir, modules_ir) = utils::collect_modules_ir(db, &modules);
+    // Phase 2: Lower to IR in parallel
+    let (entry_ir, other_ir) = utils::lower_input_files_to_ir(db, entry_file, other_files.to_vec());
+
+    handle_diagnostics(db)?;
 
     if let Some(mode) = mode
         && mode.needs_ir()
     {
-        let lowered_ir = utils::lower_to_ir(db, entry_file, other_files);
+        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
+
         db.attach(|db| {
-            pretty::print(db, mode, &filled_entry_file, Some(&lowered_ir));
+            pretty::print(db, mode, pretty::CompilationOutput::Ir(lowered_ir));
         });
     }
 
+    Ok(())
+}
+
+/// Handle diagnostics after a compilation phase
+/// Renders all diagnostics and returns an error if there are any errors emitted
+fn handle_diagnostics(db: &dyn scrap_shared::Db) -> anyhow::Result<()> {
+    db.dcx().render_all();
+    if db.dcx().has_errors() {
+        let (errors, warnings, _) = db.dcx().counts();
+        if warnings > 0 {
+            anyhow::bail!(
+                "Compilation completed with {} warnings and {} errors.",
+                warnings,
+                errors
+            );
+        } else {
+            anyhow::bail!("Compilation failed with {} errors.", errors);
+        }
+    }
     Ok(())
 }

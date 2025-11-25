@@ -19,6 +19,12 @@ pub enum PpMode {
     PrettyIr,
 }
 
+/// Compilation output to be printed
+pub enum CompilationOutput<'db> {
+    Ast(Can<'db>),
+    Ir(LoweredIr<'db>),
+}
+
 impl PpMode {
     /// Returns true if this mode requires AST to be available
     pub fn needs_ast(&self) -> bool {
@@ -50,30 +56,27 @@ impl PpMode {
 pub fn print<'db>(
     db: &'db dyn scrap_shared::Db,
     mode: PpMode,
-    ast: &Can<'db>,
-    ir: Option<LoweredIr<'db>>,
+    output: CompilationOutput<'db>,
 ) {
-    match mode {
-        PpMode::PrettyAst => {
+    match (mode, output) {
+        (PpMode::PrettyAst, CompilationOutput::Ast(ast)) => {
             ast.print();
         }
-        PpMode::DebugAst => {
+        (PpMode::DebugAst, CompilationOutput::Ast(ast)) => {
             println!("{:#?}", ast);
         }
-        PpMode::DebugIr => {
-            if let Some(ir) = ir {
-                println!("{:#?}", ir.can(db));
-            } else {
-                eprintln!("Error: IR not available");
-            }
+        (PpMode::DebugIr, CompilationOutput::Ir(ir)) => {
+            println!("{:#?}", ir.can(db));
         }
-        PpMode::PrettyIr => {
-            if let Some(ir) = ir {
-                let output = scrap_ir::print_can(db, ir.can(db));
-                print!("{}", output);
-            } else {
-                eprintln!("Error: IR not available");
-            }
+        (PpMode::PrettyIr, CompilationOutput::Ir(ir)) => {
+            let output = scrap_ir::print_can(db, ir.can(db));
+            print!("{}", output);
+        }
+        (PpMode::PrettyAst | PpMode::DebugAst, CompilationOutput::Ir(_)) => {
+            eprintln!("Error: AST printing mode but IR was provided");
+        }
+        (PpMode::PrettyIr | PpMode::DebugIr, CompilationOutput::Ast(_)) => {
+            eprintln!("Error: IR printing mode but AST was provided");
         }
     }
 }

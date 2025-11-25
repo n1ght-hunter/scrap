@@ -68,6 +68,10 @@ impl<'a> DiagnosticInner<'a> {
         !self.errors.lock().is_empty()
     }
 
+    fn has_warnings(&self) -> bool {
+        !self.warnings.lock().is_empty()
+    }
+
     fn has_unrendered(&self) -> bool {
         let check = |input: &parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>| {
             let guard = input.lock();
@@ -159,6 +163,10 @@ impl<'a> DiagnosticEmitter<'a> {
 impl<'a> DiagnosticEmitter<'a> {
     pub fn has_errors(&self) -> bool {
         self.diagnostics.has_errors()
+    }
+
+    pub fn has_warnings(&self) -> bool {
+        self.diagnostics.has_warnings()
     }
 
     pub fn has_unrendered(&self) -> bool {

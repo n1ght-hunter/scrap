@@ -1,5 +1,5 @@
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use scrap_diagnostics::Level;
-use scrap_shared::Db;
 
 use crate::parsing::Modules;
 
@@ -98,7 +98,7 @@ pub fn collect_modules<'db>(
     entry_file: &'db scrap_parser::ParsedFile<'db>,
     other_files: &'db [scrap_parser::ParsedFile<'db>],
 ) -> Modules<'db> {
-    let mut modules = hashbrown::HashMap::new();
+    let mut modules = indexmap::IndexMap::new();
     let entry_module = entry_file.ast(db).to_module(db);
     modules.insert(entry_module.id(db), entry_module);
     entry_file.modules(db).iter().for_each(|module| {
@@ -115,11 +115,75 @@ pub fn collect_modules<'db>(
 }
 
 
+// NOTE: This function is currently unused because lower_parsed_file requires a ParsedFile,
+// not just a ModuleId. Use collect_and_lower_modules_ir instead which has access to the parsed files.
+// /// Lower all parsed modules to IR in parallel
+// pub fn lower_modules_parallel<'db>(
+//     db: &'db dyn scrap_shared::Db,
+//     modules: &Modules<'db>,
+// ) -> std::collections::HashMap<ModuleId<'db>, Option<scrap_ir::Module<'db>>> {
+//     // Lower all modules in parallel using rayon
+//     // Convert to Vec first since hashbrown doesn't support par_iter
+//     let modules_vec: Vec<_> = modules.iter().map(|(k, v)| (*k, v.clone())).collect();
+//
+//     modules_vec
+//         .into_par_iter()
+//         .map(|(module_id, _module)| {
+//             // Use the tracked function to lower each parsed file
+//             let ir_module = scrap_ast_lowering::lower_parsed_file(
+//                 db,
+//                 // We need to find the original parsed file for this module
+//                 // For now, we'll lower the module from the AST directly
+//                 // This is a placeholder - we'll need to track parsed files better
+//                 module_id,
+//                 module_id,
+//             );
+//             (module_id, ir_module)
+//         })
+//         .collect()
+// }
+
+/// Lower all input files to IR in parallel (returns entry module and other modules separately)
 #[salsa::tracked(persist)]
-pub fn lower_to_ir<'db>(
+pub fn lower_input_files_to_ir<'db>(
     db: &'db dyn scrap_shared::Db,
-    can: scrap_parser::ParsedFile<'db>,
-    modules: Vec<scrap_parser::ParsedFile<'db>>,
-) -> scrap_ir::CanIr<'db> {
-    scrap_ir::lower_can_to_ir(db, can)
+    entry_file: scrap_parser::ParsedFile<'db>,
+    other_files: Vec<scrap_parser::ParsedFile<'db>>,
+) -> (
+    Option<scrap_ir::Module<'db>>,
+    Vec<scrap_ir::Module<'db>>,
+) {
+    // Lower entry file
+    let entry_module = entry_file.ast(db).to_module(db);
+    let entry_module_id = entry_module.id(db);
+    let entry_ir = scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id);
+
+    // Lower other files in parallel
+    let other_ir: Vec<_> = other_files
+        .into_par_iter()
+        .filter_map(|file| {
+            let module = file.ast(db).to_module(db);
+            let module_id = module.id(db);
+            scrap_ast_lowering::lower_parsed_file(db, file, module_id)
+        })
+        .collect();
+
+    (entry_ir, other_ir)
+} 
+
+/// Create a LoweredIr Can from entry and other modules (tracked function for creating tracked structs)
+#[salsa::tracked(persist)]
+pub fn create_lowered_ir<'db>(
+    db: &'db dyn scrap_shared::Db,
+    entry_ir: Option<scrap_ir::Module<'db>>,
+    mut other_ir: Vec<scrap_ir::Module<'db>>,
+) -> scrap_ast_lowering::LoweredIr<'db> {
+    // Collect all successfully lowered modules
+    let mut modules = Vec::with_capacity(other_ir.len() + 1);
+    if let Some(entry_module) = entry_ir {
+        modules.push(entry_module);
+    }
+    modules.append(&mut other_ir);
+    scrap_ast_lowering::LoweredIr::new(db, scrap_ir::Can::new(db, modules))
 }
+

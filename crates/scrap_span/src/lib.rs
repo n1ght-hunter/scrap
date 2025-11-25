@@ -20,7 +20,7 @@ impl<'db> Span<'db> {
     }
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn new_span<'db>(db: &'db dyn salsa::Database, start: usize, end: usize) -> Span<'db> {
     Span::new(db, start, end)
 }

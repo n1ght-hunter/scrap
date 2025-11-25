@@ -24,6 +24,7 @@ anyhow.workspace = true
 serde_json.workspace = true
 rayon.workspace = true
 hashbrown.workspace = true
+indexmap = {workspace = true, features = ["serde"]}
 thin-vec.workspace = true
 
 [lints]

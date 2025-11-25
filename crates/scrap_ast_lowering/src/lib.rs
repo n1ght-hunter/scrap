@@ -43,7 +43,7 @@ pub struct LoweredIr<'db> {
 }
 
 /// Lower a single parsed file to an IR module (tracked function for parallelization)
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn lower_parsed_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_parser::ParsedFile<'db>,

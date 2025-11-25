@@ -4,7 +4,7 @@ use scrap_ast::{
     module::ModuleKind,
 };
 use scrap_diagnostics::Level;
-use scrap_shared::{Db, id::ModuleId};
+use scrap_shared::id::ModuleId;
 
 /// Parse all input files in parallel
 pub fn parse_input_files<'db>(
@@ -59,9 +59,9 @@ pub fn parse_input_files<'db>(
     Ok((entry_file, modules))
 }
 
-pub type Modules<'db> = hashbrown::HashMap<ModuleId<'db>, scrap_ast::module::Module<'db>>;
+pub type Modules<'db> = indexmap::IndexMap<scrap_shared::id::ModuleId<'db>, scrap_ast::module::Module<'db>>;
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 fn create_module<'db>(
     db: &'db dyn scrap_shared::Db,
     module_id: scrap_shared::id::ModuleId<'db>,
@@ -70,7 +70,7 @@ fn create_module<'db>(
     scrap_ast::module::Module::new(db, module_id, module_kind)
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 fn create_can<'db>(
     db: &'db dyn scrap_shared::Db,
     id: scrap_shared::NodeId,
