@@ -12,22 +12,44 @@ impl<'db> Parser<'db> {
 
     /// Parse expression with binding power (Pratt parsing)
     pub(super) fn parse_expr_bp(&mut self, min_bp: u8) {
-        // Parse prefix/atom
+        // Create checkpoint BEFORE parsing the left operand
+        // This allows us to retroactively wrap it in a BINARY_EXPR if we find an operator
+        let checkpoint = self.checkpoint();
+
+        // Parse prefix/atom expression
+        // This creates and completes its node (e.g., PATH_EXPR, LITERAL_EXPR, etc.)
         self.parse_atom_expr();
 
-        // Parse infix operators
-        while let Some(kind) = self.current_kind() {
-            if let Some((l_bp, r_bp)) = infix_binding_power(kind) {
+        // Parse infix operators using the Pratt algorithm
+        loop {
+            // Check if current token is an infix operator
+            let op = match self.current_kind() {
+                Some(kind) => kind,
+                None => break,
+            };
+
+            if let Some((l_bp, r_bp)) = infix_binding_power(op) {
+                // Check if this operator's precedence is high enough
                 if l_bp < min_bp {
                     break;
                 }
 
-                // Wrap the left side in a binary expr node
-                self.start_node(SyntaxKind::BINARY_EXPR);
-                self.bump(); // operator
+                // Use checkpoint to retroactively wrap the left operand
+                // This creates: BINARY_EXPR { left_operand, operator, right_operand }
+                self.start_node_at(checkpoint, SyntaxKind::BINARY_EXPR);
+
+                self.bump(); // consume operator token
+
+                // Parse right operand with appropriate precedence
                 self.parse_expr_bp(r_bp);
-                self.finish_node();
+
+                self.finish_node(); // finish BINARY_EXPR
+
+                // Important: For chained operators (a + b + c), the checkpoint
+                // already captures the previous BINARY_EXPR, so the next iteration
+                // will wrap it again, creating proper left-associativity
             } else {
+                // Not an infix operator, stop parsing
                 break;
             }
         }

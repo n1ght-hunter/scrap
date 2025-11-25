@@ -13,7 +13,7 @@ salsa = { workspace = true }
 clap = { workspace = true }
 
 [dev-dependencies]
-expect-test = "1.4"
+expect-test.workspace = true
 
 [[bin]]
 name = "scrap-fmt"

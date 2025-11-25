@@ -90,6 +90,16 @@ impl<'db> Parser<'db> {
         self.builder.finish_node();
     }
 
+    /// Create a checkpoint for potentially wrapping nodes later
+    pub(super) fn checkpoint(&mut self) -> rowan::Checkpoint {
+        self.builder.checkpoint()
+    }
+
+    /// Start a node at a previous checkpoint, wrapping all content added since
+    pub(super) fn start_node_at(&mut self, checkpoint: rowan::Checkpoint, kind: SyntaxKind) {
+        self.builder.start_node_at(checkpoint, kind.into());
+    }
+
     /// Consume the current token and add it to the tree
     /// This consumes all trivia up to and including the next non-trivia token
     fn bump(&mut self) {

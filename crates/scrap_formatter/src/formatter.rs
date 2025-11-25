@@ -57,7 +57,14 @@ pub fn format_syntax_tree(node: &SyntaxNode, config: &FormatterConfig) -> String
     let doc = format_node(&arena, node, config);
     let mut result = Vec::new();
     doc.render(config.line_width, &mut result).unwrap();
-    String::from_utf8(result).unwrap()
+    let mut formatted = String::from_utf8(result).unwrap();
+
+    // Ensure output ends with a newline
+    if !formatted.ends_with('\n') {
+        formatted.push('\n');
+    }
+
+    formatted
 }
 
 /// Format a syntax node
@@ -135,7 +142,7 @@ fn format_function<'a>(
 
     // Function name
     if let Some(name) = node.children().find(|n| n.kind() == SyntaxKind::NAME) {
-        docs.push(format_node(arena, &name, config));
+        docs.push(format_name(arena, &name));
     }
 
     // Parameters
@@ -355,7 +362,7 @@ fn format_variant_list<'a>(
 fn format_variant<'a>(
     arena: &'a Arena<'a>,
     node: &SyntaxNode,
-    _config: &FormatterConfig,
+    config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
     let mut docs = Vec::new();
 
@@ -364,8 +371,39 @@ fn format_variant<'a>(
         docs.push(format_name(arena, &name));
     }
 
-    // Optional tuple data
-    // This is simplified; real implementation would handle tuple variants properly
+    // Optional tuple data: check for L_PAREN indicating tuple variant
+    let has_tuple = node.children_with_tokens().any(
+        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN),
+    );
+
+    if has_tuple {
+        docs.push(arena.text("("));
+
+        // Find all type nodes between the parens
+        let mut in_parens = false;
+        let types: Vec<_> = node
+            .children_with_tokens()
+            .filter_map(|child| {
+                match child {
+                    rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN => {
+                        in_parens = true;
+                        None
+                    }
+                    rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::R_PAREN => {
+                        in_parens = false;
+                        None
+                    }
+                    rowan::NodeOrToken::Node(n) if in_parens => {
+                        Some(format_node(arena, &n, config))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        docs.push(arena.intersperse(types, arena.text(", ")));
+        docs.push(arena.text(")"));
+    }
 
     arena.concat(docs)
 }
@@ -464,23 +502,44 @@ fn format_if_expr<'a>(
     let mut docs = Vec::new();
     docs.push(arena.text("if "));
 
-    let mut children = node.children();
+    // Collect all non-block expression nodes (these form the condition)
+    let mut condition_parts = Vec::new();
+    let mut blocks = Vec::new();
+    let mut found_else = false;
 
-    // Condition
-    if let Some(cond) = children.next() {
-        docs.push(format_node(arena, &cond, config));
+    for child in node.children() {
+        match child.kind() {
+            SyntaxKind::BLOCK_EXPR => {
+                blocks.push(child);
+            }
+            _ => {
+                // Part of the condition
+                condition_parts.push(child);
+            }
+        }
     }
 
-    // Then block
-    if let Some(then_block) = children.next() {
+    // Format condition (all non-block nodes)
+    for part in condition_parts {
+        docs.push(format_node(arena, &part, config));
         docs.push(arena.space());
-        docs.push(format_node(arena, &then_block, config));
     }
 
-    // Else block
-    if let Some(else_part) = children.next() {
-        docs.push(arena.text(" else "));
-        docs.push(format_node(arena, &else_part, config));
+    // Format then block
+    if let Some(then_block) = blocks.get(0) {
+        docs.push(format_node(arena, then_block, config));
+    }
+
+    // Check for else keyword and format else block
+    let has_else = node.children_with_tokens().any(
+        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ELSE_KW),
+    );
+
+    if has_else {
+        if let Some(else_block) = blocks.get(1) {
+            docs.push(arena.text(" else "));
+            docs.push(format_node(arena, else_block, config));
+        }
     }
 
     arena.concat(docs)
@@ -589,11 +648,15 @@ fn format_literal_expr<'a>(
     node: &SyntaxNode,
     _config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
-    if let Some(token) = node.first_token() {
-        arena.text(token.text().to_string())
-    } else {
-        arena.nil()
+    // Skip trivia to get the actual literal token
+    for child in node.children_with_tokens() {
+        if let rowan::NodeOrToken::Token(token) = child {
+            if !is_trivia(&token) {
+                return arena.text(token.text().to_string());
+            }
+        }
     }
+    arena.nil()
 }
 
 /// Format path expression
@@ -634,10 +697,15 @@ fn format_let_stmt<'a>(
 ) -> DocBuilder<'a, Arena<'a>> {
     let mut docs = vec![arena.text("let ")];
 
-    // Pattern
+    // Pattern - need to skip trivia to get identifier
     if let Some(pat) = node.children().find(|n| n.kind() == SyntaxKind::IDENT_PAT) {
-        if let Some(token) = pat.first_token() {
-            docs.push(arena.text(token.text().to_string()));
+        for child in pat.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(token) = child {
+                if !is_trivia(&token) {
+                    docs.push(arena.text(token.text().to_string()));
+                    break;
+                }
+            }
         }
     }
 
@@ -652,20 +720,19 @@ fn format_let_stmt<'a>(
         }
     }
 
-    // Initializer
-    let has_eq = node
-        .children_with_tokens()
-        .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::EQ));
-
-    if has_eq {
-        docs.push(arena.text(" = "));
-        // Find the expression after the equals
-        let found_eq = false;
-        for child in node.children() {
-            if found_eq {
-                docs.push(format_node(arena, &child, config));
+    // Initializer - find the expression after the EQ token
+    let mut found_eq = false;
+    for child in node.children_with_tokens() {
+        match child {
+            rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::EQ => {
+                docs.push(arena.text(" = "));
+                found_eq = true;
+            }
+            rowan::NodeOrToken::Node(n) if found_eq => {
+                docs.push(format_node(arena, &n, config));
                 break;
             }
+            _ => {}
         }
     }
 
@@ -700,11 +767,15 @@ fn format_expr_stmt<'a>(
 
 /// Format a name node
 fn format_name<'a>(arena: &'a Arena<'a>, node: &SyntaxNode) -> DocBuilder<'a, Arena<'a>> {
-    if let Some(token) = node.first_token() {
-        arena.text(token.text().to_string())
-    } else {
-        arena.nil()
+    // Find first non-trivia token (should be the IDENT)
+    for child in node.children_with_tokens() {
+        if let rowan::NodeOrToken::Token(token) = child {
+            if !is_trivia(&token) {
+                return arena.text(token.text().to_string());
+            }
+        }
     }
+    arena.nil()
 }
 
 /// Format a path
@@ -712,7 +783,17 @@ fn format_path<'a>(arena: &'a Arena<'a>, node: &SyntaxNode) -> DocBuilder<'a, Ar
     let segments: Vec<_> = node
         .children()
         .filter(|n| n.kind() == SyntaxKind::PATH_SEGMENT)
-        .filter_map(|seg| seg.first_token().map(|t| arena.text(t.text().to_string())))
+        .filter_map(|seg| {
+            // Find first non-trivia token in the segment
+            for child in seg.children_with_tokens() {
+                if let rowan::NodeOrToken::Token(token) = child {
+                    if !is_trivia(&token) {
+                        return Some(arena.text(token.text().to_string()));
+                    }
+                }
+            }
+            None
+        })
         .collect();
 
     arena.intersperse(segments, arena.text("::"))

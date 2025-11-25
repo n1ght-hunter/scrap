@@ -67,6 +67,7 @@ hashbrown = "0.16"
 
 # testing
 insta = "1"
+expect-test = "1.4"
 
 # serialization
 bincode = { version = "2", default-features = false, features = [

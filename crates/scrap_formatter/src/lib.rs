@@ -14,6 +14,7 @@ pub fn format_parsed_file<'db>(db: &'db dyn scrap_shared::Db, parsed: ParsedFile
 #[cfg(test)]
 mod tests {
     use super::*;
+    use expect_test::expect;
 
     #[test]
     fn test_format_enum() {
@@ -24,10 +25,13 @@ mod tests {
         let config = FormatterConfig::default();
         let formatted = format_file(source, &config);
 
-        eprintln!("=== FORMATTED OUTPUT ===\n{}\n===", formatted);
-
-        // Just verify it doesn't crash
-        assert!(!formatted.is_empty());
+        expect![[r#"
+            enum MyEnum {
+                Variant1,
+                Variant2(MyStruct),
+            }
+        "#]]
+        .assert_eq(&formatted);
     }
 
     #[test]
@@ -39,9 +43,13 @@ mod tests {
         let config = FormatterConfig::default();
         let formatted = format_file(source, &config);
 
-        eprintln!("=== FORMATTED OUTPUT ===\n{}\n===", formatted);
-
-        assert!(!formatted.is_empty());
+        expect![[r#"
+            struct MyStruct {
+                field1: i32,
+                field2: String,
+            }
+        "#]]
+        .assert_eq(&formatted);
     }
 
     #[test]
@@ -52,8 +60,71 @@ mod tests {
         let config = FormatterConfig::default();
         let formatted = format_file(source, &config);
 
-        eprintln!("=== FORMATTED OUTPUT ===\n{}\n===", formatted);
+        expect![[r#"
+            fn main() {
+                print("Hello, world!");
+            }
+        "#]]
+        .assert_eq(&formatted);
+    }
 
-        assert!(!formatted.is_empty());
+    #[test]
+    fn test_format_binary_expr_in_block() {
+        let source = "fn main() { a+b }";
+        let config = FormatterConfig::default();
+        let formatted = format_file(source, &config);
+
+        expect![[r#"
+            fn main() {
+                a + b
+            }
+        "#]]
+        .assert_eq(&formatted);
+    }
+
+    #[test]
+    fn test_format_if_with_binary_expr_block() {
+        let source = "fn foo() { if a>1.0 { a+b } else { 50.0 } }";
+        let config = FormatterConfig::default();
+        let formatted = format_file(source, &config);
+
+        expect![[r#"
+            fn foo() {
+                if a > 1.0 {
+                    a + b
+                } else {
+                    50.0
+                }
+            }
+        "#]]
+        .assert_eq(&formatted);
+    }
+
+    #[test]
+    fn test_format_chained_binary_expr() {
+        let source = "fn main() { a+b+c }";
+        let config = FormatterConfig::default();
+        let formatted = format_file(source, &config);
+
+        expect![[r#"
+            fn main() {
+                a + b + c
+            }
+        "#]]
+        .assert_eq(&formatted);
+    }
+
+    #[test]
+    fn test_format_complex_precedence() {
+        let source = "fn main() { a*b+c*d }";
+        let config = FormatterConfig::default();
+        let formatted = format_file(source, &config);
+
+        expect![[r#"
+            fn main() {
+                a * b + c * d
+            }
+        "#]]
+        .assert_eq(&formatted);
     }
 }

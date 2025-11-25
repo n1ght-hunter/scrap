@@ -13,4 +13,4 @@ salsa = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-expect-test = "1.4"
+expect-test = { workspace = true }

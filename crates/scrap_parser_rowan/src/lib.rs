@@ -37,11 +37,3 @@ impl<'db> ParsedFile<'db> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_basic_parse() {
-        // TODO: Add tests once we have a way to create a test database
-    }
-}
