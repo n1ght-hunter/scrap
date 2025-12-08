@@ -53,7 +53,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
             ItemKind::Struct(structdef) => structdef.pretty_print_indent(f, indent),
             ItemKind::Module(module) => {
                 salsa::with_attached_database(|db| {
-                    write!(f, "mod {} ", { module.id(db).path(db).pretty_to_string() })
+                    write!(f, "mod {} ", module.id(db).path(db))
                 })
                 .unwrap_or_else(|| write!(f, "mod <no db> "))?;
                 module.pretty_print_indent(f, indent)

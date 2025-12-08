@@ -163,17 +163,10 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Module(module) => {
-                assert_eq!(
-                    module
-                        .id(db)
-                        .path(db)
-                        .segments
-                        .last()
-                        .unwrap()
-                        .ident
-                        .name
-                        .text(db),
-                    "my_module"
+                assert!(
+                    module.id(db).path_str(db).ends_with("my_module"),
+                    "Expected path to end with 'my_module', got '{}'",
+                    module.id(db).path_str(db)
                 );
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Loaded(_, inline, span) => {
@@ -193,17 +186,10 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Module(module) => {
-                assert_eq!(
-                    module
-                        .id(db)
-                        .path(db)
-                        .segments
-                        .last()
-                        .unwrap()
-                        .ident
-                        .name
-                        .text(db),
-                    "my_module"
+                assert!(
+                    module.id(db).path_str(db).ends_with("my_module"),
+                    "Expected path to end with 'my_module', got '{}'",
+                    module.id(db).path_str(db)
                 );
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Unloaded => {}

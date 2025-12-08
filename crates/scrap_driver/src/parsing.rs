@@ -180,13 +180,13 @@ fn resolve_module_by_id<'a, 'db>(
     modules: &'a Modules<'db>,
     module_id: &scrap_shared::id::ModuleId<'db>,
 ) -> Option<&'a scrap_ast::module::Module<'db>> {
+    // ModuleIds are now interned by path string, so direct lookup works
     if let Some(mo) = modules.get(module_id) {
-        // Module is found
         Some(mo)
     } else {
         db.dcx().emit_err(
             Level::ERROR
-                .primary_title(format!("Unresolved module: {}", module_id.path(db)))
+                .primary_title(format!("Unresolved module: {}", module_id.path_str(db)))
                 .element(Level::HELP.message(
                     "Ensure that all modules are included in the source files.".to_string(),
                 )),

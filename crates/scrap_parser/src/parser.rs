@@ -198,7 +198,7 @@ impl<'a, 'db> Parser<'a, 'db> {
 
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
         let id = self.state.new_node_id();
-        let name = ModuleId::new(self.db, self.current_module_path.borrow().clone());
+        let name = ModuleId::from_path(self.db, &self.current_module_path.borrow());
         let items = self.parse_module_inner(Token::Eof)?;
         Ok(Can::new(self.db, id, name, items))
     }

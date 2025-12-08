@@ -106,6 +106,10 @@ pub fn collect_modules<'db>(
     });
 
     other_files.iter().for_each(|file| {
+        // Insert the main module from this file
+        let main_module = file.ast(db).to_module(db);
+        modules.insert(main_module.id(db), main_module);
+        // Also insert any nested modules declared in this file
         file.modules(db).iter().for_each(|module| {
             modules.insert(module.id(db), module.clone());
         });

@@ -59,7 +59,7 @@ pub fn lower_parsed_file<'db>(
             if let scrap_ast::module::ModuleKind::Loaded(items, _, _) = module.kind(db) {
                 items.iter().map(|b| (**b).clone()).collect()
             } else {
-                eprintln!("Module '{}' is not loaded", module_id.path(db));
+                eprintln!("Module '{}' is not loaded", module_id.path_str(db));
                 return None;
             }
         }
@@ -68,7 +68,7 @@ pub fn lower_parsed_file<'db>(
     match lower_module(db, module_id, &items) {
         Ok(module) => Some(module),
         Err(e) => {
-            eprintln!("Error lowering module '{}': {}", module_id.path(db), e);
+            eprintln!("Error lowering module '{}': {}", module_id.path_str(db), e);
             None
         }
     }
@@ -486,7 +486,8 @@ mod tests {
                 span,
             },
         };
-        let module_id = ModuleId::new(db, Path::from_segment(db, "test_module"));
+        let path = scrap_shared::path::Path::from_segment(db, "test_module");
+        let module_id = ModuleId::from_path(db, &path);
 
         let module = lower_module(db, module_id, &[item]).unwrap();
 
@@ -496,7 +497,8 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
-        let module_id = ModuleId::new(db, Path::from_segment(db, "empty_module"));
+        let path = scrap_shared::path::Path::from_segment(db, "empty_module");
+        let module_id = ModuleId::from_path(db, &path);
         let module = lower_module(db, module_id, &[]).unwrap();
 
         assert_eq!(module.id(db), module_id);

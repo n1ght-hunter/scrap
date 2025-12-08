@@ -133,4 +133,70 @@ impl<'db> Path<'db> {
         };
         self.extend(db, ident)
     }
+
+    /// Compare two paths by text only, ignoring spans and NodeIds
+    pub fn eq_text(&self, other: &Self, db: &'db dyn salsa::Database) -> bool {
+        if self.segments.len() != other.segments.len() {
+            return false;
+        }
+        self.segments
+            .iter()
+            .zip(other.segments.iter())
+            .all(|(a, b)| a.ident.name.text(db) == b.ident.name.text(db))
+    }
+
+    /// Compare two paths including spans (full structural equality)
+    pub fn eq_with_span(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+/// A wrapper around Path that provides equality and hashing based only on
+/// the path text (segment names), ignoring spans and NodeIds.
+/// This is used for interning ModuleId and TypeId.
+#[derive(Debug, Clone, salsa::Update, serde::Serialize, serde::Deserialize)]
+pub struct PathKey<'db> {
+    pub path: Path<'db>,
+}
+
+impl<'db> PathKey<'db> {
+    pub fn new(path: Path<'db>) -> Self {
+        Self { path }
+    }
+
+    /// Compare including span information
+    pub fn eq_with_span(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+impl<'db> std::hash::Hash for PathKey<'db> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Hash only the segment names, not spans or NodeIds
+        for segment in &self.path.segments {
+            segment.ident.name.hash(state);
+        }
+    }
+}
+
+impl<'db> PartialEq for PathKey<'db> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.path.segments.len() != other.path.segments.len() {
+            return false;
+        }
+        // Compare only segment names, not spans or NodeIds
+        self.path
+            .segments
+            .iter()
+            .zip(other.path.segments.iter())
+            .all(|(a, b)| a.ident.name == b.ident.name)
+    }
+}
+
+impl<'db> Eq for PathKey<'db> {}
+
+impl<'db> std::fmt::Display for PathKey<'db> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
 }

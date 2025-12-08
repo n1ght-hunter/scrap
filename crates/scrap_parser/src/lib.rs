@@ -84,7 +84,7 @@ pub fn parse_tokens<'db>(
     let token_stream = TokenStreamCursor::new(tokens);
     let state = State::new(file.path(db).to_str().unwrap());
     let path = Path::from_segments(db, &root_path);
-    let id = scrap_shared::id::ModuleId::new(db, path.clone());
+    let id = scrap_shared::id::ModuleId::from_path(db, &path);
     let mut parser = Parser::new(db, file.content(db), token_stream, state, path.clone());
     let ast = if is_root {
         parser.parse_can().map(|ast| {

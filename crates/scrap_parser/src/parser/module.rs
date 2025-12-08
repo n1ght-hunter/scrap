@@ -22,14 +22,14 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.eat(Token::Semicolon) {
             Ok(ItemKind::Module(Module::new(
                 self.db,
-                ModuleId::new(self.db, self.current_module_path().to_owned()),
+                ModuleId::from_path(self.db, &self.current_module_path()),
                 ModuleKind::Unloaded,
             )))
         } else if self.eat(Token::LBrace) {
             let items = self.parse_module_inner(Token::RBrace)?;
             let module = Module::new(
                 self.db,
-                ModuleId::new(self.db, self.current_module_path().to_owned()),
+                ModuleId::from_path(self.db, &self.current_module_path()),
                 ModuleKind::Loaded(
                     items,
                     Inline::Yes,
@@ -85,17 +85,10 @@ mod tests {
         let item = parser.parse_module().unwrap_or_render();
         match item {
             ItemKind::Module(module) => {
-                assert_eq!(
-                    module
-                        .id(db)
-                        .path(db)
-                        .segments
-                        .last()
-                        .unwrap()
-                        .ident
-                        .name
-                        .text(db),
-                    "my_module"
+                assert!(
+                    module.id(db).path_str(db).ends_with("my_module"),
+                    "Expected path to end with 'my_module', got '{}'",
+                    module.id(db).path_str(db)
                 );
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Loaded(items, inline, span) => {
