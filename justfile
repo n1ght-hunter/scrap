@@ -19,7 +19,6 @@ hello_world *args:
 complex *args:
     just run E:/programming/rust/scrap/example/complex.sc \
     -i E:/programming/rust/scrap/example/external_module.sc \
-    --pretty-out ast \
     --crate-name complex --crate-type bin --cache ./target/scrap/complex/cache {{args}}
 
 complex_quick *args:

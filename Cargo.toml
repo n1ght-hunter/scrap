@@ -49,10 +49,10 @@ toml = "0.9"
 
 # diagnostics and error reporting
 tracing = "0.1.41"
-tracing-subscriber = "0.3.20"
+tracing-subscriber = "0.3"
 thiserror = "2"
 anyhow = "1"
-annotate-snippets = "0.12.8"
+annotate-snippets = "0.12"
 ariadne = "0.6.0"
 anstyle = "1.0.13"
 anstream = "0.6.21"
@@ -90,7 +90,7 @@ cranelift-object = "0.126"
 chumsky = "0.11.1"
 
 # Lexer
-logos = "0.15.1"
+logos = "0.16"
 
 # Rowan parser & formatting
 rowan = "0.16.1"

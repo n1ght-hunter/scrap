@@ -166,10 +166,10 @@ pub enum Trivia {
     Whitespace,
 
     // Preserve comments (for Rowan parser)
-    #[regex(r"///[^\r\n]*")]
+    #[regex(r"///[^\r\n]*", allow_greedy = true)]
     #[display("<doc_comment>")]
     DocComment,
-    #[regex(r"//[^\r\n]*")]
+    #[regex(r"//[^\r\n]*", allow_greedy = true)]
     #[display("<comment>")]
     Comment,
 }
