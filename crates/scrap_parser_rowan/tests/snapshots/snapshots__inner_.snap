@@ -1,0 +1,27 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..28
+  USE_TREE@0..13
+    USE_KW@0..3 "use"
+    PATH@3..12
+      PATH_SEGMENT@3..7
+        WHITESPACE@3..4 " "
+        IDENT@4..7 "foo"
+      COLON2@7..9 "::"
+      PATH_SEGMENT@9..12
+        IDENT@9..12 "bar"
+    SEMICOLON@12..13 ";"
+  USE_TREE@13..27
+    WHITESPACE@13..14 "\n"
+    USE_KW@14..17 "use"
+    PATH@17..26
+      PATH_SEGMENT@17..21
+        WHITESPACE@17..18 " "
+        IDENT@18..21 "baz"
+      COLON2@21..23 "::"
+      PATH_SEGMENT@23..26
+        IDENT@23..26 "qux"
+    SEMICOLON@26..27 ";"
+  EOF@27..28 ";"

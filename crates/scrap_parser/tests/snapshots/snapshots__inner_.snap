@@ -1,0 +1,208 @@
+---
+source: crates/scrap_parser/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+Can(
+    Can {
+        [salsa id]: Id(1c00),
+        id: NodeId {
+            id: 0,
+            file_hash: 16101345102062212073,
+        },
+        name: ModuleId {
+            path: PathKey {
+                path: Path {
+                    span: Span {
+                        [salsa id]: Id(80e),
+                        start: 0,
+                        end: 4,
+                    },
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                id: NodeId {
+                                    id: -2,
+                                    file_hash: 0,
+                                },
+                                name: Symbol {
+                                    text: "test",
+                                },
+                                span: Span {
+                                    [salsa id]: Id(80d),
+                                    start: 0,
+                                    end: 4,
+                                },
+                            },
+                            id: NodeId {
+                                id: -2,
+                                file_hash: 0,
+                            },
+                        },
+                    ],
+                },
+            },
+        },
+        items: [
+            Item {
+                kind: Use(
+                    UseTree {
+                        prefix: Path {
+                            span: Span {
+                                [salsa id]: Id(80f),
+                                start: 0,
+                                end: 17,
+                            },
+                            segments: [
+                                PathSegment {
+                                    ident: Ident {
+                                        id: NodeId {
+                                            id: 1,
+                                            file_hash: 16101345102062212073,
+                                        },
+                                        name: Symbol {
+                                            text: "foo",
+                                        },
+                                        span: Span {
+                                            [salsa id]: Id(802),
+                                            start: 4,
+                                            end: 7,
+                                        },
+                                    },
+                                    id: NodeId {
+                                        id: 2,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                },
+                                PathSegment {
+                                    ident: Ident {
+                                        id: NodeId {
+                                            id: 3,
+                                            file_hash: 16101345102062212073,
+                                        },
+                                        name: Symbol {
+                                            text: "bar",
+                                        },
+                                        span: Span {
+                                            [salsa id]: Id(804),
+                                            start: 9,
+                                            end: 12,
+                                        },
+                                    },
+                                    id: NodeId {
+                                        id: 4,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                },
+                            ],
+                        },
+                        kind: Simple(
+                            None,
+                        ),
+                        span: Span {
+                            [salsa id]: Id(810),
+                            start: 0,
+                            end: 17,
+                        },
+                    },
+                ),
+                span: Span {
+                    [salsa id]: Id(811),
+                    start: 0,
+                    end: 17,
+                },
+                id: NodeId {
+                    id: 5,
+                    file_hash: 16101345102062212073,
+                },
+                vis: Visibility {
+                    kind: Inherited,
+                    span: Span {
+                        [salsa id]: Id(800),
+                        start: 0,
+                        end: 3,
+                    },
+                },
+            },
+            Item {
+                kind: Use(
+                    UseTree {
+                        prefix: Path {
+                            span: Span {
+                                [salsa id]: Id(812),
+                                start: 14,
+                                end: 27,
+                            },
+                            segments: [
+                                PathSegment {
+                                    ident: Ident {
+                                        id: NodeId {
+                                            id: 6,
+                                            file_hash: 16101345102062212073,
+                                        },
+                                        name: Symbol {
+                                            text: "baz",
+                                        },
+                                        span: Span {
+                                            [salsa id]: Id(809),
+                                            start: 18,
+                                            end: 21,
+                                        },
+                                    },
+                                    id: NodeId {
+                                        id: 7,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                },
+                                PathSegment {
+                                    ident: Ident {
+                                        id: NodeId {
+                                            id: 8,
+                                            file_hash: 16101345102062212073,
+                                        },
+                                        name: Symbol {
+                                            text: "qux",
+                                        },
+                                        span: Span {
+                                            [salsa id]: Id(80b),
+                                            start: 23,
+                                            end: 26,
+                                        },
+                                    },
+                                    id: NodeId {
+                                        id: 9,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                },
+                            ],
+                        },
+                        kind: Simple(
+                            None,
+                        ),
+                        span: Span {
+                            [salsa id]: Id(813),
+                            start: 14,
+                            end: 27,
+                        },
+                    },
+                ),
+                span: Span {
+                    [salsa id]: Id(814),
+                    start: 14,
+                    end: 27,
+                },
+                id: NodeId {
+                    id: 10,
+                    file_hash: 16101345102062212073,
+                },
+                vis: Visibility {
+                    kind: Inherited,
+                    span: Span {
+                        [salsa id]: Id(807),
+                        start: 14,
+                        end: 17,
+                    },
+                },
+            },
+        ],
+    },
+)

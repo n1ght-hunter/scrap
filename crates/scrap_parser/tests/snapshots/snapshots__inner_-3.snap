@@ -1,0 +1,248 @@
+---
+source: crates/scrap_parser/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+Can(
+    Can {
+        [salsa id]: Id(1c00),
+        id: NodeId {
+            id: 0,
+            file_hash: 16101345102062212073,
+        },
+        name: ModuleId {
+            path: PathKey {
+                path: Path {
+                    span: Span {
+                        [salsa id]: Id(814),
+                        start: 0,
+                        end: 4,
+                    },
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                id: NodeId {
+                                    id: -2,
+                                    file_hash: 0,
+                                },
+                                name: Symbol {
+                                    text: "test",
+                                },
+                                span: Span {
+                                    [salsa id]: Id(813),
+                                    start: 0,
+                                    end: 4,
+                                },
+                            },
+                            id: NodeId {
+                                id: -2,
+                                file_hash: 0,
+                            },
+                        },
+                    ],
+                },
+            },
+        },
+        items: [
+            Item {
+                kind: Enum(
+                    EnumDef {
+                        id: NodeId {
+                            id: 14,
+                            file_hash: 16101345102062212073,
+                        },
+                        ident: Ident {
+                            id: NodeId {
+                                id: 1,
+                                file_hash: 16101345102062212073,
+                            },
+                            name: Symbol {
+                                text: "Color",
+                            },
+                            span: Span {
+                                [salsa id]: Id(802),
+                                start: 5,
+                                end: 10,
+                            },
+                        },
+                        variants: [
+                            Variant {
+                                id: NodeId {
+                                    id: 4,
+                                    file_hash: 16101345102062212073,
+                                },
+                                span: Span {
+                                    [salsa id]: Id(815),
+                                    start: 17,
+                                    end: 21,
+                                },
+                                ident: Ident {
+                                    id: NodeId {
+                                        id: 2,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                    name: Symbol {
+                                        text: "Red",
+                                    },
+                                    span: Span {
+                                        [salsa id]: Id(806),
+                                        start: 17,
+                                        end: 20,
+                                    },
+                                },
+                                data: Unit(
+                                    NodeId {
+                                        id: 3,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                ),
+                            },
+                            Variant {
+                                id: NodeId {
+                                    id: 7,
+                                    file_hash: 16101345102062212073,
+                                },
+                                span: Span {
+                                    [salsa id]: Id(816),
+                                    start: 26,
+                                    end: 32,
+                                },
+                                ident: Ident {
+                                    id: NodeId {
+                                        id: 5,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                    name: Symbol {
+                                        text: "Green",
+                                    },
+                                    span: Span {
+                                        [salsa id]: Id(809),
+                                        start: 26,
+                                        end: 31,
+                                    },
+                                },
+                                data: Unit(
+                                    NodeId {
+                                        id: 6,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                ),
+                            },
+                            Variant {
+                                id: NodeId {
+                                    id: 13,
+                                    file_hash: 16101345102062212073,
+                                },
+                                span: Span {
+                                    [salsa id]: Id(817),
+                                    start: 37,
+                                    end: 47,
+                                },
+                                ident: Ident {
+                                    id: NodeId {
+                                        id: 8,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                    name: Symbol {
+                                        text: "Blue",
+                                    },
+                                    span: Span {
+                                        [salsa id]: Id(80c),
+                                        start: 37,
+                                        end: 41,
+                                    },
+                                },
+                                data: Tuple(
+                                    [
+                                        FieldDef {
+                                            id: NodeId {
+                                                id: 11,
+                                                file_hash: 16101345102062212073,
+                                            },
+                                            span: Span {
+                                                [salsa id]: Id(80e),
+                                                start: 42,
+                                                end: 45,
+                                            },
+                                            vis: Visibility {
+                                                kind: Inherited,
+                                                span: Span {
+                                                    [salsa id]: Id(80e),
+                                                    start: 42,
+                                                    end: 45,
+                                                },
+                                            },
+                                            ident: None,
+                                            ty: Ty {
+                                                id: NodeId {
+                                                    id: 10,
+                                                    file_hash: 16101345102062212073,
+                                                },
+                                                kind: Path(
+                                                    Path {
+                                                        span: Span {
+                                                            [salsa id]: Id(80e),
+                                                            start: 42,
+                                                            end: 45,
+                                                        },
+                                                        segments: [
+                                                            PathSegment {
+                                                                ident: Ident {
+                                                                    id: NodeId {
+                                                                        id: 9,
+                                                                        file_hash: 16101345102062212073,
+                                                                    },
+                                                                    name: Symbol {
+                                                                        text: "int",
+                                                                    },
+                                                                    span: Span {
+                                                                        [salsa id]: Id(80e),
+                                                                        start: 42,
+                                                                        end: 45,
+                                                                    },
+                                                                },
+                                                                id: NodeId {
+                                                                    id: 9,
+                                                                    file_hash: 16101345102062212073,
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
+                                                ),
+                                                span: Span {
+                                                    [salsa id]: Id(80e),
+                                                    start: 42,
+                                                    end: 45,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                    NodeId {
+                                        id: 12,
+                                        file_hash: 16101345102062212073,
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                ),
+                span: Span {
+                    [salsa id]: Id(818),
+                    start: 0,
+                    end: 49,
+                },
+                id: NodeId {
+                    id: 15,
+                    file_hash: 16101345102062212073,
+                },
+                vis: Visibility {
+                    kind: Inherited,
+                    span: Span {
+                        [salsa id]: Id(800),
+                        start: 0,
+                        end: 4,
+                    },
+                },
+            },
+        ],
+    },
+)

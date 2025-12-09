@@ -1,0 +1,44 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..62
+  MODULE@0..61
+    MOD_KW@0..3 "mod"
+    NAME@3..9
+      WHITESPACE@3..4 " "
+      IDENT@4..9 "inner"
+    WHITESPACE@9..10 " "
+    L_BRACE@10..11 "{"
+    FUNCTION@11..59
+      WHITESPACE@11..16 "\n    "
+      FN_KW@16..18 "fn"
+      NAME@18..25
+        WHITESPACE@18..19 " "
+        IDENT@19..25 "helper"
+      PARAM_LIST@25..27
+        L_PAREN@25..26 "("
+        R_PAREN@26..27 ")"
+      BLOCK_EXPR@27..59
+        BLOCK@27..59
+          WHITESPACE@27..28 " "
+          L_BRACE@28..29 "{"
+          STMT_LIST@29..53
+            EXPR_STMT@29..53
+              CALL_EXPR@29..52
+                PATH_EXPR@29..43
+                  PATH@29..43
+                    PATH_SEGMENT@29..43
+                      WHITESPACE@29..38 "\n        "
+                      IDENT@38..43 "print"
+                ARG_LIST@43..52
+                  L_PAREN@43..44 "("
+                  LITERAL_EXPR@44..51
+                    STRING_LIT@44..51 "\"hello\""
+                  R_PAREN@51..52 ")"
+              SEMICOLON@52..53 ";"
+          WHITESPACE@53..58 "\n    "
+          R_BRACE@58..59 "}"
+    WHITESPACE@59..60 "\n"
+    R_BRACE@60..61 "}"
+  EOF@61..62 "}"

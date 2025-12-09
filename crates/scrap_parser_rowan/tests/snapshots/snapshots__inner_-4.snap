@@ -1,0 +1,68 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..77
+  FUNCTION@0..76
+    FN_KW@0..2 "fn"
+    NAME@2..7
+      WHITESPACE@2..3 " "
+      IDENT@3..7 "test"
+    PARAM_LIST@7..9
+      L_PAREN@7..8 "("
+      R_PAREN@8..9 ")"
+    RET_TYPE@9..16
+      WHITESPACE@9..10 " "
+      ARROW@10..12 "->"
+      PATH_TYPE@12..16
+        PATH@12..16
+          PATH_SEGMENT@12..16
+            WHITESPACE@12..13 " "
+            IDENT@13..16 "int"
+    BLOCK_EXPR@16..76
+      BLOCK@16..76
+        WHITESPACE@16..17 " "
+        L_BRACE@17..18 "{"
+        STMT_LIST@18..74
+          EXPR_STMT@18..74
+            IF_EXPR@18..74
+              WHITESPACE@18..23 "\n    "
+              IF_KW@23..25 "if"
+              BINARY_EXPR@25..32
+                PATH_EXPR@25..27
+                  PATH@25..27
+                    PATH_SEGMENT@25..27
+                      WHITESPACE@25..26 " "
+                      IDENT@26..27 "x"
+                WHITESPACE@27..28 " "
+                GT@28..29 ">"
+                LITERAL_EXPR@29..32
+                  WHITESPACE@29..30 " "
+                  INT_LIT@30..32 "10"
+              BLOCK_EXPR@32..51
+                BLOCK@32..51
+                  WHITESPACE@32..33 " "
+                  L_BRACE@33..34 "{"
+                  STMT_LIST@34..45
+                    EXPR_STMT@34..45
+                      LITERAL_EXPR@34..45
+                        WHITESPACE@34..43 "\n        "
+                        INT_LIT@43..45 "42"
+                  WHITESPACE@45..50 "\n    "
+                  R_BRACE@50..51 "}"
+              WHITESPACE@51..52 " "
+              ELSE_KW@52..56 "else"
+              BLOCK_EXPR@56..74
+                BLOCK@56..74
+                  WHITESPACE@56..57 " "
+                  L_BRACE@57..58 "{"
+                  STMT_LIST@58..68
+                    EXPR_STMT@58..68
+                      LITERAL_EXPR@58..68
+                        WHITESPACE@58..67 "\n        "
+                        INT_LIT@67..68 "0"
+                  WHITESPACE@68..73 "\n    "
+                  R_BRACE@73..74 "}"
+        WHITESPACE@74..75 "\n"
+        R_BRACE@75..76 "}"
+  EOF@76..77 "}"

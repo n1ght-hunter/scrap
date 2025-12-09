@@ -1,0 +1,65 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..44
+  FUNCTION@0..43
+    FN_KW@0..2 "fn"
+    NAME@2..6
+      WHITESPACE@2..3 " "
+      IDENT@3..6 "add"
+    PARAM_LIST@6..22
+      L_PAREN@6..7 "("
+      PARAM@7..13
+        NAME@7..8
+          IDENT@7..8 "a"
+        TYPE_ANNOTATION@8..13
+          COLON@8..9 ":"
+          PATH_TYPE@9..13
+            PATH@9..13
+              PATH_SEGMENT@9..13
+                WHITESPACE@9..10 " "
+                IDENT@10..13 "int"
+      COMMA@13..14 ","
+      PARAM@14..21
+        NAME@14..16
+          WHITESPACE@14..15 " "
+          IDENT@15..16 "b"
+        TYPE_ANNOTATION@16..21
+          COLON@16..17 ":"
+          PATH_TYPE@17..21
+            PATH@17..21
+              PATH_SEGMENT@17..21
+                WHITESPACE@17..18 " "
+                IDENT@18..21 "int"
+      R_PAREN@21..22 ")"
+    RET_TYPE@22..29
+      WHITESPACE@22..23 " "
+      ARROW@23..25 "->"
+      PATH_TYPE@25..29
+        PATH@25..29
+          PATH_SEGMENT@25..29
+            WHITESPACE@25..26 " "
+            IDENT@26..29 "int"
+    BLOCK_EXPR@29..43
+      BLOCK@29..43
+        WHITESPACE@29..30 " "
+        L_BRACE@30..31 "{"
+        STMT_LIST@31..41
+          EXPR_STMT@31..41
+            BINARY_EXPR@31..41
+              PATH_EXPR@31..37
+                PATH@31..37
+                  PATH_SEGMENT@31..37
+                    WHITESPACE@31..36 "\n    "
+                    IDENT@36..37 "a"
+              WHITESPACE@37..38 " "
+              PLUS@38..39 "+"
+              PATH_EXPR@39..41
+                PATH@39..41
+                  PATH_SEGMENT@39..41
+                    WHITESPACE@39..40 " "
+                    IDENT@40..41 "b"
+        WHITESPACE@41..42 "\n"
+        R_BRACE@42..43 "}"
+  EOF@43..44 "}"

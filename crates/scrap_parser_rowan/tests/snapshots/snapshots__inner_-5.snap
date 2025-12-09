@@ -1,0 +1,40 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..41
+  STRUCT_DEF@0..40
+    STRUCT_KW@0..6 "struct"
+    NAME@6..12
+      WHITESPACE@6..7 " "
+      IDENT@7..12 "Point"
+    FIELD_LIST@12..40
+      WHITESPACE@12..13 " "
+      L_BRACE@13..14 "{"
+      FIELD@14..25
+        NAME@14..20
+          WHITESPACE@14..19 "\n    "
+          IDENT@19..20 "x"
+        TYPE_ANNOTATION@20..25
+          COLON@20..21 ":"
+          PATH_TYPE@21..25
+            PATH@21..25
+              PATH_SEGMENT@21..25
+                WHITESPACE@21..22 " "
+                IDENT@22..25 "int"
+      COMMA@25..26 ","
+      FIELD@26..37
+        NAME@26..32
+          WHITESPACE@26..31 "\n    "
+          IDENT@31..32 "y"
+        TYPE_ANNOTATION@32..37
+          COLON@32..33 ":"
+          PATH_TYPE@33..37
+            PATH@33..37
+              PATH_SEGMENT@33..37
+                WHITESPACE@33..34 " "
+                IDENT@34..37 "int"
+      COMMA@37..38 ","
+      WHITESPACE@38..39 "\n"
+      R_BRACE@39..40 "}"
+  EOF@40..41 "}"

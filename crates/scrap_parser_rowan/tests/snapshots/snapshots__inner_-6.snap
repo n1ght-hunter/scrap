@@ -1,0 +1,37 @@
+---
+source: crates/scrap_parser_rowan/tests/snapshots.rs
+expression: "parse(db, source)"
+---
+SOURCE_FILE@0..50
+  ENUM_DEF@0..49
+    ENUM_KW@0..4 "enum"
+    NAME@4..10
+      WHITESPACE@4..5 " "
+      IDENT@5..10 "Color"
+    VARIANT_LIST@10..49
+      WHITESPACE@10..11 " "
+      L_BRACE@11..12 "{"
+      VARIANT@12..20
+        NAME@12..20
+          WHITESPACE@12..17 "\n    "
+          IDENT@17..20 "Red"
+      COMMA@20..21 ","
+      VARIANT@21..31
+        NAME@21..31
+          WHITESPACE@21..26 "\n    "
+          IDENT@26..31 "Green"
+      COMMA@31..32 ","
+      VARIANT@32..46
+        NAME@32..41
+          WHITESPACE@32..37 "\n    "
+          IDENT@37..41 "Blue"
+        L_PAREN@41..42 "("
+        PATH_TYPE@42..45
+          PATH@42..45
+            PATH_SEGMENT@42..45
+              IDENT@42..45 "int"
+        R_PAREN@45..46 ")"
+      COMMA@46..47 ","
+      WHITESPACE@47..48 "\n"
+      R_BRACE@48..49 "}"
+  EOF@49..50 "}"
