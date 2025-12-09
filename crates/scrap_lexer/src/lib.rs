@@ -184,6 +184,7 @@ pub enum Token {
 }
 
 impl Token {
+    #[inline(always)]
     pub const fn dummy() -> Self {
         Token::Dummy
     }

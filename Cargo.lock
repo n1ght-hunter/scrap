@@ -1267,9 +1267,11 @@ name = "scrap_parser_rowan"
 version = "0.1.0"
 dependencies = [
  "expect-test",
+ "insta",
  "rowan",
  "salsa",
  "scrap_lexer",
+ "scrap_macros",
  "scrap_shared",
  "scrap_span",
  "serde",
