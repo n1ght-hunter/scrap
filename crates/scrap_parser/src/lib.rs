@@ -31,6 +31,8 @@ pub struct ParsedFile<'db> {
     #[returns(ref)]
     /// All modules defined in this file
     pub modules: Vec<scrap_ast::module::Module<'db>>,
+    /// The input file (for accessing source text during lowering)
+    pub file: scrap_shared::salsa::InputFile<'db>,
 }
 
 #[derive(
@@ -92,6 +94,7 @@ pub fn parse_tokens<'db>(
                 db,
                 CanOrModule::Can(ast),
                 std::mem::take(&mut parser.modules),
+                file,
             )
         })
     } else {
@@ -108,6 +111,7 @@ pub fn parse_tokens<'db>(
                     ),
                 )),
                 std::mem::take(&mut parser.modules),
+                file,
             )
         })
     };

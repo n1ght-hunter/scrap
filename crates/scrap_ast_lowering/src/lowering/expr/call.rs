@@ -1,0 +1,233 @@
+//! Function call lowering
+
+use scrap_ast::expr::Expr;
+use scrap_ir as ir;
+
+use crate::{lowerer::ExprLowerer, MResult};
+
+impl<'db> ExprLowerer<'db> {
+    /// Lower a function call to an operand
+    pub(crate) fn lower_call(
+        &mut self,
+        func: &Expr<'db>,
+        args: &[Box<Expr<'db>>],
+    ) -> MResult<ir::Operand<'db>> {
+        // Lower the function expression (typically a path)
+        let func_operand = self.lower_expr(func)?;
+
+        // Lower each argument to an operand
+        let mut arg_operands = Vec::new();
+        for arg in args {
+            let operand = self.lower_expr(arg)?;
+            arg_operands.push(operand);
+        }
+
+        // Allocate a temporary for the return value
+        // TODO: Better type inference based on function signature
+        let result_ty = ir::Ty::Infer;
+        let result_temp = self.allocate_temp(result_ty);
+        let destination = ir::Place::Local(result_temp);
+
+        // Create a continuation block for after the call
+        let cont_bb = self.cfg_builder.start_block();
+
+        // Emit the call terminator
+        let terminator = ir::Terminator::Call {
+            func: func_operand,
+            args: arg_operands,
+            destination: destination.clone(),
+            target: cont_bb,
+        };
+        self.cfg_builder.finish_block(terminator);
+
+        // Continue at the continuation block
+        self.cfg_builder.set_current_block(cont_bb);
+
+        // Return reference to the result temporary
+        Ok(ir::Operand::Place(destination))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::*;
+    use scrap_ast::operators::BinOpKind;
+    use scrap_shared::ident::Symbol;
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_simple_call(db: &dyn scrap_shared::Db) {
+        // foo()
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create binding for foo
+        let foo_sym = Symbol::new(db, "foo".to_string());
+        let foo_local = lowerer.allocate_named_local(foo_sym, ir::Ty::Infer);
+        lowerer.insert_binding(foo_sym, foo_local);
+
+        let func = create_ident_expr(db, "foo");
+        let call_expr = create_call_expr(db, func, vec![]);
+
+        let result = lowerer.lower_expr(&call_expr);
+        assert!(result.is_ok());
+
+        // Should have: foo, result_temp = 2 locals
+        assert_eq!(lowerer.local_decls.len(), 2);
+
+        // Should have created at least 2 blocks (call block + continuation)
+        assert!(lowerer.cfg_builder.block_count() >= 2);
+    }
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_call_with_args(db: &dyn scrap_shared::Db) {
+        // add(1, 2)
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create binding for add
+        let add_sym = Symbol::new(db, "add".to_string());
+        let add_local = lowerer.allocate_named_local(add_sym, ir::Ty::Infer);
+        lowerer.insert_binding(add_sym, add_local);
+
+        let func = create_ident_expr(db, "add");
+        let one = create_int_lit(db, 1);
+        let two = create_int_lit(db, 2);
+        let call_expr = create_call_expr(db, func, vec![one, two]);
+
+        let result = lowerer.lower_expr(&call_expr);
+        assert!(result.is_ok());
+
+        // Should have: add, 1_temp, 2_temp, result_temp = 4 locals
+        assert_eq!(lowerer.local_decls.len(), 4);
+    }
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_call_with_expression_args(db: &dyn scrap_shared::Db) {
+        // max(x + 1, y * 2)
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create bindings
+        let max_sym = Symbol::new(db, "max".to_string());
+        let max_local = lowerer.allocate_named_local(max_sym, ir::Ty::Infer);
+        lowerer.insert_binding(max_sym, max_local);
+
+        let x_sym = Symbol::new(db, "x".to_string());
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        lowerer.insert_binding(x_sym, x_local);
+
+        let y_sym = Symbol::new(db, "y".to_string());
+        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int);
+        lowerer.insert_binding(y_sym, y_local);
+
+        // Create the call: max(x + 1, y * 2)
+        let func = create_ident_expr(db, "max");
+        let x_expr = create_ident_expr(db, "x");
+        let one = create_int_lit(db, 1);
+        let arg1 = create_binary_expr(db, BinOpKind::Add, x_expr, one);
+
+        let y_expr = create_ident_expr(db, "y");
+        let two = create_int_lit(db, 2);
+        let arg2 = create_binary_expr(db, BinOpKind::Mul, y_expr, two);
+
+        let call_expr = create_call_expr(db, func, vec![arg1, arg2]);
+
+        let result = lowerer.lower_expr(&call_expr);
+        assert!(result.is_ok());
+
+        // Should have: max, x, y, 1, add_result, 2, mul_result, call_result = 8 locals
+        assert_eq!(lowerer.local_decls.len(), 8);
+    }
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_nested_calls(db: &dyn scrap_shared::Db) {
+        // outer(inner(1))
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create bindings
+        let outer_sym = Symbol::new(db, "outer".to_string());
+        let outer_local = lowerer.allocate_named_local(outer_sym, ir::Ty::Infer);
+        lowerer.insert_binding(outer_sym, outer_local);
+
+        let inner_sym = Symbol::new(db, "inner".to_string());
+        let inner_local = lowerer.allocate_named_local(inner_sym, ir::Ty::Infer);
+        lowerer.insert_binding(inner_sym, inner_local);
+
+        // Create inner call: inner(1)
+        let inner_func = create_ident_expr(db, "inner");
+        let one = create_int_lit(db, 1);
+        let inner_call = create_call_expr(db, inner_func, vec![one]);
+
+        // Create outer call: outer(inner(1))
+        let outer_func = create_ident_expr(db, "outer");
+        let outer_call = create_call_expr(db, outer_func, vec![inner_call]);
+
+        let result = lowerer.lower_expr(&outer_call);
+        assert!(result.is_ok());
+
+        // Should have: outer, inner, 1, inner_result, outer_result = 5 locals
+        assert_eq!(lowerer.local_decls.len(), 5);
+
+        // Should have multiple blocks for nested calls
+        assert!(lowerer.cfg_builder.block_count() >= 3);
+    }
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_call_result_assignment(db: &dyn scrap_shared::Db) {
+        // result = foo(1, 2)
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create bindings
+        let result_sym = Symbol::new(db, "result".to_string());
+        let result_local = lowerer.allocate_named_local(result_sym, ir::Ty::Infer);
+        lowerer.insert_binding(result_sym, result_local);
+
+        let foo_sym = Symbol::new(db, "foo".to_string());
+        let foo_local = lowerer.allocate_named_local(foo_sym, ir::Ty::Infer);
+        lowerer.insert_binding(foo_sym, foo_local);
+
+        // Create call: foo(1, 2)
+        let func = create_ident_expr(db, "foo");
+        let one = create_int_lit(db, 1);
+        let two = create_int_lit(db, 2);
+        let call_expr = create_call_expr(db, func, vec![one, two]);
+
+        // Create assignment: result = foo(1, 2)
+        let result_expr = create_ident_expr(db, "result");
+        let assign_expr = create_assign_expr(db, result_expr, call_expr);
+
+        let result = lowerer.lower_expr(&assign_expr);
+        assert!(result.is_ok());
+
+        // Should have: result, foo, 1, 2, call_result = 5 locals
+        assert_eq!(lowerer.local_decls.len(), 5);
+    }
+
+    #[scrap_macros::salsa_test]
+    fn test_lower_call_in_if_condition(db: &dyn scrap_shared::Db) {
+        // if is_valid(x) { }
+        let mut lowerer = ExprLowerer::new(db, "");
+
+        // Create bindings
+        let is_valid_sym = Symbol::new(db, "is_valid".to_string());
+        let is_valid_local = lowerer.allocate_named_local(is_valid_sym, ir::Ty::Infer);
+        lowerer.insert_binding(is_valid_sym, is_valid_local);
+
+        let x_sym = Symbol::new(db, "x".to_string());
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        lowerer.insert_binding(x_sym, x_local);
+
+        // Create call: is_valid(x)
+        let func = create_ident_expr(db, "is_valid");
+        let x_expr = create_ident_expr(db, "x");
+        let call_expr = create_call_expr(db, func, vec![x_expr]);
+
+        // Create if: if is_valid(x) { }
+        let then_block = create_empty_block(db);
+        let if_expr = create_if_expr(db, call_expr, then_block);
+
+        let result = lowerer.lower_expr(&if_expr);
+        assert!(result.is_ok());
+
+        // Should have multiple blocks for call + if structure
+        assert!(lowerer.cfg_builder.block_count() >= 5);
+    }
+}

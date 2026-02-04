@@ -1,19 +1,16 @@
 mod cfg_builder;
-mod expr_lowering;
+mod lowerer;
+mod lowering;
 #[cfg(test)]
 mod test_helpers;
 
-use scrap_ast::{
-    block::Block,
-    expr::ExprKind,
-    fndef::FnDef,
-    item::{Item, ItemKind},
-    pat::PatKind,
-    stmt::StmtKind,
-    typedef::{Ty, TyKind},
-};
+use scrap_ast::item::Item;
 use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
+
+pub use cfg_builder::BasicBlockBuilder;
+pub use lowerer::ExprLowerer;
+pub use lowering::{lower_body, lower_function, lower_module, lower_signature, lower_type};
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -34,7 +31,7 @@ pub enum BuilderError {
 }
 
 type Error = BuilderError;
-type MResult<T> = std::result::Result<T, Error>;
+pub type MResult<T> = std::result::Result<T, Error>;
 
 /// Result wrapper for lowered IR
 #[salsa::tracked(debug, persist)]
@@ -50,6 +47,7 @@ pub fn lower_parsed_file<'db>(
     module_id: ModuleId<'db>,
 ) -> Option<ir::Module<'db>> {
     let ast = file.ast(db);
+    let source = file.file(db).content(db);
 
     let items: Vec<Item<'db>> = match ast {
         scrap_parser::CanOrModule::Can(can) => {
@@ -65,167 +63,12 @@ pub fn lower_parsed_file<'db>(
         }
     };
 
-    match lower_module(db, module_id, &items) {
+    match lower_module(db, module_id, &items, source) {
         Ok(module) => Some(module),
         Err(e) => {
             eprintln!("Error lowering module '{}': {}", module_id.path_str(db), e);
             None
         }
-    }
-}
-
-/// Lower a module with its items
-fn lower_module<'db>(
-    db: &'db dyn scrap_shared::Db,
-    module_id: ModuleId<'db>,
-    ast_items: &[Item<'db>],
-) -> MResult<ir::Module<'db>> {
-    let mut items = Vec::new();
-
-    for item in ast_items {
-        match &item.kind {
-            ItemKind::Fn(fn_def) => {
-                let mir_function = lower_function(db, *fn_def)?;
-                items.push(ir::Items::Function(mir_function));
-            }
-            _ => {
-                // Skip non-function items for now
-                continue;
-            }
-        }
-    }
-
-    Ok(ir::Module::new(db, module_id, items))
-}
-
-/// Lower a function definition
-fn lower_function<'db>(
-    db: &'db dyn scrap_shared::Db,
-    ast_function: FnDef<'db>,
-) -> MResult<ir::Function<'db>> {
-    let signature = lower_signature(db, ast_function)?;
-    let body = lower_body(db, ast_function.body(db))?;
-
-    Ok(ir::Function::new(db, signature, body))
-}
-
-/// Lower function signature
-fn lower_signature<'db>(
-    db: &'db dyn scrap_shared::Db,
-    ast_function: FnDef<'db>,
-) -> MResult<ir::Signature<'db>> {
-    let name = ast_function.ident(db).name;
-
-    let mut params = Vec::new();
-    for arg in ast_function.args(db).iter() {
-        let param_name = arg.ident.name;
-        let param_ty = lower_type(db, &*arg.ty)?;
-        params.push((param_name, param_ty));
-    }
-
-    let return_ty = match ast_function.ret_type(db).as_ref() {
-        Some(ty) => Some(lower_type(db, ty)?),
-        None => None,
-    };
-
-    Ok(ir::Signature::new(db, name, params, return_ty))
-}
-
-/// Lower function body
-fn lower_body<'db>(
-    db: &'db dyn scrap_shared::Db,
-    ast_block: &Block<'db>,
-) -> MResult<ir::Body<'db>> {
-    let mut blocks = Vec::new();
-    let mut local_decls = Vec::new();
-    let statements = Vec::new();
-    let mut terminator = ir::Terminator::Unreachable;
-
-    // Process statements
-    for stmt in &ast_block.stmts {
-        match &stmt.kind {
-            StmtKind::Let(local) => {
-                if let PatKind::Ident(_, ident, _pat) = &local.pat.kind {
-                    let ty = local
-                        .ty
-                        .as_ref()
-                        .map_or(Ok(ir::Ty::Infer), |t| lower_type(db, t))?;
-
-                    let local_decl = ir::LocalDecl::new(db, Some(ident.name), ty);
-                    local_decls.push(local_decl);
-                } else {
-                    // For now, skip non-ident patterns (like wildcards, tuples, etc.)
-                    continue;
-                }
-            }
-            StmtKind::Semi(expr) => {
-                match &expr.kind {
-                    ExprKind::Return(_) => {
-                        terminator = ir::Terminator::Return;
-                    }
-                    _ => {
-                        // Other expressions - ignore for now
-                    }
-                }
-            }
-            StmtKind::Expr(expr) => {
-                // Trailing expression - treat as implicit return
-                match &expr.kind {
-                    ExprKind::Return(_) => {
-                        terminator = ir::Terminator::Return;
-                    }
-                    _ => {
-                        // Other expressions as implicit return
-                        terminator = ir::Terminator::Return;
-                    }
-                }
-            }
-            _ => {
-                // Skip other statement kinds for now
-                continue;
-            }
-        }
-    }
-
-    // If no explicit terminator, assume unreachable
-    if matches!(terminator, ir::Terminator::Unreachable) && !ast_block.stmts.is_empty() {
-        // If the last statement is an expression, treat as return
-        if let Some(last_stmt) = ast_block.stmts.last() {
-            if matches!(last_stmt.kind, StmtKind::Expr(_)) {
-                terminator = ir::Terminator::Return;
-            }
-        }
-    }
-
-    // Create the basic block
-    let basic_block = ir::BasicBlock::new(db, statements, terminator);
-    blocks.push(basic_block);
-
-    Ok(ir::Body::new(db, blocks, local_decls))
-}
-
-/// Lower a type from AST to IR
-fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MResult<ir::Ty<'db>> {
-    match &ast_type.kind {
-        TyKind::Path(path) => {
-            // Get the last segment as the type name
-            let type_name = path
-                .single_segment()
-                .map(|e| e.ident.name.text(db).as_str())
-                .unwrap_or("");
-
-            match type_name {
-                "int" => Ok(ir::Ty::Int),
-                "bool" => Ok(ir::Ty::Bool),
-                "String" => Ok(ir::Ty::Str),
-                _ => {
-                    let type_id = ir::TypeId::new(db, type_name);
-                    Ok(ir::Ty::Adt(type_id))
-                }
-            }
-        }
-        TyKind::Never => Ok(ir::Ty::Never),
-        _ => Ok(ir::Ty::Infer),
     }
 }
 
@@ -268,7 +111,7 @@ mod tests {
         };
         let fn_def = FnDef::new(db, node_id, ident, ThinVec::new(), None, body, span);
 
-        let result = lower_function(db, fn_def);
+        let result = lower_function(db, fn_def, "");
         if result.is_err() {
             return false;
         }
@@ -363,7 +206,7 @@ mod tests {
         let args = ThinVec::from([param_a, param_b]);
         let fn_def = FnDef::new(db, node_id, ident, args, None, body, span);
 
-        let result = lower_function(db, fn_def);
+        let result = lower_function(db, fn_def, "");
         if result.is_err() {
             return false;
         }
@@ -489,7 +332,7 @@ mod tests {
         let path = scrap_shared::path::Path::from_segment(db, "test_module");
         let module_id = ModuleId::from_path(db, &path);
 
-        let module = lower_module(db, module_id, &[item]).unwrap();
+        let module = lower_module(db, module_id, &[item], "").unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert_eq!(module.items(db).len(), 1);
@@ -499,7 +342,7 @@ mod tests {
     fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
         let path = scrap_shared::path::Path::from_segment(db, "empty_module");
         let module_id = ModuleId::from_path(db, &path);
-        let module = lower_module(db, module_id, &[]).unwrap();
+        let module = lower_module(db, module_id, &[], "").unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert!(module.items(db).is_empty());
