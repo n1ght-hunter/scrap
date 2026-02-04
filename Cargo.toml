@@ -33,6 +33,7 @@ scrap_errors = { path = "crates/scrap_errors" }
 scrap_span = { path = "crates/scrap_span" }
 scrap_shared = { path = "crates/scrap_shared" }
 scrap_driver = { path = "crates/scrap_driver" }
+scrap_tycheck = { path = "crates/scrap_tycheck" }
 
 
 either = "1"

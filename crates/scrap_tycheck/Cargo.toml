@@ -1,0 +1,21 @@
+[package]
+name = "scrap_tycheck"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scrap_shared.workspace = true
+scrap_ast.workspace = true
+scrap_span.workspace = true
+scrap_diagnostics.workspace = true
+scrap_errors.workspace = true
+thiserror.workspace = true
+salsa.workspace = true
+thin-vec.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+scrap_macros.workspace = true
+
+[lints]
+workspace = true

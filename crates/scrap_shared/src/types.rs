@@ -174,7 +174,7 @@ impl FloatTy {
 /// A unique identifier for AST nodes. NodeIds are used throughout the compiler
 /// to track and reference specific nodes during analysis and compilation.
 /// Every AST node that can be referenced has a unique NodeId.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct NodeId {
     id: i32,
     file_hash: u64,

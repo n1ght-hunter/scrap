@@ -1299,6 +1299,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrap_tycheck"
+version = "0.1.0"
+dependencies = [
+ "salsa",
+ "scrap_ast",
+ "scrap_diagnostics",
+ "scrap_errors",
+ "scrap_macros",
+ "scrap_shared",
+ "scrap_span",
+ "serde",
+ "thin-vec",
+ "thiserror",
+]
+
+[[package]]
 name = "scrapc"
 version = "0.1.0"
 dependencies = [
