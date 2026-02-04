@@ -34,22 +34,23 @@ scrap_span = { path = "crates/scrap_span" }
 scrap_shared = { path = "crates/scrap_shared" }
 scrap_driver = { path = "crates/scrap_driver" }
 scrap_tycheck = { path = "crates/scrap_tycheck" }
+scrap_test_utils = { path = "crates/scrap_test_utils" }
 
 
 either = "1"
 wyhash = "0.6.0"
 inflections = "1.1.1"
 heck = "0.5.0"
-target-lexicon = "0.13.3"
+target-lexicon = "0.13"
 clap = { version = "4", features = ["derive"] }
-salsa = { version = "0.24.0", features = ["persistence"] }
+salsa = { version = "0.25", features = ["persistence"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
 pathdiff = "0.2.3"
 toml = "0.9"
 
 # diagnostics and error reporting
-tracing = "0.1.41"
+tracing = "0.1"
 tracing-subscriber = "0.3"
 thiserror = "2"
 anyhow = "1"
@@ -71,9 +72,10 @@ indexmap = "2"
 # testing
 insta = "1"
 expect-test = "1.4"
+regex = "1"
 
 # serialization
-bincode = { version = "2", default-features = false, features = [
+bincode = { version = "3", default-features = false, features = [
     "serde",
     "std",
 ] }
@@ -81,15 +83,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # backend
-cranelift = "0.126"
-cranelift-module = "0.126"
-cranelift-jit = "0.126"
-cranelift-native = "0.126"
-cranelift-object = "0.126"
-
-# Parser
-chumsky = "0.11.1"
-
+cranelift = "0.128"
+cranelift-module = "0.128"
+cranelift-jit = "0.128"
+cranelift-native = "0.128"
+cranelift-object = "0.128"
 # Lexer
 logos = "0.16"
 

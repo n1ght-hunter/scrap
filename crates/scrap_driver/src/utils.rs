@@ -92,11 +92,11 @@ fn is_beside_or_below(base_path: &std::path::Path, other_path: &std::path::Path)
     is_below && base_path != other_path
 }
 
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn collect_modules<'db>(
     db: &'db dyn scrap_shared::Db,
-    entry_file: &'db scrap_parser::ParsedFile<'db>,
-    other_files: &'db [scrap_parser::ParsedFile<'db>],
+    entry_file: scrap_parser::ParsedFile<'db>,
+    other_files: Vec<scrap_parser::ParsedFile<'db>>,
 ) -> Modules<'db> {
     let mut modules = indexmap::IndexMap::new();
     let entry_module = entry_file.ast(db).to_module(db);

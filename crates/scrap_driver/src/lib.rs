@@ -51,7 +51,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     handle_diagnostics(db)?;
 
-    let modules = utils::collect_modules(db, &entry_file, &other_files);
+    let modules = utils::collect_modules(db, entry_file, other_files.clone());
 
     let mode = pretty::PpMode::determine_pp_mode(args);
 

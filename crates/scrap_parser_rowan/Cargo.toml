@@ -14,5 +14,4 @@ serde = { workspace = true }
 
 [dev-dependencies]
 expect-test = { workspace = true }
-insta = { workspace = true }
-scrap_macros = { workspace = true }
+scrap_test_utils = { workspace = true }

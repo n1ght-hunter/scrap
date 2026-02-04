@@ -8,7 +8,7 @@ use syn::parse_macro_input;
 /// The test function will be called with the database as the first argument.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// #[salsa_test]
 /// fn my_test(db: &dyn Db) {
 ///     // test code here

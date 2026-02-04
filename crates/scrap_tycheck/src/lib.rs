@@ -31,6 +31,7 @@ mod unify;
 
 pub use context::TypeContext;
 pub use resolved::ResolvedTy;
+use scrap_shared::InputFile;
 pub use table::TypeTable;
 pub use types::{InferTy, TyVid};
 
@@ -48,10 +49,9 @@ use scrap_ast::Can;
 pub fn check_types<'db>(
     db: &'db dyn scrap_shared::Db,
     can: Can<'db>,
-    source: &'db str,
-    file_name: &'db str,
+    file: InputFile<'db>,
 ) -> TypeTable<'db> {
-    let mut ctx = TypeContext::new(db, source, file_name);
+    let mut ctx = TypeContext::new(db, file.content(db), file.path(db).to_str().unwrap_or("<unknown>"));
 
     ctx.check_can(can);
 

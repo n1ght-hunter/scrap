@@ -1,0 +1,9 @@
+[package]
+name = "scrap_test_utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+regex.workspace = true
+insta.workspace = true
+scrap_macros.workspace = true

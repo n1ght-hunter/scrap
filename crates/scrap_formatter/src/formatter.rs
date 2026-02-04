@@ -23,32 +23,32 @@ pub fn format_file(source: &str, config: &FormatterConfig) -> String {
     let db = scrap_shared::salsa::ScrapDb::default();
 
     // Use a helper tracked function to create tracked structs
-    format_file_impl(&db, source, config)
+    format_file_impl(&db, source.to_string(), config.clone())
 }
 
 /// Helper function to format a file within a tracked function context
 #[salsa::tracked]
-fn format_file_impl<'db>(
-    db: &'db dyn scrap_shared::Db,
-    source: &'db str,
-    config: &'db FormatterConfig,
+fn format_file_impl(
+    db: &dyn scrap_shared::Db,
+    source: String,
+    config: FormatterConfig,
 ) -> String {
     use scrap_shared::InputFile;
 
     // Create an input file from the source
-    let file = InputFile::new(db, std::path::PathBuf::from("<format>"), source.to_string());
+    let file = InputFile::new(db, std::path::PathBuf::from("<format>"), source.clone());
 
     // Lex the file
     let tokens = match scrap_lexer::lex_file(db, file) {
         Some(tokens) => tokens,
-        None => return source.to_string(), // Return original on lex error
+        None => return source, // Return original on lex error
     };
 
     // Parse the file using the Rowan parser
     let parsed = scrap_parser_rowan::parse_file(db, file, tokens);
 
     // Format the syntax tree
-    format_syntax_tree(&parsed.syntax(db), config)
+    format_syntax_tree(&parsed.syntax(db), &config)
 }
 
 /// Format a syntax tree
