@@ -9,6 +9,7 @@ scrap_lexer = { workspace = true }
 scrap_ir = { workspace = true }
 scrap_ast = { workspace = true }
 scrap_ast_lowering = { workspace = true }
+scrap_tycheck = { workspace = true }
 scrap_shared = { workspace = true }
 scrap_span = { workspace = true }
 scrap_errors.workspace = true

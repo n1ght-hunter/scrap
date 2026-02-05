@@ -45,7 +45,7 @@ use scrap_ast::Can;
 /// 3. Solves type constraints
 /// 4. Reports any type errors via the diagnostic context
 /// 5. Returns a type table mapping expressions to their resolved types
-#[salsa::tracked]
+#[salsa::tracked(persist)]
 pub fn check_types<'db>(
     db: &'db dyn scrap_shared::Db,
     can: Can<'db>,

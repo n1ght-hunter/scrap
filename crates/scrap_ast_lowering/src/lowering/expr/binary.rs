@@ -12,10 +12,14 @@ impl<'db> ExprLowerer<'db> {
     /// Lower a binary operation to an operand
     pub(crate) fn lower_binary_op(
         &mut self,
-        op: &BinOp<'db>,
-        lhs: &Expr<'db>,
-        rhs: &Expr<'db>,
+        binary_expr: &Expr<'db>,
     ) -> MResult<ir::Operand<'db>> {
+        // Extract operator and operands from binary expression
+        let (op, lhs, rhs) = match &binary_expr.kind {
+            scrap_ast::expr::ExprKind::Binary(o, l, r) => (o, l, r),
+            _ => return Err(crate::BuilderError::LowerExpressionError),
+        };
+
         // Recursively lower the left and right operands
         let lhs_operand = self.lower_expr(lhs)?;
         let rhs_operand = self.lower_expr(rhs)?;
@@ -23,9 +27,8 @@ impl<'db> ExprLowerer<'db> {
         // Convert AST binary operator to IR binary operator
         let ir_op = self.convert_bin_op(op.node)?;
 
-        // Allocate a temporary for the result
-        // TODO: Better type inference based on operand types
-        let result_ty = ir::Ty::Infer;
+        // Allocate a temporary for the result using type from type table
+        let result_ty = self.lookup_and_convert_type(binary_expr.id);
         let temp = self.allocate_temp(result_ty);
 
         // Emit assignment: temp = lhs op rhs
@@ -80,7 +83,7 @@ mod tests {
         let rhs = create_int_lit(db, 3);
         let expr = create_binary_expr(db, BinOpKind::Add, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 
@@ -94,7 +97,7 @@ mod tests {
         let rhs = create_int_lit(db, 4);
         let expr = create_binary_expr(db, BinOpKind::Sub, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -105,7 +108,7 @@ mod tests {
         let rhs = create_int_lit(db, 7);
         let expr = create_binary_expr(db, BinOpKind::Mul, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -116,7 +119,7 @@ mod tests {
         let rhs = create_int_lit(db, 10);
         let expr = create_binary_expr(db, BinOpKind::Lt, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -127,7 +130,7 @@ mod tests {
         let rhs = create_bool_lit(db, false);
         let expr = create_binary_expr(db, BinOpKind::And, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -138,7 +141,7 @@ mod tests {
         let rhs = create_int_lit(db, 3);
         let expr = create_binary_expr(db, BinOpKind::BitAnd, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -153,7 +156,7 @@ mod tests {
         let two = create_int_lit(db, 2);
         let mul_expr = create_binary_expr(db, BinOpKind::Mul, add_expr, two);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&mul_expr);
         assert!(result.is_ok());
 
@@ -166,7 +169,7 @@ mod tests {
         let inner = create_int_lit(db, 42);
         let expr = create_paren_expr(db, inner);
 
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 
@@ -176,7 +179,7 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_operator_conversion(db: &dyn scrap_shared::Db) {
-        let lowerer = ExprLowerer::new(db, "");
+        let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Test all arithmetic operators
         assert_eq!(lowerer.convert_bin_op(BinOpKind::Add).unwrap(), ir::BinOp::Add);

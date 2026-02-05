@@ -17,10 +17,13 @@ use crate::cfg_builder::BasicBlockBuilder;
 /// - Symbol table for resolving variable names to local IDs
 /// - CFG builder for managing basic blocks and control flow
 /// - Source text for extracting literal values from spans
+/// - Type table for looking up types resolved during type checking
 pub struct ExprLowerer<'db> {
     pub(crate) db: &'db dyn scrap_shared::Db,
     /// Source text for extracting literal values
     pub(crate) source: &'db str,
+    /// Type table from type checking
+    pub(crate) type_table: scrap_tycheck::TypeTable<'db>,
     /// All local variable declarations (params + named locals + temps)
     pub local_decls: Vec<ir::LocalDecl<'db>>,
     /// CFG builder for managing basic blocks
@@ -31,14 +34,32 @@ pub struct ExprLowerer<'db> {
 
 impl<'db> ExprLowerer<'db> {
     /// Create a new expression lowerer with source text for literal extraction
-    pub fn new(db: &'db dyn scrap_shared::Db, source: &'db str) -> Self {
+    pub fn new(
+        db: &'db dyn scrap_shared::Db,
+        source: &'db str,
+        type_table: scrap_tycheck::TypeTable<'db>,
+    ) -> Self {
         Self {
             db,
             source,
+            type_table,
             local_decls: Vec::new(),
             cfg_builder: BasicBlockBuilder::new(db),
             symbol_table: HashMap::new(),
         }
+    }
+
+    /// Look up the type of an expression by its NodeId from the type table
+    pub(crate) fn lookup_expr_type(&self, node_id: scrap_shared::NodeId) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
+        self.type_table.expr_type(self.db, node_id)
+    }
+
+    /// Look up the type of an expression from type table and convert to IR type.
+    /// Returns Bool as fallback for tests that don't populate the type table.
+    pub(crate) fn lookup_and_convert_type(&self, node_id: scrap_shared::NodeId) -> ir::Ty<'db> {
+        self.lookup_expr_type(node_id)
+            .map(|resolved| crate::ty_convert::resolved_to_ir(self.db, resolved))
+            .unwrap_or(ir::Ty::Bool) // Fallback for tests
     }
 
     /// Allocate an anonymous temporary variable

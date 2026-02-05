@@ -9,6 +9,7 @@ scrap_parser.workspace = true
 scrap_span.workspace = true
 scrap_ir.workspace = true
 scrap_shared.workspace = true
+scrap_tycheck.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 salsa.workspace = true

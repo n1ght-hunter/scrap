@@ -329,7 +329,6 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Ty::Str => write!(self.output, "str").unwrap(),
             Ty::Adt(type_id) => write!(self.output, "{}", type_id.name(self.db)).unwrap(),
             Ty::Never => write!(self.output, "!").unwrap(),
-            Ty::Infer => write!(self.output, "_").unwrap(),
         }
     }
 

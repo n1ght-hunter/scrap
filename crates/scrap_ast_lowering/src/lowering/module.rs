@@ -18,13 +18,14 @@ pub fn lower_module<'db>(
     module_id: ModuleId<'db>,
     ast_items: &[Item<'db>],
     source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Module<'db>> {
     let mut items = Vec::new();
 
     for item in ast_items {
         match &item.kind {
             ItemKind::Fn(fn_def) => {
-                let mir_function = lower_function(db, *fn_def, source)?;
+                let mir_function = lower_function(db, *fn_def, source, type_table)?;
                 items.push(ir::Items::Function(mir_function));
             }
             _ => {
@@ -42,9 +43,10 @@ pub fn lower_function<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Function<'db>> {
     let signature = lower_signature(db, ast_function)?;
-    let body = lower_body(db, ast_function, source)?;
+    let body = lower_body(db, ast_function, source, type_table)?;
 
     Ok(ir::Function::new(db, signature, body))
 }
@@ -76,8 +78,9 @@ pub fn lower_body<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Body<'db>> {
-    let mut lowerer = ExprLowerer::new(db, source);
+    let mut lowerer = ExprLowerer::new(db, source, type_table);
 
     // 1. Register function parameters as local variables
     for param in ast_function.args(db).iter() {
@@ -93,10 +96,13 @@ pub fn lower_body<'db>(
             StmtKind::Let(local) => {
                 // Handle let bindings
                 if let PatKind::Ident(_, ident, _) = &local.pat.kind {
-                    let ty = local
-                        .ty
-                        .as_ref()
-                        .map_or(Ok(ir::Ty::Infer), |t| lower_type(db, t))?;
+                    // Get type from explicit annotation or type table
+                    let ty = if let Some(explicit_ty) = local.ty.as_ref() {
+                        lower_type(db, explicit_ty)?
+                    } else {
+                        // No explicit type - look up from type table using pattern NodeId
+                        lowerer.lookup_and_convert_type(local.pat.id)
+                    };
 
                     let local_id = lowerer.allocate_named_local(ident.name, ty);
                     lowerer.insert_binding(ident.name, local_id);

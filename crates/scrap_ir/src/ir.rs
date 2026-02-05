@@ -122,8 +122,6 @@ pub enum Ty<'db> {
     Adt(TypeId<'db>),
     /// Represents a type that never returns a value, like a function that always panics.
     Never,
-    /// Represents a type that is not yet known or determined.
-    Infer,
 }
 
 #[salsa::tracked(debug, persist)]

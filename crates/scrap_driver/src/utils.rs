@@ -118,7 +118,6 @@ pub fn collect_modules<'db>(
     modules
 }
 
-
 // NOTE: This function is currently unused because lower_parsed_file requires a ParsedFile,
 // not just a ModuleId. Use collect_and_lower_modules_ir instead which has access to the parsed files.
 // /// Lower all parsed modules to IR in parallel
@@ -147,12 +146,13 @@ pub fn collect_modules<'db>(
 //         .collect()
 // }
 
-/// Lower all input files to IR in parallel (returns entry module and other modules separately)
+/// Lower all input files to IR in parallel with type information
 #[salsa::tracked(persist)]
 pub fn lower_input_files_to_ir<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_file: scrap_parser::ParsedFile<'db>,
     other_files: Vec<scrap_parser::ParsedFile<'db>>,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> (
     Option<scrap_ir::Module<'db>>,
     Vec<scrap_ir::Module<'db>>,
@@ -160,7 +160,7 @@ pub fn lower_input_files_to_ir<'db>(
     // Lower entry file
     let entry_module = entry_file.ast(db).to_module(db);
     let entry_module_id = entry_module.id(db);
-    let entry_ir = scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id);
+    let entry_ir = scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id, type_table);
 
     // Lower other files in parallel
     let other_ir: Vec<_> = other_files
@@ -168,7 +168,7 @@ pub fn lower_input_files_to_ir<'db>(
         .filter_map(|file| {
             let module = file.ast(db).to_module(db);
             let module_id = module.id(db);
-            scrap_ast_lowering::lower_parsed_file(db, file, module_id)
+            scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table)
         })
         .collect();
 

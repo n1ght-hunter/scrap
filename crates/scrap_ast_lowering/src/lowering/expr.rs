@@ -22,7 +22,7 @@ impl<'db> ExprLowerer<'db> {
         match &expr.kind {
             ExprKind::Lit(lit) => self.lower_literal(lit),
             ExprKind::Path(path) => self.lower_path(path),
-            ExprKind::Binary(op, lhs, rhs) => self.lower_binary_op(op, lhs, rhs),
+            ExprKind::Binary(_, _, _) => self.lower_binary_op(expr),
             ExprKind::Paren(inner) => self.lower_expr(inner),
             ExprKind::Assign(lhs, rhs, _span) => self.lower_assign(lhs, rhs),
             ExprKind::AssignOp(op, lhs, rhs) => self.lower_assign_op(op, lhs, rhs),
@@ -31,8 +31,8 @@ impl<'db> ExprLowerer<'db> {
             }
             ExprKind::Return(value) => self.lower_return(value.as_deref()),
             ExprKind::Block(block) => self.lower_block_expr(block),
-            ExprKind::Array(elements) => self.lower_array(elements),
-            ExprKind::Call(func, args) => self.lower_call(func, args),
+            ExprKind::Array(_) => self.lower_array(expr),
+            ExprKind::Call(_, _) => self.lower_call(expr),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
             _ => {
                 // Unsupported expression types for now

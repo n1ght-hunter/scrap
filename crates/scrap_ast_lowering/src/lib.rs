@@ -1,6 +1,7 @@
 mod cfg_builder;
 mod lowerer;
 mod lowering;
+mod ty_convert;
 #[cfg(test)]
 mod test_helpers;
 
@@ -11,6 +12,7 @@ use scrap_shared::id::ModuleId;
 pub use cfg_builder::BasicBlockBuilder;
 pub use lowerer::ExprLowerer;
 pub use lowering::{lower_body, lower_function, lower_module, lower_signature, lower_type};
+pub use ty_convert::resolved_to_ir;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum BuilderError {
@@ -45,6 +47,7 @@ pub fn lower_parsed_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_parser::ParsedFile<'db>,
     module_id: ModuleId<'db>,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> Option<ir::Module<'db>> {
     let ast = file.ast(db);
     let source = file.file(db).content(db);
@@ -63,7 +66,7 @@ pub fn lower_parsed_file<'db>(
         }
     };
 
-    match lower_module(db, module_id, &items, source) {
+    match lower_module(db, module_id, &items, source, type_table) {
         Ok(module) => Some(module),
         Err(e) => {
             eprintln!("Error lowering module '{}': {}", module_id.path_str(db), e);
@@ -75,6 +78,7 @@ pub fn lower_parsed_file<'db>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::create_empty_type_table;
     use scrap_ast::{
         Visibility, VisibilityKind,
         block::Block,
@@ -111,7 +115,7 @@ mod tests {
         };
         let fn_def = FnDef::new(db, node_id, ident, ThinVec::new(), None, body, span);
 
-        let result = lower_function(db, fn_def, "");
+        let result = lower_function(db, fn_def, "", create_empty_type_table(db));
         if result.is_err() {
             return false;
         }
@@ -206,7 +210,7 @@ mod tests {
         let args = ThinVec::from([param_a, param_b]);
         let fn_def = FnDef::new(db, node_id, ident, args, None, body, span);
 
-        let result = lower_function(db, fn_def, "");
+        let result = lower_function(db, fn_def, "", create_empty_type_table(db));
         if result.is_err() {
             return false;
         }
@@ -332,7 +336,7 @@ mod tests {
         let path = scrap_shared::path::Path::from_segment(db, "test_module");
         let module_id = ModuleId::from_path(db, &path);
 
-        let module = lower_module(db, module_id, &[item], "").unwrap();
+        let module = lower_module(db, module_id, &[item], "", create_empty_type_table(db)).unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert_eq!(module.items(db).len(), 1);
@@ -342,7 +346,7 @@ mod tests {
     fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
         let path = scrap_shared::path::Path::from_segment(db, "empty_module");
         let module_id = ModuleId::from_path(db, &path);
-        let module = lower_module(db, module_id, &[], "").unwrap();
+        let module = lower_module(db, module_id, &[], "", create_empty_type_table(db)).unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert!(module.items(db).is_empty());

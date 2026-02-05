@@ -82,7 +82,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_without_else(db: &dyn scrap_shared::Db) {
         // if x > 0 { }
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Create variable x
         let x_sym = Symbol::new(db, "x".to_string());
@@ -110,7 +110,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_else(db: &dyn scrap_shared::Db) {
         // if x > 0 { } else { }
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
@@ -142,7 +142,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_if(db: &dyn scrap_shared::Db) {
         // if x > 0 { if y > 0 { } }
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
@@ -183,7 +183,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_return_without_value(db: &dyn scrap_shared::Db) {
         // return;
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let return_expr = create_return_expr(db, None);
 
@@ -197,7 +197,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_return_with_value(db: &dyn scrap_shared::Db) {
         // return 42;
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let value = create_int_lit(db, 42);
         let return_expr = create_return_expr(db, Some(value));
@@ -215,7 +215,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_return_in_then(db: &dyn scrap_shared::Db) {
         // if x > 0 { return 1; }
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
@@ -244,7 +244,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_early_return(db: &dyn scrap_shared::Db) {
         // return 42; (followed by more code would be dead)
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let value = create_int_lit(db, 42);
         let return_expr = create_return_expr(db, Some(value));
@@ -262,7 +262,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_complex_condition(db: &dyn scrap_shared::Db) {
         // if x > 0 && y < 10 { }
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
@@ -298,7 +298,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_cfg_builder_integration(db: &dyn scrap_shared::Db) {
         // Test that we can build a complete CFG
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);

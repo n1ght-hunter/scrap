@@ -322,3 +322,8 @@ pub fn create_call_expr<'db>(
         span,
     }
 }
+
+/// Create an empty TypeTable for tests
+pub fn create_empty_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tycheck::TypeTable<'db> {
+    scrap_tycheck::TypeTable::new(db, vec![], vec![])
+}

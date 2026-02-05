@@ -33,7 +33,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_variable_reference(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "x");
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // First, create a binding for "x"
         let x_sym = Symbol::new(db, "x".to_string());
@@ -54,7 +54,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_undefined_variable(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "undefined");
-        let mut lowerer = ExprLowerer::new(db, "");
+        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Try to lower without binding the variable
         let result = lowerer.lower_expr(&expr);
