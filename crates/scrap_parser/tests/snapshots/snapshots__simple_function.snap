@@ -1,10 +1,9 @@
 ---
 source: crates/scrap_parser/tests/snapshots.rs
-expression: "parse(db, source)"
+expression: "$crate :: strip_salsa_ids(& format! (\"{:#?}\", parse(db, source)))"
 ---
 Can(
     Can {
-        [salsa id]: Id(2000),
         id: NodeId {
             id: 0,
             file_hash: 16101345102062212073,
@@ -13,7 +12,6 @@ Can(
             path: PathKey {
                 path: Path {
                     span: Span {
-                        [salsa id]: Id(813),
                         start: 0,
                         end: 4,
                     },
@@ -28,7 +26,6 @@ Can(
                                     text: "test",
                                 },
                                 span: Span {
-                                    [salsa id]: Id(812),
                                     start: 0,
                                     end: 4,
                                 },
@@ -46,7 +43,6 @@ Can(
             Item {
                 kind: Fn(
                     FnDef {
-                        [salsa id]: Id(1c00),
                         id: NodeId {
                             id: 9,
                             file_hash: 16101345102062212073,
@@ -60,7 +56,6 @@ Can(
                                 text: "main",
                             },
                             span: Span {
-                                [salsa id]: Id(802),
                                 start: 3,
                                 end: 7,
                             },
@@ -99,7 +94,6 @@ Can(
                                                             text: "x",
                                                         },
                                                         span: Span {
-                                                            [salsa id]: Id(80a),
                                                             start: 20,
                                                             end: 21,
                                                         },
@@ -107,7 +101,6 @@ Can(
                                                     None,
                                                 ),
                                                 span: Span {
-                                                    [salsa id]: Id(80c),
                                                     start: 22,
                                                     end: 23,
                                                 },
@@ -127,28 +120,24 @@ Can(
                                                             },
                                                             kind: Integer,
                                                             span: Span {
-                                                                [salsa id]: Id(80e),
                                                                 start: 24,
                                                                 end: 26,
                                                             },
                                                         },
                                                     ),
                                                     span: Span {
-                                                        [salsa id]: Id(814),
                                                         start: 24,
                                                         end: 27,
                                                     },
                                                 },
                                             ),
                                             span: Span {
-                                                [salsa id]: Id(815),
                                                 start: 16,
                                                 end: 27,
                                             },
                                         },
                                     ),
                                     span: Span {
-                                        [salsa id]: Id(815),
                                         start: 16,
                                         end: 27,
                                     },
@@ -159,20 +148,17 @@ Can(
                                 file_hash: 16101345102062212073,
                             },
                             span: Span {
-                                [salsa id]: Id(816),
                                 start: 10,
                                 end: 29,
                             },
                         },
                         span: Span {
-                            [salsa id]: Id(817),
                             start: 0,
                             end: 29,
                         },
                     },
                 ),
                 span: Span {
-                    [salsa id]: Id(818),
                     start: 0,
                     end: 29,
                 },
@@ -183,7 +169,6 @@ Can(
                 vis: Visibility {
                     kind: Inherited,
                     span: Span {
-                        [salsa id]: Id(800),
                         start: 0,
                         end: 2,
                     },

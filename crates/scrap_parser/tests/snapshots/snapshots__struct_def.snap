@@ -1,10 +1,9 @@
 ---
 source: crates/scrap_parser/tests/snapshots.rs
-expression: "parse(db, source)"
+expression: "$crate :: strip_salsa_ids(& format! (\"{:#?}\", parse(db, source)))"
 ---
 Can(
     Can {
-        [salsa id]: Id(1c00),
         id: NodeId {
             id: 0,
             file_hash: 16101345102062212073,
@@ -13,7 +12,6 @@ Can(
             path: PathKey {
                 path: Path {
                     span: Span {
-                        [salsa id]: Id(814),
                         start: 0,
                         end: 4,
                     },
@@ -28,7 +26,6 @@ Can(
                                     text: "test",
                                 },
                                 span: Span {
-                                    [salsa id]: Id(813),
                                     start: 0,
                                     end: 4,
                                 },
@@ -59,7 +56,6 @@ Can(
                                 text: "Point",
                             },
                             span: Span {
-                                [salsa id]: Id(802),
                                 start: 7,
                                 end: 12,
                             },
@@ -72,14 +68,12 @@ Can(
                                         file_hash: 16101345102062212073,
                                     },
                                     span: Span {
-                                        [salsa id]: Id(815),
                                         start: 19,
                                         end: 25,
                                     },
                                     vis: Visibility {
                                         kind: Inherited,
                                         span: Span {
-                                            [salsa id]: Id(806),
                                             start: 19,
                                             end: 20,
                                         },
@@ -94,7 +88,6 @@ Can(
                                                 text: "x",
                                             },
                                             span: Span {
-                                                [salsa id]: Id(806),
                                                 start: 19,
                                                 end: 20,
                                             },
@@ -108,7 +101,6 @@ Can(
                                         kind: Path(
                                             Path {
                                                 span: Span {
-                                                    [salsa id]: Id(809),
                                                     start: 22,
                                                     end: 25,
                                                 },
@@ -123,7 +115,6 @@ Can(
                                                                 text: "int",
                                                             },
                                                             span: Span {
-                                                                [salsa id]: Id(809),
                                                                 start: 22,
                                                                 end: 25,
                                                             },
@@ -137,7 +128,6 @@ Can(
                                             },
                                         ),
                                         span: Span {
-                                            [salsa id]: Id(809),
                                             start: 22,
                                             end: 25,
                                         },
@@ -149,14 +139,12 @@ Can(
                                         file_hash: 16101345102062212073,
                                     },
                                     span: Span {
-                                        [salsa id]: Id(816),
                                         start: 31,
                                         end: 37,
                                     },
                                     vis: Visibility {
                                         kind: Inherited,
                                         span: Span {
-                                            [salsa id]: Id(80c),
                                             start: 31,
                                             end: 32,
                                         },
@@ -171,7 +159,6 @@ Can(
                                                 text: "y",
                                             },
                                             span: Span {
-                                                [salsa id]: Id(80c),
                                                 start: 31,
                                                 end: 32,
                                             },
@@ -185,7 +172,6 @@ Can(
                                         kind: Path(
                                             Path {
                                                 span: Span {
-                                                    [salsa id]: Id(80f),
                                                     start: 34,
                                                     end: 37,
                                                 },
@@ -200,7 +186,6 @@ Can(
                                                                 text: "int",
                                                             },
                                                             span: Span {
-                                                                [salsa id]: Id(80f),
                                                                 start: 34,
                                                                 end: 37,
                                                             },
@@ -214,7 +199,6 @@ Can(
                                             },
                                         ),
                                         span: Span {
-                                            [salsa id]: Id(80f),
                                             start: 34,
                                             end: 37,
                                         },
@@ -225,7 +209,6 @@ Can(
                     },
                 ),
                 span: Span {
-                    [salsa id]: Id(817),
                     start: 0,
                     end: 40,
                 },
@@ -236,7 +219,6 @@ Can(
                 vis: Visibility {
                     kind: Inherited,
                     span: Span {
-                        [salsa id]: Id(800),
                         start: 0,
                         end: 6,
                     },
