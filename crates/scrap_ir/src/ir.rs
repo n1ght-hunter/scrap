@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use scrap_shared::types::{FloatTy, FloatVal, IntTy, IntVal, UintTy, UintVal};
 use scrap_shared::{id::ModuleId, ident::Symbol};
 
 #[derive(
@@ -114,8 +115,12 @@ pub struct Signature<'db> {
 pub enum Ty<'db> {
     /// A primitive boolean type.
     Bool,
-    /// A primitive integer type (you would add size/signedness).
-    Int,
+    /// A signed integer type.
+    Int(IntTy),
+    /// An unsigned integer type.
+    Uint(UintTy),
+    /// A floating-point type.
+    Float(FloatTy),
     /// A primitive string type.
     Str,
     /// A user-defined struct or enum, referenced by its unique ID.
@@ -250,8 +255,9 @@ pub enum AggregateKind<'db> {
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum Constant<'db> {
-    Int(i64),
-    Float(u64), // Store as bits for Eq/Hash
+    Int(IntVal),
+    Uint(UintVal),
+    Float(FloatVal),
     Bool(bool),
     String(Symbol<'db>),
 }

@@ -12,6 +12,7 @@ use scrap_ast::{
     stmt::{Stmt, StmtKind},
     typedef::{Ty, TyKind},
 };
+use scrap_shared::types::{FloatTy, IntTy, UintTy};
 use scrap_shared::{ident::Symbol, path::Path};
 use scrap_span::Span;
 
@@ -59,11 +60,11 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a literal.
-    fn infer_literal(&self, lit: &Lit<'db>) -> InferTy<'db> {
+    fn infer_literal(&mut self, lit: &Lit<'db>) -> InferTy<'db> {
         match lit.kind {
             LitKind::Bool => InferTy::Bool,
-            LitKind::Integer => InferTy::Int,
-            LitKind::Float => InferTy::Int, // TODO: Add Float type when needed
+            LitKind::Integer => self.fresh_ty_var(), // Will be resolved by context or default to i32
+            LitKind::Float => self.fresh_ty_var(),   // Will be resolved by context or default to f64
             LitKind::Str => InferTy::Str,
         }
     }
@@ -111,11 +112,11 @@ impl<'db> TypeContext<'db> {
         let rhs_ty = self.infer_expr(rhs);
 
         match op.node {
-            // Arithmetic operators: int -> int -> int
+            // Arithmetic operators: operands must match, result is same type
             BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div | BinOpKind::Rem => {
-                self.constrain_eq_with_kind(lhs_ty, InferTy::Int, lhs.span, ConstraintKind::BinaryOp);
-                self.constrain_eq_with_kind(rhs_ty, InferTy::Int, rhs.span, ConstraintKind::BinaryOp);
-                InferTy::Int
+                // Constrain operands to be the same type
+                self.constrain_eq_with_kind(lhs_ty.clone(), rhs_ty, span, ConstraintKind::BinaryOp);
+                lhs_ty
             }
 
             // Comparison operators: T -> T -> bool
@@ -131,11 +132,10 @@ impl<'db> TypeContext<'db> {
                 InferTy::Bool
             }
 
-            // Bitwise operators: int -> int -> int
+            // Bitwise operators: operands must match, result is same type
             BinOpKind::BitAnd | BinOpKind::BitOr | BinOpKind::BitXor | BinOpKind::Shl | BinOpKind::Shr => {
-                self.constrain_eq_with_kind(lhs_ty, InferTy::Int, lhs.span, ConstraintKind::BinaryOp);
-                self.constrain_eq_with_kind(rhs_ty, InferTy::Int, rhs.span, ConstraintKind::BinaryOp);
-                InferTy::Int
+                self.constrain_eq_with_kind(lhs_ty.clone(), rhs_ty, span, ConstraintKind::BinaryOp);
+                lhs_ty
             }
         }
     }
@@ -320,14 +320,13 @@ impl<'db> TypeContext<'db> {
         _op: &AssignOp<'db>,
         lhs: &Expr<'db>,
         rhs: &Expr<'db>,
-        _span: Span<'db>,
+        span: Span<'db>,
     ) -> InferTy<'db> {
         let lhs_ty = self.infer_expr(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
-        // Compound assignment typically requires numeric types
-        self.constrain_eq_with_kind(lhs_ty, InferTy::Int, lhs.span, ConstraintKind::BinaryOp);
-        self.constrain_eq_with_kind(rhs_ty, InferTy::Int, rhs.span, ConstraintKind::BinaryOp);
+        // Compound assignment requires operands to have matching types
+        self.constrain_eq_with_kind(lhs_ty, rhs_ty, span, ConstraintKind::BinaryOp);
 
         InferTy::unit() // Assignment returns unit
     }
@@ -361,7 +360,28 @@ impl<'db> TypeContext<'db> {
                 if let Some(segment) = path.single_segment() {
                     let name_str = segment.ident.name.text(self.db());
                     match name_str.as_str() {
-                        "int" => InferTy::Int,
+                        // Signed integers
+                        "i8" => InferTy::Int(IntTy::I8),
+                        "i16" => InferTy::Int(IntTy::I16),
+                        "i32" => InferTy::Int(IntTy::I32),
+                        "i64" => InferTy::Int(IntTy::I64),
+                        "i128" => InferTy::Int(IntTy::I128),
+                        "isize" => InferTy::Int(IntTy::Isize),
+                        // Unsigned integers
+                        "u8" => InferTy::Uint(UintTy::U8),
+                        "u16" => InferTy::Uint(UintTy::U16),
+                        "u32" => InferTy::Uint(UintTy::U32),
+                        "u64" => InferTy::Uint(UintTy::U64),
+                        "u128" => InferTy::Uint(UintTy::U128),
+                        "usize" => InferTy::Uint(UintTy::Usize),
+                        // Floats
+                        "f16" => InferTy::Float(FloatTy::F16),
+                        "f32" => InferTy::Float(FloatTy::F32),
+                        "f64" => InferTy::Float(FloatTy::F64),
+                        "f128" => InferTy::Float(FloatTy::F128),
+                        // Legacy alias
+                        "int" => InferTy::Int(IntTy::I32),
+                        // Other primitives
                         "bool" => InferTy::Bool,
                         "String" => InferTy::Str,
                         _ => {

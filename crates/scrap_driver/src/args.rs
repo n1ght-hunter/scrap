@@ -51,8 +51,8 @@ pub struct Args {
 pub enum PrettyOut {
     /// Generate and print the abstract syntax tree (AST)
     Ast,
-    /// Generate and print the intermediate representation (IR)
-    IR,
+    /// Generate and print the Scrap IR
+    SIR,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]

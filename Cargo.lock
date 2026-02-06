@@ -1133,6 +1133,8 @@ dependencies = [
  "rayon",
  "salsa",
  "scrap_ast",
+ "scrap_diagnostics",
+ "scrap_errors",
  "scrap_ir",
  "scrap_macros",
  "scrap_parser",

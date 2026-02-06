@@ -20,7 +20,7 @@ impl<'db> ExprLowerer<'db> {
     /// Lower an expression to an operand
     pub fn lower_expr(&mut self, expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
         match &expr.kind {
-            ExprKind::Lit(lit) => self.lower_literal(lit),
+            ExprKind::Lit(lit) => self.lower_literal(lit, expr.id),
             ExprKind::Path(path) => self.lower_path(path),
             ExprKind::Binary(_, _, _) => self.lower_binary_op(expr),
             ExprKind::Paren(inner) => self.lower_expr(inner),

@@ -2,6 +2,7 @@
 
 use scrap_ast::typedef::{Ty, TyKind};
 use scrap_ir as ir;
+use scrap_shared::types::{FloatTy, IntTy, UintTy};
 
 use crate::MResult;
 
@@ -16,7 +17,28 @@ pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MRe
                 .unwrap_or("");
 
             match type_name {
-                "int" => Ok(ir::Ty::Int),
+                // Signed integers
+                "i8" => Ok(ir::Ty::Int(IntTy::I8)),
+                "i16" => Ok(ir::Ty::Int(IntTy::I16)),
+                "i32" => Ok(ir::Ty::Int(IntTy::I32)),
+                "i64" => Ok(ir::Ty::Int(IntTy::I64)),
+                "i128" => Ok(ir::Ty::Int(IntTy::I128)),
+                "isize" => Ok(ir::Ty::Int(IntTy::Isize)),
+                // Unsigned integers
+                "u8" => Ok(ir::Ty::Uint(UintTy::U8)),
+                "u16" => Ok(ir::Ty::Uint(UintTy::U16)),
+                "u32" => Ok(ir::Ty::Uint(UintTy::U32)),
+                "u64" => Ok(ir::Ty::Uint(UintTy::U64)),
+                "u128" => Ok(ir::Ty::Uint(UintTy::U128)),
+                "usize" => Ok(ir::Ty::Uint(UintTy::Usize)),
+                // Floats
+                "f16" => Ok(ir::Ty::Float(FloatTy::F16)),
+                "f32" => Ok(ir::Ty::Float(FloatTy::F32)),
+                "f64" => Ok(ir::Ty::Float(FloatTy::F64)),
+                "f128" => Ok(ir::Ty::Float(FloatTy::F128)),
+                // Legacy alias
+                "int" => Ok(ir::Ty::Int(IntTy::I32)),
+                // Other primitives
                 "bool" => Ok(ir::Ty::Bool),
                 "String" => Ok(ir::Ty::Str),
                 _ => {

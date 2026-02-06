@@ -4,6 +4,7 @@
 //! and transferred between compilation phases.
 
 use scrap_shared::ident::Symbol;
+use scrap_shared::types::{FloatTy, IntTy, UintTy};
 
 /// Finalized type with no inference variables.
 /// Can be stored and transferred between compilation phases.
@@ -13,8 +14,12 @@ use scrap_shared::ident::Symbol;
 pub enum ResolvedTy<'db> {
     /// Boolean type
     Bool,
-    /// Integer type
-    Int,
+    /// Signed integer type
+    Int(IntTy),
+    /// Unsigned integer type
+    Uint(UintTy),
+    /// Float type
+    Float(FloatTy),
     /// String type
     Str,
     /// Never type (diverging)

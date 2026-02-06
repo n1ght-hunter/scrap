@@ -8,6 +8,7 @@ mod test_helpers;
 use scrap_ast::item::Item;
 use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
+use scrap_errors::ErrorGuaranteed;
 
 pub use cfg_builder::BasicBlockBuilder;
 pub use lowerer::ExprLowerer;
@@ -30,6 +31,8 @@ pub enum BuilderError {
     LowerTypeError,
     #[error("Failed to lower expression")]
     LowerExpressionError,
+    #[error("Type error")]
+    Error(ErrorGuaranteed),
 }
 
 type Error = BuilderError;
@@ -220,9 +223,9 @@ mod tests {
         signature.name(db).text(db) == "add"
             && signature.params(db).len() == 2
             && signature.params(db)[0].0.text(db) == "a"
-            && signature.params(db)[0].1 == ir::Ty::Int
+            && signature.params(db)[0].1 == ir::Ty::Int(scrap_shared::types::IntTy::I32)
             && signature.params(db)[1].0.text(db) == "b"
-            && signature.params(db)[1].1 == ir::Ty::Int
+            && signature.params(db)[1].1 == ir::Ty::Int(scrap_shared::types::IntTy::I32)
     }
 
     #[test]
@@ -254,7 +257,7 @@ mod tests {
             kind: scrap_ast::typedef::TyKind::Path(int_path),
             span,
         };
-        if lower_type(db, &int_ty).unwrap() != ir::Ty::Int {
+        if lower_type(db, &int_ty).unwrap() != ir::Ty::Int(scrap_shared::types::IntTy::I32) {
             return false;
         }
 

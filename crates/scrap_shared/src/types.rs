@@ -1,4 +1,4 @@
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum IntTy {
     Isize,
     I8,
@@ -66,7 +66,7 @@ impl IntTy {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum UintTy {
     Usize,
     U8,
@@ -134,7 +134,7 @@ impl UintTy {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum FloatTy {
     F16,
     F32,
@@ -167,6 +167,85 @@ impl FloatTy {
             FloatTy::F32 => 32,
             FloatTy::F64 => 64,
             FloatTy::F128 => 128,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+pub enum IntVal {
+    Isize(isize),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+}
+
+impl IntVal {
+    pub fn ty(&self) -> IntTy {
+        match self {
+            IntVal::Isize(_) => IntTy::Isize,
+            IntVal::I8(_) => IntTy::I8,
+            IntVal::I16(_) => IntTy::I16,
+            IntVal::I32(_) => IntTy::I32,
+            IntVal::I64(_) => IntTy::I64,
+            IntVal::I128(_) => IntTy::I128,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+pub enum UintVal {
+    Usize(usize),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+}
+
+impl UintVal {
+    pub fn ty(&self) -> UintTy {
+        match self {
+            UintVal::Usize(_) => UintTy::Usize,
+            UintVal::U8(_) => UintTy::U8,
+            UintVal::U16(_) => UintTy::U16,
+            UintVal::U32(_) => UintTy::U32,
+            UintVal::U64(_) => UintTy::U64,
+            UintVal::U128(_) => UintTy::U128,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+pub enum FloatVal {
+    F32(f32),
+    F64(f64),
+}
+
+impl Eq for FloatVal {}
+
+impl std::hash::Hash for FloatVal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            FloatVal::F32(f) => f.to_bits().hash(state),
+            FloatVal::F64(f) => f.to_bits().hash(state),
+        }
+    }
+}
+
+impl Ord for FloatVal {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+    }
+}
+
+impl FloatVal {
+    pub fn ty(&self) -> FloatTy {
+        match self {
+            FloatVal::F32(_) => FloatTy::F32,
+            FloatVal::F64(_) => FloatTy::F64,
         }
     }
 }

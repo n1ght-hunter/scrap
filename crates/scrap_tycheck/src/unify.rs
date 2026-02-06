@@ -36,8 +36,14 @@ impl<'db> TypeContext<'db> {
 
             // Primitive types must match exactly
             (InferTy::Bool, InferTy::Bool) => true,
-            (InferTy::Int, InferTy::Int) => true,
             (InferTy::Str, InferTy::Str) => true,
+
+            // Sized ints must match exactly
+            (InferTy::Int(k1), InferTy::Int(k2)) if k1 == k2 => true,
+            (InferTy::Uint(k1), InferTy::Uint(k2)) if k1 == k2 => true,
+
+            // Sized floats must match exactly
+            (InferTy::Float(k1), InferTy::Float(k2)) if k1 == k2 => true,
 
             // Never type unifies with anything (it's a bottom type)
             (InferTy::Never, _) | (_, InferTy::Never) => true,
@@ -167,7 +173,9 @@ impl<'db> TypeContext<'db> {
             InferTy::Tuple(elems) => elems.iter().any(|e| self.occurs_check(vid, e)),
             // Primitive types and ADTs don't contain type variables
             InferTy::Bool
-            | InferTy::Int
+            | InferTy::Int(_)
+            | InferTy::Uint(_)
+            | InferTy::Float(_)
             | InferTy::Str
             | InferTy::Never
             | InferTy::Adt(_)
@@ -199,13 +207,14 @@ impl<'db> TypeContext<'db> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_unify_same_primitives(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
         let span = Span::new(db, 0, 0);
 
-        assert!(ctx.unify(&InferTy::Int, &InferTy::Int, span));
+        assert!(ctx.unify(&InferTy::Int(IntTy::I32), &InferTy::Int(IntTy::I32), span));
         assert!(ctx.unify(&InferTy::Bool, &InferTy::Bool, span));
         assert!(ctx.unify(&InferTy::Str, &InferTy::Str, span));
     }
@@ -215,7 +224,7 @@ mod tests {
         let mut ctx = TypeContext::new(db, "", "test.sc");
         let span = Span::new(db, 0, 0);
 
-        assert!(!ctx.unify(&InferTy::Int, &InferTy::Bool, span));
+        assert!(!ctx.unify(&InferTy::Int(IntTy::I32), &InferTy::Bool, span));
         assert!(db.dcx().has_errors());
     }
 
@@ -225,11 +234,11 @@ mod tests {
         let span = Span::new(db, 0, 0);
 
         let var = ctx.fresh_ty_var();
-        assert!(ctx.unify(&var, &InferTy::Int, span));
+        assert!(ctx.unify(&var, &InferTy::Int(IntTy::I32), span));
 
         // After unification, resolving should give Int
         let resolved = ctx.resolve(&var);
-        assert_eq!(resolved, InferTy::Int);
+        assert_eq!(resolved, InferTy::Int(IntTy::I32));
     }
 
     #[scrap_macros::salsa_test]
@@ -244,11 +253,11 @@ mod tests {
         assert!(ctx.unify(&var1, &var2, span));
 
         // Then unify one with a concrete type
-        assert!(ctx.unify(&var1, &InferTy::Int, span));
+        assert!(ctx.unify(&var1, &InferTy::Int(IntTy::I32), span));
 
         // Both should resolve to Int
-        assert_eq!(ctx.resolve(&var1), InferTy::Int);
-        assert_eq!(ctx.resolve(&var2), InferTy::Int);
+        assert_eq!(ctx.resolve(&var1), InferTy::Int(IntTy::I32));
+        assert_eq!(ctx.resolve(&var2), InferTy::Int(IntTy::I32));
     }
 
     #[scrap_macros::salsa_test]
@@ -256,7 +265,7 @@ mod tests {
         let mut ctx = TypeContext::new(db, "", "test.sc");
         let span = Span::new(db, 0, 0);
 
-        assert!(ctx.unify(&InferTy::Never, &InferTy::Int, span));
+        assert!(ctx.unify(&InferTy::Never, &InferTy::Int(IntTy::I32), span));
         assert!(ctx.unify(&InferTy::Bool, &InferTy::Never, span));
     }
 
@@ -265,12 +274,12 @@ mod tests {
         let mut ctx = TypeContext::new(db, "", "test.sc");
         let span = Span::new(db, 0, 0);
 
-        let tuple1 = InferTy::Tuple(vec![InferTy::Int, InferTy::Bool]);
-        let tuple2 = InferTy::Tuple(vec![InferTy::Int, InferTy::Bool]);
+        let tuple1 = InferTy::Tuple(vec![InferTy::Int(IntTy::I32), InferTy::Bool]);
+        let tuple2 = InferTy::Tuple(vec![InferTy::Int(IntTy::I32), InferTy::Bool]);
         assert!(ctx.unify(&tuple1, &tuple2, span));
 
         // Different lengths should fail
-        let tuple3 = InferTy::Tuple(vec![InferTy::Int]);
+        let tuple3 = InferTy::Tuple(vec![InferTy::Int(IntTy::I32)]);
         assert!(!ctx.unify(&tuple1, &tuple3, span));
     }
 

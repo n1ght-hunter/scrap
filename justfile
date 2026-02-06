@@ -28,4 +28,5 @@ basic *args:
     just run E:/programming/rust/scrap/tests/basic.sc --crate-name test --crate-type bin --unpretty-out sir --cache ./target/scrap/basic_cache {{args}}
 
 test-types *args:
-    just run E:/programming/rust/scrap/tests/types.sc --crate-name test --crate-type bin --unpretty-out sir --cache ./target/scrap/types_cache {{args}}
+    rm ./target/scrap/types_cache.json || true
+    just run E:/programming/rust/scrap/tests/types.sc --crate-name test --crate-type bin --pretty-out sir --cache ./target/scrap/types_cache {{args}}

@@ -14,13 +14,15 @@ impl<'db> ExprLowerer<'db> {
             .ok_or(BuilderError::LowerExpressionError)?
             .ident;
 
-        // Look up the variable in the symbol table
-        let local_id = self
-            .lookup_binding(ident.name)
-            .ok_or(BuilderError::LowerExpressionError)?;
+        // Try to look up the variable in the symbol table
+        if let Some(local_id) = self.lookup_binding(ident.name) {
+            // Found as a local variable
+            return Ok(ir::Operand::Place(ir::Place::Local(local_id)));
+        }
 
-        // Return a reference to the local variable
-        Ok(ir::Operand::Place(ir::Place::Local(local_id)))
+        // Not found as a local - treat as a function reference
+        let func_id = ir::FunctionId::new(self.db, ident.name.text(self.db).to_string());
+        Ok(ir::Operand::FunctionRef(func_id))
     }
 }
 
@@ -29,6 +31,7 @@ mod tests {
     use super::*;
     use crate::test_helpers::*;
     use scrap_shared::ident::Symbol;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_lower_variable_reference(db: &dyn scrap_shared::Db) {
@@ -37,7 +40,7 @@ mod tests {
 
         // First, create a binding for "x"
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Now lower the variable reference
@@ -52,12 +55,15 @@ mod tests {
     }
 
     #[scrap_macros::salsa_test]
-    fn test_lower_undefined_variable(db: &dyn scrap_shared::Db) {
-        let expr = create_ident_expr(db, "undefined");
+    fn test_lower_unknown_path_as_function_ref(db: &dyn scrap_shared::Db) {
+        let expr = create_ident_expr(db, "some_function");
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
-        // Try to lower without binding the variable
+        // Unknown paths are treated as function references (for function calls)
         let result = lowerer.lower_expr(&expr);
-        assert!(result.is_err());
+        assert!(result.is_ok());
+
+        let operand = result.unwrap();
+        assert!(matches!(operand, ir::Operand::FunctionRef(_)));
     }
 }

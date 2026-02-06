@@ -16,6 +16,8 @@ salsa.workspace = true
 serde.workspace = true
 thin-vec.workspace = true
 scrap_macros.workspace = true
+scrap_errors.workspace = true
+scrap_diagnostics.workspace = true
 
 [lints]
 workspace = true

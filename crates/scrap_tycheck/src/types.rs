@@ -1,6 +1,7 @@
 //! Type representation for type checking and inference.
 
 use scrap_shared::ident::Symbol;
+use scrap_shared::types::{FloatTy, IntTy, UintTy};
 
 /// Type variable ID for inference.
 /// Represents an unknown type that will be solved during unification.
@@ -18,8 +19,14 @@ pub enum InferTy<'db> {
     /// Primitive boolean type
     Bool,
 
-    /// Primitive integer type
-    Int,
+    /// Signed integer type
+    Int(IntTy),
+
+    /// Unsigned integer type
+    Uint(UintTy),
+
+    /// Float type
+    Float(FloatTy),
 
     /// Primitive string type
     Str,

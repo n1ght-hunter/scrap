@@ -40,7 +40,7 @@ impl PpMode {
     pub fn determine_pp_mode(args: &crate::args::Args) -> Option<PpMode> {
         if matches!(args.pretty_out, Some(PrettyOut::Ast)) {
             Some(PpMode::PrettyAst)
-        } else if matches!(args.pretty_out, Some(PrettyOut::IR)) {
+        } else if matches!(args.pretty_out, Some(PrettyOut::SIR)) {
             Some(PpMode::PrettyIr)
         } else if matches!(args.unpretty_out, Some(UnPrettyOut::Ast)) {
             Some(PpMode::DebugAst)

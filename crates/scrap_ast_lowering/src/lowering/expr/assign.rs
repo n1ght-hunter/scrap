@@ -5,6 +5,7 @@ use scrap_ast::{
     operators::{AssignOp, AssignOpKind},
 };
 use scrap_ir as ir;
+use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, BuilderError, MResult};
 
@@ -53,7 +54,7 @@ impl<'db> ExprLowerer<'db> {
         // Assignments produce unit value (represented as a constant)
         // For now, we'll return a dummy constant
         // TODO: Proper unit type representation
-        Ok(ir::Operand::Constant(ir::Constant::Int(0)))
+        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
     }
 
     /// Lower a compound assignment expression: lhs op= rhs
@@ -83,7 +84,7 @@ impl<'db> ExprLowerer<'db> {
         self.emit_assign(place, rvalue);
 
         // Assignments produce unit value
-        Ok(ir::Operand::Constant(ir::Constant::Int(0)))
+        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
     }
 
     /// Convert AST assignment operator to IR binary operator
@@ -109,6 +110,7 @@ mod tests {
     use crate::test_helpers::*;
     use scrap_ast::operators::BinOpKind;
     use scrap_shared::ident::Symbol;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_lower_simple_assignment(db: &dyn scrap_shared::Db) {
@@ -117,7 +119,7 @@ mod tests {
 
         // First, create a binding for "x"
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Create the assignment: x = 5
@@ -152,7 +154,7 @@ mod tests {
 
         // Create a binding for "x"
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Create the assignment: x += 5
@@ -173,7 +175,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let lhs = create_ident_expr(db, "x");
@@ -190,7 +192,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let lhs = create_ident_expr(db, "x");
@@ -207,7 +209,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let lhs = create_ident_expr(db, "x");
@@ -224,7 +226,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let lhs = create_ident_expr(db, "x");
@@ -246,7 +248,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // First: x += 5
@@ -290,7 +292,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let expr = create_ident_expr(db, "x");

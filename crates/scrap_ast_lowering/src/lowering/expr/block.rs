@@ -2,6 +2,7 @@
 
 use scrap_ast::block::Block;
 use scrap_ir as ir;
+use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, MResult};
 
@@ -11,7 +12,7 @@ impl<'db> ExprLowerer<'db> {
         self.lower_block(block)?;
         // Blocks produce unit value for now
         // TODO: Handle implicit return from last expression
-        Ok(ir::Operand::Constant(ir::Constant::Int(0)))
+        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
     }
 
     /// Lower a block's statements
@@ -41,6 +42,7 @@ mod tests {
     use crate::test_helpers::*;
     use scrap_ast::expr::{Expr, ExprKind};
     use scrap_shared::ident::Symbol;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_lower_block_expr(db: &dyn scrap_shared::Db) {
@@ -48,7 +50,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let lhs = create_ident_expr(db, "x");

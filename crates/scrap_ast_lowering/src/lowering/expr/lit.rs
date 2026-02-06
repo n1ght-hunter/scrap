@@ -1,10 +1,13 @@
 //! Literal lowering
 
 use scrap_ast::lit::{Lit, LitKind};
+use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_ir as ir;
+use scrap_shared::NodeId;
 use scrap_shared::ident::Symbol;
+use scrap_shared::types::{FloatTy, FloatVal, IntTy, IntVal, UintTy, UintVal};
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 /// Unescape a string literal (handle \n, \t, \\, \", etc.)
 fn unescape_string(s: &str) -> String {
@@ -33,20 +36,63 @@ fn unescape_string(s: &str) -> String {
 }
 
 impl<'db> ExprLowerer<'db> {
-    /// Lower a literal to an operand by extracting the actual value from source text
-    pub(crate) fn lower_literal(&mut self, lit: &Lit<'db>) -> MResult<ir::Operand<'db>> {
+    /// Lower a literal to an operand by extracting the actual value from source text.
+    /// `expr_id` is the NodeId of the parent Expr, used to look up types from the type table.
+    pub(crate) fn lower_literal(
+        &mut self,
+        lit: &Lit<'db>,
+        expr_id: NodeId,
+    ) -> MResult<ir::Operand<'db>> {
         // Extract the actual text from source using the span
         let start = lit.span.start(self.db);
         let end = lit.span.end(self.db);
         let text = &self.source[start..end];
+
+        // Infer the type of the literal first (needed for typed constants)
+        let ty = self.infer_literal_type(lit, expr_id)?;
 
         // Create the constant based on literal kind
         let constant = match lit.kind {
             LitKind::Integer => {
                 // Handle underscores in numeric literals (e.g., 1_000_000)
                 let clean = text.replace('_', "");
-                let value = clean.parse::<i64>().unwrap_or(0);
-                ir::Constant::Int(value)
+                match ty {
+                    ir::Ty::Uint(uint_ty) => {
+                        let val = match uint_ty {
+                            UintTy::Usize => UintVal::Usize(clean.parse().unwrap()),
+                            UintTy::U8 => UintVal::U8(clean.parse().unwrap()),
+                            UintTy::U16 => UintVal::U16(clean.parse().unwrap()),
+                            UintTy::U32 => UintVal::U32(clean.parse().unwrap()),
+                            UintTy::U64 => UintVal::U64(clean.parse().unwrap()),
+                            UintTy::U128 => UintVal::U128(clean.parse().unwrap()),
+                        };
+                        ir::Constant::Uint(val)
+                    }
+                    ir::Ty::Int(int_ty) => {
+                        let val = match int_ty {
+                            IntTy::Isize => IntVal::Isize(clean.parse().unwrap()),
+                            IntTy::I8 => IntVal::I8(clean.parse().unwrap()),
+                            IntTy::I16 => IntVal::I16(clean.parse().unwrap()),
+                            IntTy::I32 => IntVal::I32(clean.parse().unwrap()),
+                            IntTy::I64 => IntVal::I64(clean.parse().unwrap()),
+                            IntTy::I128 => IntVal::I128(clean.parse().unwrap()),
+                        };
+                        ir::Constant::Int(val)
+                    }
+                    _ => {
+                        return Err(crate::Error::Error(
+                            self.db.dcx().emit_err(
+                                Level::ERROR.primary_title("Invalid literal type").element(
+                                    Snippet::source(self.source).annotation(
+                                        AnnotationKind::Primary
+                                            .span(lit.span.to_range(self.db))
+                                            .label("Expected an integer literal here"),
+                                    ),
+                                ),
+                            ),
+                        ));
+                    }
+                }
             }
             LitKind::Bool => {
                 let value = text == "true";
@@ -65,13 +111,45 @@ impl<'db> ExprLowerer<'db> {
             }
             LitKind::Float => {
                 let clean = text.replace('_', "");
-                let value = clean.parse::<f64>().unwrap_or(0.0);
-                ir::Constant::Float(value.to_bits())
+                let float_ty = match ty {
+                    ir::Ty::Float(k) => k,
+                    _ => {
+                        return Err(crate::Error::Error(
+                            self.db.dcx().emit_err(
+                                Level::ERROR.primary_title("Invalid literal type").element(
+                                    Snippet::source(self.source).annotation(
+                                        AnnotationKind::Primary
+                                            .span(lit.span.to_range(self.db))
+                                            .label("Expected a float literal here"),
+                                    ),
+                                ),
+                            ),
+                        ));
+                    }
+                };
+                let val = match float_ty {
+                    FloatTy::F32 => FloatVal::F32(clean.parse().unwrap()),
+                    FloatTy::F64 => FloatVal::F64(clean.parse().unwrap()),
+                    _ => {
+                        return Err(crate::Error::Error(
+                            self.db.dcx().emit_err(
+                                Level::ERROR
+                                    .primary_title("Unsupported float type")
+                                    .element(Snippet::source(self.source).annotation(
+                                        AnnotationKind::Primary
+                                            .span(lit.span.to_range(self.db))
+                                            .label(format!(
+                                                "{} is not yet supported",
+                                                float_ty.name_str()
+                                            )),
+                                    )),
+                            ),
+                        ));
+                    }
+                };
+                ir::Constant::Float(val)
             }
         };
-
-        // Infer the type of the literal
-        let ty = self.infer_literal_type(lit);
 
         // Allocate a temporary for the literal
         let temp = self.allocate_temp(ty);
@@ -85,13 +163,34 @@ impl<'db> ExprLowerer<'db> {
         Ok(ir::Operand::Place(ir::Place::Local(temp)))
     }
 
-    /// Infer the IR type from a literal
-    pub(crate) fn infer_literal_type(&self, lit: &Lit<'_>) -> ir::Ty<'db> {
+    /// Infer the IR type from a literal.
+    /// Consults the type table (for type-annotated contexts like `let x: u32 = 42`).
+    /// Returns an error if the type cannot be determined.
+    pub(crate) fn infer_literal_type(
+        &self,
+        lit: &Lit<'_>,
+        expr_id: NodeId,
+    ) -> MResult<ir::Ty<'db>> {
+        // Check the type table — the type checker should have resolved this literal's type
+        if let Some(resolved) = self.lookup_expr_type(expr_id) {
+            return Ok(crate::ty_convert::resolved_to_ir(self.db, resolved));
+        }
+
+        // For bool and str, the type is unambiguous from the literal kind
         match lit.kind {
-            LitKind::Integer => ir::Ty::Int,
-            LitKind::Bool => ir::Ty::Bool,
-            LitKind::Str => ir::Ty::Str,
-            LitKind::Float => ir::Ty::Int, // TODO: Add Float type to IR
+            LitKind::Bool => Ok(ir::Ty::Bool),
+            LitKind::Str => Ok(ir::Ty::Str),
+            LitKind::Integer | LitKind::Float => Err(crate::Error::Error(
+                self.db.dcx().emit_err(
+                    Level::ERROR
+                        .primary_title("Could not determine literal type")
+                        .element(Snippet::source(self.source).annotation(
+                            AnnotationKind::Primary
+                                .span(lit.span.to_range(self.db))
+                                .label("Type not found in type table"),
+                        )),
+                ),
+            )),
         }
     }
 }
@@ -116,7 +215,7 @@ mod tests {
         assert_eq!(lowerer.local_decls.len(), 1);
 
         // Check the local declaration type
-        assert_eq!(lowerer.local_decls[0].ty(db), ir::Ty::Int);
+        assert_eq!(lowerer.local_decls[0].ty(db), ir::Ty::Int(IntTy::I32));
     }
 
     #[scrap_macros::salsa_test]

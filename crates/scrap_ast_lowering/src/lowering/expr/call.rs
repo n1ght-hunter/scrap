@@ -58,6 +58,7 @@ mod tests {
     use crate::test_helpers::*;
     use scrap_ast::operators::BinOpKind;
     use scrap_shared::ident::Symbol;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_lower_simple_call(db: &dyn scrap_shared::Db) {
@@ -115,11 +116,11 @@ mod tests {
         lowerer.insert_binding(max_sym, max_local);
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let y_sym = Symbol::new(db, "y".to_string());
-        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int);
+        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
         // Create the call: max(x + 1, y * 2)
@@ -216,7 +217,7 @@ mod tests {
         lowerer.insert_binding(is_valid_sym, is_valid_local);
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Create call: is_valid(x)

@@ -64,6 +64,7 @@ pub fn check_types<'db>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_type_context_creation(db: &dyn scrap_shared::Db) {
@@ -94,7 +95,7 @@ mod tests {
         let sym = scrap_shared::ident::Symbol::new(db, "x".to_string());
 
         // Define in outer scope
-        ctx.define_var(sym, InferTy::Int);
+        ctx.define_var(sym, InferTy::Int(IntTy::I32));
         assert!(ctx.lookup_var(sym).is_some());
 
         // Push inner scope
@@ -111,7 +112,7 @@ mod tests {
         ctx.pop_scope();
 
         // Back to outer scope value
-        assert_eq!(ctx.lookup_var(sym), Some(InferTy::Int));
+        assert_eq!(ctx.lookup_var(sym), Some(InferTy::Int(IntTy::I32)));
     }
 
     #[scrap_macros::salsa_test]
@@ -125,7 +126,7 @@ mod tests {
         let local_id = NodeId::new(2, 0);
 
         // Record some types
-        ctx.record_expr_type(expr_id, InferTy::Int);
+        ctx.record_expr_type(expr_id, InferTy::Int(IntTy::I32));
         ctx.record_local_type(local_id, InferTy::Bool);
 
         // Finalize types and create TypeTable
@@ -133,7 +134,7 @@ mod tests {
         let table = TypeTable::new(db, expr_types, local_types);
 
         // Verify types are recorded
-        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int));
+        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
         assert_eq!(table.local_type(db, local_id), Some(&ResolvedTy::Bool));
     }
 
@@ -153,13 +154,13 @@ mod tests {
 
         // Unify the type variable with Int
         let span = Span::new(db, 0, 0);
-        ctx.unify(&var, &InferTy::Int, span);
+        ctx.unify(&var, &InferTy::Int(IntTy::I32), span);
 
         // Finalize - should resolve the type variable to Int
         let (expr_types, local_types) = ctx.finalize_types();
         let table = TypeTable::new(db, expr_types, local_types);
 
         // The type should be resolved to Int, not a type variable
-        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int));
+        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
     }
 }

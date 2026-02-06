@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_errors::ErrorGuaranteed;
 use scrap_shared::ident::Symbol;
+use scrap_shared::types::IntTy;
 use scrap_shared::NodeId;
 use scrap_span::Span;
 
@@ -336,9 +337,11 @@ impl<'db> TypeContext<'db> {
     fn resolve_to_final(&self, ty: &InferTy<'db>) -> ResolvedTy<'db> {
         let resolved = self.resolve(ty);
         match resolved {
-            InferTy::Var(_) => ResolvedTy::Error, // Unsolved variable
+            InferTy::Var(_) => ResolvedTy::Int(IntTy::I32), // Unsolved variable defaults to i32
             InferTy::Bool => ResolvedTy::Bool,
-            InferTy::Int => ResolvedTy::Int,
+            InferTy::Int(k) => ResolvedTy::Int(k),
+            InferTy::Uint(k) => ResolvedTy::Uint(k),
+            InferTy::Float(k) => ResolvedTy::Float(k),
             InferTy::Str => ResolvedTy::Str,
             InferTy::Never => ResolvedTy::Never,
             InferTy::Adt(s) => ResolvedTy::Adt(s),
@@ -496,7 +499,9 @@ impl<'db> TypeContext<'db> {
         match ty {
             InferTy::Var(vid) => format!("?{}", vid.0),
             InferTy::Bool => "bool".to_string(),
-            InferTy::Int => "int".to_string(),
+            InferTy::Int(k) => k.name_str().to_string(),
+            InferTy::Uint(k) => k.name_str().to_string(),
+            InferTy::Float(k) => k.name_str().to_string(),
             InferTy::Str => "String".to_string(),
             InferTy::Never => "!".to_string(),
             InferTy::Adt(name) => name.text(self.db).to_string(),

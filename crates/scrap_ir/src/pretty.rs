@@ -313,9 +313,34 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn print_constant(&mut self, constant: &Constant<'db>) {
         match constant {
-            Constant::Int(i) => write!(self.output, "{}", i).unwrap(),
-            Constant::Float(bits) => {
-                write!(self.output, "{}", f64::from_bits(*bits)).unwrap();
+            Constant::Int(val) => {
+                let ty = val.ty();
+                match val {
+                    scrap_shared::types::IntVal::Isize(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::IntVal::I8(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::IntVal::I16(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::IntVal::I32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::IntVal::I64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::IntVal::I128(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                }.unwrap();
+            }
+            Constant::Uint(val) => {
+                let ty = val.ty();
+                match val {
+                    scrap_shared::types::UintVal::Usize(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::UintVal::U8(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::UintVal::U16(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::UintVal::U32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::UintVal::U64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::UintVal::U128(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                }.unwrap();
+            }
+            Constant::Float(val) => {
+                let ty = val.ty();
+                match val {
+                    scrap_shared::types::FloatVal::F32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                    scrap_shared::types::FloatVal::F64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
+                }.unwrap();
             }
             Constant::Bool(b) => write!(self.output, "{}", b).unwrap(),
             Constant::String(s) => write!(self.output, "\"{}\"", s.text(self.db)).unwrap(),
@@ -325,7 +350,9 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
     fn print_type(&mut self, ty: &Ty<'db>) {
         match ty {
             Ty::Bool => write!(self.output, "bool").unwrap(),
-            Ty::Int => write!(self.output, "int").unwrap(),
+            Ty::Int(k) => write!(self.output, "{}", k.name_str()).unwrap(),
+            Ty::Uint(k) => write!(self.output, "{}", k.name_str()).unwrap(),
+            Ty::Float(k) => write!(self.output, "{}", k.name_str()).unwrap(),
             Ty::Str => write!(self.output, "str").unwrap(),
             Ty::Adt(type_id) => write!(self.output, "{}", type_id.name(self.db)).unwrap(),
             Ty::Never => write!(self.output, "!").unwrap(),

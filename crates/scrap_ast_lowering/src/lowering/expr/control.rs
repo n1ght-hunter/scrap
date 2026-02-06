@@ -2,6 +2,7 @@
 
 use scrap_ast::{block::Block, expr::Expr};
 use scrap_ir as ir;
+use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, MResult};
 
@@ -53,7 +54,7 @@ impl<'db> ExprLowerer<'db> {
 
         // If-expressions produce unit value for now
         // TODO: Proper handling of if-expression results
-        Ok(ir::Operand::Constant(ir::Constant::Int(0)))
+        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
     }
 
     /// Lower a return statement
@@ -67,7 +68,7 @@ impl<'db> ExprLowerer<'db> {
         self.cfg_builder.finish_block(ir::Terminator::Return);
 
         // Returns don't produce a value, but we return a dummy
-        Ok(ir::Operand::Constant(ir::Constant::Int(0)))
+        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
     }
 }
 
@@ -78,6 +79,7 @@ mod tests {
     use scrap_ast::expr::ExprKind;
     use scrap_ast::operators::BinOpKind;
     use scrap_shared::ident::Symbol;
+    use scrap_shared::types::IntTy;
 
     #[scrap_macros::salsa_test]
     fn test_lower_if_without_else(db: &dyn scrap_shared::Db) {
@@ -86,7 +88,7 @@ mod tests {
 
         // Create variable x
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Create condition: x > 0
@@ -113,7 +115,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Condition: x > 0
@@ -145,11 +147,11 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let y_sym = Symbol::new(db, "y".to_string());
-        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int);
+        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
         // Outer condition: x > 0
@@ -218,7 +220,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // Condition
@@ -265,11 +267,11 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         let y_sym = Symbol::new(db, "y".to_string());
-        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int);
+        let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
         // x > 0
@@ -301,7 +303,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
-        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int);
+        let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
         // if x > 0 { return 1; } else { return 0; }

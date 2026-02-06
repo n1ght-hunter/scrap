@@ -125,6 +125,7 @@ impl<'db> BasicBlockBuilder<'db> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use scrap_shared::types::IntVal;
 
     #[scrap_macros::salsa_test]
     fn test_new_builder(db: &dyn scrap_shared::Db) {
@@ -164,7 +165,7 @@ mod tests {
 
         // Create a simple assignment statement
         let place = ir::Place::Local(ir::LocalId(0));
-        let constant = ir::Constant::Int(42);
+        let constant = ir::Constant::Int(IntVal::I32(42));
         let rvalue = ir::Rvalue::Constant(constant);
         let stmt_kind = ir::StatementKind::Assign(place, rvalue);
         let statement = ir::Statement::new(db, stmt_kind);
@@ -214,7 +215,7 @@ mod tests {
 
         // Try to add a statement after terminator (dead code)
         let place = ir::Place::Local(ir::LocalId(0));
-        let constant = ir::Constant::Int(42);
+        let constant = ir::Constant::Int(IntVal::I32(42));
         let rvalue = ir::Rvalue::Constant(constant);
         let stmt_kind = ir::StatementKind::Assign(place, rvalue);
         let statement = ir::Statement::new(db, stmt_kind);
