@@ -222,10 +222,8 @@ mod tests {
         let signature = function.signature(db);
         signature.name(db).text(db) == "add"
             && signature.params(db).len() == 2
-            && signature.params(db)[0].0.text(db) == "a"
-            && signature.params(db)[0].1 == ir::Ty::Int(scrap_shared::types::IntTy::I32)
-            && signature.params(db)[1].0.text(db) == "b"
-            && signature.params(db)[1].1 == ir::Ty::Int(scrap_shared::types::IntTy::I32)
+            && signature.params(db)[0] == ir::Ty::Int(scrap_shared::types::IntTy::I32)
+            && signature.params(db)[1] == ir::Ty::Int(scrap_shared::types::IntTy::I32)
     }
 
     #[test]

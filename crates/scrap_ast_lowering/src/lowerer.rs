@@ -54,10 +54,23 @@ impl<'db> ExprLowerer<'db> {
         self.type_table.expr_type(self.db, node_id)
     }
 
+    /// Look up the type of a local variable by its NodeId from the type table
+    pub(crate) fn lookup_local_type(&self, node_id: scrap_shared::NodeId) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
+        self.type_table.local_type(self.db, node_id)
+    }
+
     /// Look up the type of an expression from type table and convert to IR type.
     /// Returns Bool as fallback for tests that don't populate the type table.
     pub(crate) fn lookup_and_convert_type(&self, node_id: scrap_shared::NodeId) -> ir::Ty<'db> {
         self.lookup_expr_type(node_id)
+            .map(|resolved| crate::ty_convert::resolved_to_ir(self.db, resolved))
+            .unwrap_or(ir::Ty::Bool) // Fallback for tests
+    }
+
+    /// Look up the type of a local variable from type table and convert to IR type.
+    /// Returns Bool as fallback for tests that don't populate the type table.
+    pub(crate) fn lookup_and_convert_local_type(&self, node_id: scrap_shared::NodeId) -> ir::Ty<'db> {
+        self.lookup_local_type(node_id)
             .map(|resolved| crate::ty_convert::resolved_to_ir(self.db, resolved))
             .unwrap_or(ir::Ty::Bool) // Fallback for tests
     }
@@ -76,6 +89,11 @@ impl<'db> ExprLowerer<'db> {
         let local_decl = ir::LocalDecl::new(self.db, Some(name), ty);
         self.local_decls.push(local_decl);
         id
+    }
+
+    /// The return place is always _0
+    pub fn return_place(&self) -> ir::Place<'db> {
+        ir::Place::Local(ir::LocalId(0))
     }
 
     /// Emit an assignment statement

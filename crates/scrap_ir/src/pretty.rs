@@ -55,14 +55,14 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         self.write_indent();
         write!(self.output, "fn {}", sig.name(self.db).text(self.db)).unwrap();
 
-        // Parameters
+        // Parameters (referenced by local ID: _1, _2, ...)
         write!(self.output, "(").unwrap();
         let params = sig.params(self.db);
-        for (i, (name, ty)) in params.iter().enumerate() {
+        for (i, ty) in params.iter().enumerate() {
             if i > 0 {
                 write!(self.output, ", ").unwrap();
             }
-            write!(self.output, "{}: ", name.text(self.db)).unwrap();
+            write!(self.output, "_{}: ", i + 1).unwrap();
             self.print_type(ty);
         }
         write!(self.output, ")").unwrap();
@@ -142,20 +142,30 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
     }
 
     fn print_body(&mut self, body: Body<'db>) {
-        // Print local declarations
         let locals = body.local_decls(self.db);
-        if !locals.is_empty() {
-            self.write_indent();
-            writeln!(self.output, "// Locals:").unwrap();
-            for (i, local) in locals.iter().enumerate() {
+        let param_count = body.param_count(self.db);
+
+        // Print debug info for named locals (maps names to local IDs)
+        for (i, local) in locals.iter().enumerate() {
+            if let Some(name) = local.name(self.db) {
                 self.write_indent();
-                write!(self.output, "// _{}: ", i).unwrap();
-                if let Some(name) = local.name(self.db) {
-                    write!(self.output, "{} = ", name.text(self.db)).unwrap();
-                }
-                self.print_type(&local.ty(self.db));
-                writeln!(self.output).unwrap();
+                writeln!(self.output, "debug {} => _{};", name.text(self.db), i).unwrap();
             }
+        }
+
+        // Print let declarations for return place and non-param locals (skip params)
+        for (i, local) in locals.iter().enumerate() {
+            // Skip params (_1 through _param_count) — they're in the signature
+            if i >= 1 && i <= param_count {
+                continue;
+            }
+            self.write_indent();
+            write!(self.output, "let _{}: ", i).unwrap();
+            self.print_type(&local.ty(self.db));
+            writeln!(self.output, ";").unwrap();
+        }
+
+        if !locals.is_empty() {
             writeln!(self.output).unwrap();
         }
 

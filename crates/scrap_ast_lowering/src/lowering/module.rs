@@ -46,7 +46,8 @@ pub fn lower_function<'db>(
     type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Function<'db>> {
     let signature = lower_signature(db, ast_function)?;
-    let body = lower_body(db, ast_function, source, type_table)?;
+    let return_ty = signature.return_ty(db);
+    let body = lower_body(db, ast_function, source, type_table, return_ty)?;
 
     Ok(ir::Function::new(db, signature, body))
 }
@@ -60,9 +61,8 @@ pub fn lower_signature<'db>(
 
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_name = arg.ident.name;
         let param_ty = lower_type(db, &*arg.ty)?;
-        params.push((param_name, param_ty));
+        params.push(param_ty);
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
@@ -79,10 +79,16 @@ pub fn lower_body<'db>(
     ast_function: FnDef<'db>,
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
+    return_ty: ir::Ty<'db>,
 ) -> MResult<ir::Body<'db>> {
     let mut lowerer = ExprLowerer::new(db, source, type_table);
 
-    // 1. Register function parameters as local variables
+    // _0 is always the return place
+    let is_void_return = matches!(return_ty, ir::Ty::Void);
+    lowerer.allocate_temp(return_ty);
+
+    // _1, _2, ... are function parameters
+    let param_count = ast_function.args(db).len();
     for param in ast_function.args(db).iter() {
         let param_ty = lower_type(db, &*param.ty)?;
         let local_id = lowerer.allocate_named_local(param.ident.name, param_ty);
@@ -91,7 +97,10 @@ pub fn lower_body<'db>(
 
     // 2. Process all statements in the body
     let body = ast_function.body(db);
-    for stmt in &body.stmts {
+    let stmts = &body.stmts;
+    let last_idx = stmts.len().saturating_sub(1);
+    for (idx, stmt) in stmts.iter().enumerate() {
+        let is_last = idx == last_idx;
         match &stmt.kind {
             StmtKind::Let(local) => {
                 // Handle let bindings
@@ -100,22 +109,26 @@ pub fn lower_body<'db>(
                     let ty = if let Some(explicit_ty) = local.ty.as_ref() {
                         lower_type(db, explicit_ty)?
                     } else {
-                        // No explicit type - look up from type table using pattern NodeId
-                        lowerer.lookup_and_convert_type(local.pat.id)
+                        // No explicit type - look up from type table using local's NodeId
+                        lowerer.lookup_and_convert_local_type(local.id)
                     };
 
                     let local_id = lowerer.allocate_named_local(ident.name, ty);
                     lowerer.insert_binding(ident.name, local_id);
 
-                    // If there's an initializer, lower it and emit assignment
+                    // If there's an initializer, lower it directly into the local
                     if let LocalKind::Init(init) = &local.kind {
-                        let rhs = lowerer.lower_expr(init)?;
-                        lowerer.emit_assign(ir::Place::Local(local_id), ir::Rvalue::Use(rhs));
+                        lowerer.lower_expr_into(init, ir::Place::Local(local_id))?;
                     }
                 }
             }
+            StmtKind::Expr(expr) if is_last && !is_void_return => {
+                // Last expression without semicolon in a non-void function:
+                // this is an implicit return — assign result directly to _0
+                let ret_place = lowerer.return_place();
+                lowerer.lower_expr_into(expr, ret_place)?;
+            }
             StmtKind::Semi(expr) | StmtKind::Expr(expr) => {
-                // Lower the expression (handles returns, control flow, etc.)
                 lowerer.lower_expr(expr)?;
             }
             StmtKind::Item(_) | StmtKind::Empty => {
@@ -131,5 +144,5 @@ pub fn lower_body<'db>(
 
     // 4. Build the CFG and return the body
     let blocks = lowerer.cfg_builder.build();
-    Ok(ir::Body::new(db, blocks, lowerer.local_decls))
+    Ok(ir::Body::new(db, blocks, lowerer.local_decls, param_count))
 }

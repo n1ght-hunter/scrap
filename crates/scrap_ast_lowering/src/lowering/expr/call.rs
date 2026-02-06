@@ -6,49 +6,66 @@ use scrap_ir as ir;
 use crate::{lowerer::ExprLowerer, MResult};
 
 impl<'db> ExprLowerer<'db> {
-    /// Lower a function call to an operand
-    pub(crate) fn lower_call(
+    /// Lower the common parts of a function call (func operand + args).
+    fn lower_call_parts(
         &mut self,
         call_expr: &Expr<'db>,
-    ) -> MResult<ir::Operand<'db>> {
-        // Extract function and arguments from call expression
+    ) -> MResult<(ir::Operand<'db>, Vec<ir::Operand<'db>>)> {
         let (func, args) = match &call_expr.kind {
             scrap_ast::expr::ExprKind::Call(f, a) => (f, a),
             _ => return Err(crate::BuilderError::LowerExpressionError),
         };
 
-        // Lower the function expression (typically a path)
         let func_operand = self.lower_expr(func)?;
-
-        // Lower each argument to an operand
         let mut arg_operands = Vec::new();
         for arg in args {
-            let operand = self.lower_expr(arg)?;
-            arg_operands.push(operand);
+            arg_operands.push(self.lower_expr(arg)?);
         }
+        Ok((func_operand, arg_operands))
+    }
 
-        // Allocate a temporary for the return value using type from type table
+    /// Emit a call terminator writing the result to `destination`.
+    fn emit_call(
+        &mut self,
+        func: ir::Operand<'db>,
+        args: Vec<ir::Operand<'db>>,
+        destination: ir::Place<'db>,
+    ) {
+        let cont_bb = self.cfg_builder.start_block();
+        let terminator = ir::Terminator::Call {
+            func,
+            args,
+            destination,
+            target: cont_bb,
+        };
+        self.cfg_builder.finish_block(terminator);
+        self.cfg_builder.set_current_block(cont_bb);
+    }
+
+    /// Lower a function call to an operand (allocates a temporary).
+    pub(crate) fn lower_call(
+        &mut self,
+        call_expr: &Expr<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+
         let result_ty = self.lookup_and_convert_type(call_expr.id);
         let result_temp = self.allocate_temp(result_ty);
         let destination = ir::Place::Local(result_temp);
 
-        // Create a continuation block for after the call
-        let cont_bb = self.cfg_builder.start_block();
-
-        // Emit the call terminator
-        let terminator = ir::Terminator::Call {
-            func: func_operand,
-            args: arg_operands,
-            destination: destination.clone(),
-            target: cont_bb,
-        };
-        self.cfg_builder.finish_block(terminator);
-
-        // Continue at the continuation block
-        self.cfg_builder.set_current_block(cont_bb);
-
-        // Return reference to the result temporary
+        self.emit_call(func_operand, arg_operands, destination.clone());
         Ok(ir::Operand::Place(destination))
+    }
+
+    /// Lower a function call directly into a destination place.
+    pub(crate) fn lower_call_into(
+        &mut self,
+        call_expr: &Expr<'db>,
+        dest: ir::Place<'db>,
+    ) -> MResult<()> {
+        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+        self.emit_call(func_operand, arg_operands, dest);
+        Ok(())
     }
 }
 
@@ -86,7 +103,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_args(db: &dyn scrap_shared::Db) {
         // add(1, 2)
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create binding for add
         let add_sym = Symbol::new(db, "add".to_string());
@@ -108,7 +125,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_expression_args(db: &dyn scrap_shared::Db) {
         // max(x + 1, y * 2)
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create bindings
         let max_sym = Symbol::new(db, "max".to_string());
@@ -145,7 +162,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_calls(db: &dyn scrap_shared::Db) {
         // outer(inner(1))
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create bindings
         let outer_sym = Symbol::new(db, "outer".to_string());
@@ -178,7 +195,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_result_assignment(db: &dyn scrap_shared::Db) {
         // result = foo(1, 2)
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create bindings
         let result_sym = Symbol::new(db, "result".to_string());

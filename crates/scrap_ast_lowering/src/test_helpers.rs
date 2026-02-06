@@ -13,14 +13,28 @@ use scrap_ast::{
 use scrap_shared::{
     ident::{Ident, Symbol},
     path::{Path, PathSegment},
+    types::IntTy,
     NodeId,
 };
 use scrap_span::Span;
+use scrap_tycheck::ResolvedTy;
 use thin_vec::ThinVec;
 
-/// Create a simple span for testing
+/// Default source text for tests that involve integer/float literal parsing.
+/// The lowerer's `build_constant` extracts text from the source using the span,
+/// so tests that lower integer or float literals need a source string containing
+/// a valid numeric literal at the span position.
+pub const TEST_SOURCE: &str = "0";
+
+/// Create a simple span for testing (zero-length, used for non-literal nodes)
 pub fn test_span(db: &dyn scrap_shared::Db) -> Span<'_> {
     Span::new(db, 0, 0)
+}
+
+/// Create a span that covers one character for literal parsing in tests.
+/// Points to position 0..1 in the source, which should contain a valid literal.
+pub fn test_literal_span(db: &dyn scrap_shared::Db) -> Span<'_> {
+    Span::new(db, 0, 1)
 }
 
 /// Create a simple node ID for testing
@@ -28,9 +42,11 @@ pub fn test_node_id() -> NodeId {
     NodeId::new(0, 0)
 }
 
-/// Create an integer literal expression
+/// Create an integer literal expression.
+/// Uses `test_literal_span` so that `build_constant` can parse the source text.
+/// The test source (TEST_SOURCE = "0") must be passed to `ExprLowerer::new`.
 pub fn create_int_lit<'db>(db: &'db dyn scrap_shared::Db, _value: i64) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_literal_span(db);
     let node_id = test_node_id();
 
     let lit = Lit {
@@ -82,9 +98,11 @@ pub fn create_string_lit<'db>(db: &'db dyn scrap_shared::Db, _value: &str) -> Ex
     }
 }
 
-/// Create a float literal expression
+/// Create a float literal expression.
+/// Uses `test_literal_span` so that `build_constant` can parse the source text.
+/// The test source (TEST_SOURCE = "0") must be passed to `ExprLowerer::new`.
 pub fn create_float_lit<'db>(db: &'db dyn scrap_shared::Db, _value: f64) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_literal_span(db);
     let node_id = test_node_id();
 
     let lit = Lit {
@@ -323,7 +341,21 @@ pub fn create_call_expr<'db>(
     }
 }
 
-/// Create an empty TypeTable for tests
+/// Create an empty TypeTable for tests.
+/// Suitable for tests that only use bool/string literals or non-literal expressions.
 pub fn create_empty_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tycheck::TypeTable<'db> {
     scrap_tycheck::TypeTable::new(db, vec![], vec![])
+}
+
+/// Create a TypeTable with a default i32 entry for the test node ID.
+///
+/// This is needed for tests that involve integer literals, because
+/// `infer_literal_type` requires a type table entry for Integer/Float kinds.
+/// All test helpers use `NodeId::new(0, 0)`, so a single entry suffices.
+pub fn create_test_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tycheck::TypeTable<'db> {
+    scrap_tycheck::TypeTable::new(
+        db,
+        vec![(test_node_id(), ResolvedTy::Int(IntTy::I32))],
+        vec![],
+    )
 }

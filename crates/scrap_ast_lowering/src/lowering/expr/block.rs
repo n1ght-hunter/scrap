@@ -46,7 +46,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_block_expr(db: &dyn scrap_shared::Db) {
         // { x = 5; }
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         let x_sym = Symbol::new(db, "x".to_string());
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));

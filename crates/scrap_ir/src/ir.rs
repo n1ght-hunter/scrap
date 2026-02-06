@@ -101,10 +101,10 @@ pub struct Function<'db> {
 pub struct Signature<'db> {
     /// The name of the function.
     pub name: Symbol<'db>,
-    /// The parameters of the function.
+    /// The parameter types of the function.
     #[tracked]
     #[returns(ref)]
-    pub params: Vec<(Symbol<'db>, Ty<'db>)>,
+    pub params: Vec<Ty<'db>>,
     /// The return type of the function. `Ty::Void` for functions with no return value.
     pub return_ty: Ty<'db>,
 }
@@ -133,6 +133,7 @@ pub enum Ty<'db> {
 
 #[salsa::tracked(debug, persist)]
 /// The MIR for a single function, represented as a Control Flow Graph (CFG).
+/// Local layout: _0 = return place, _1.._param_count = params, rest = locals/temps.
 pub struct Body<'db> {
     #[tracked]
     #[returns(ref)]
@@ -140,6 +141,8 @@ pub struct Body<'db> {
     #[tracked]
     #[returns(ref)]
     pub local_decls: Vec<LocalDecl<'db>>,
+    /// Number of function parameters (locals _1 through _param_count).
+    pub param_count: usize,
 }
 
 #[salsa::tracked(debug, persist)]

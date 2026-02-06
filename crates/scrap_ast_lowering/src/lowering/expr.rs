@@ -40,4 +40,33 @@ impl<'db> ExprLowerer<'db> {
             }
         }
     }
+
+    /// Lower an expression directly into a destination place.
+    /// Avoids allocating a temporary — the result is written to `dest`.
+    pub fn lower_expr_into(
+        &mut self,
+        expr: &Expr<'db>,
+        dest: ir::Place<'db>,
+    ) -> MResult<()> {
+        match &expr.kind {
+            ExprKind::Lit(lit) => {
+                self.lower_literal_into(lit, expr.id, dest)
+            }
+            ExprKind::Binary(_, _, _) => {
+                self.lower_binary_op_into(expr, dest)
+            }
+            ExprKind::Call(_, _) => {
+                self.lower_call_into(expr, dest)
+            }
+            ExprKind::Paren(inner) => {
+                self.lower_expr_into(inner, dest)
+            }
+            // For other expressions, fall back to lower_expr + assign
+            _ => {
+                let operand = self.lower_expr(expr)?;
+                self.emit_assign(dest, ir::Rvalue::Use(operand));
+                Ok(())
+            }
+        }
+    }
 }
