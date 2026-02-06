@@ -5,7 +5,6 @@ use scrap_ast::{
     operators::{AssignOp, AssignOpKind},
 };
 use scrap_ir as ir;
-use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, BuilderError, MResult};
 
@@ -51,10 +50,8 @@ impl<'db> ExprLowerer<'db> {
         let rvalue = ir::Rvalue::Use(rhs_operand);
         self.emit_assign(place, rvalue);
 
-        // Assignments produce unit value (represented as a constant)
-        // For now, we'll return a dummy constant
-        // TODO: Proper unit type representation
-        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
+        // Assignments produce void
+        Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 
     /// Lower a compound assignment expression: lhs op= rhs
@@ -83,8 +80,8 @@ impl<'db> ExprLowerer<'db> {
         // Emit the assignment: place = lhs op rhs
         self.emit_assign(place, rvalue);
 
-        // Assignments produce unit value
-        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
+        // Assignments produce void
+        Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 
     /// Convert AST assignment operator to IR binary operator

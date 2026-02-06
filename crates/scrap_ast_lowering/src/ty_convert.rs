@@ -13,6 +13,7 @@ pub fn resolved_to_ir<'db>(
     resolved: &ResolvedTy<'db>,
 ) -> ir::Ty<'db> {
     match resolved {
+        ResolvedTy::Void => ir::Ty::Void,
         ResolvedTy::Bool => ir::Ty::Bool,
         ResolvedTy::Int(k) => ir::Ty::Int(*k),
         ResolvedTy::Uint(k) => ir::Ty::Uint(*k),

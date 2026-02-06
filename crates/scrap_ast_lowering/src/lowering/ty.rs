@@ -39,6 +39,7 @@ pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MRe
                 // Legacy alias
                 "int" => Ok(ir::Ty::Int(IntTy::I32)),
                 // Other primitives
+                "void" => Ok(ir::Ty::Void),
                 "bool" => Ok(ir::Ty::Bool),
                 "String" => Ok(ir::Ty::Str),
                 _ => {

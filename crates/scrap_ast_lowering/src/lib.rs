@@ -126,7 +126,7 @@ mod tests {
         let function = result.unwrap();
         function.signature(db).name(db).text(db) == "test_fn"
             && function.signature(db).params(db).len() == 0
-            && function.signature(db).return_ty(db).is_none()
+            && function.signature(db).return_ty(db) == ir::Ty::Void
     }
 
     #[test]

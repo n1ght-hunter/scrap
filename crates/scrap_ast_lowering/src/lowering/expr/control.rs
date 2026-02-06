@@ -2,7 +2,6 @@
 
 use scrap_ast::{block::Block, expr::Expr};
 use scrap_ir as ir;
-use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, MResult};
 
@@ -52,9 +51,9 @@ impl<'db> ExprLowerer<'db> {
         // Continue at the continuation block
         self.cfg_builder.set_current_block(cont_bb);
 
-        // If-expressions produce unit value for now
+        // If-expressions produce void for now
         // TODO: Proper handling of if-expression results
-        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
+        Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 
     /// Lower a return statement
@@ -67,8 +66,8 @@ impl<'db> ExprLowerer<'db> {
         // Emit the return terminator
         self.cfg_builder.finish_block(ir::Terminator::Return);
 
-        // Returns don't produce a value, but we return a dummy
-        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
+        // Returns don't produce a value
+        Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 }
 

@@ -12,6 +12,8 @@ use scrap_shared::types::{FloatTy, IntTy, UintTy};
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum ResolvedTy<'db> {
+    /// Void type (no value)
+    Void,
     /// Boolean type
     Bool,
     /// Signed integer type

@@ -16,6 +16,9 @@ pub enum InferTy<'db> {
     /// Inference variable (unknown type to be solved)
     Var(TyVid),
 
+    /// The void type, for functions that return nothing
+    Void,
+
     /// Primitive boolean type
     Bool,
 
@@ -56,9 +59,9 @@ pub enum InferTy<'db> {
 }
 
 impl<'db> InferTy<'db> {
-    /// Returns true if this is the unit type (empty tuple)
+    /// Returns true if this is the void type
     pub fn is_unit(&self) -> bool {
-        matches!(self, InferTy::Tuple(elems) if elems.is_empty())
+        matches!(self, InferTy::Void)
     }
 
     /// Returns true if this is an inference variable
@@ -76,9 +79,9 @@ impl<'db> InferTy<'db> {
         matches!(self, InferTy::Never)
     }
 
-    /// Create a unit type (empty tuple)
+    /// Create a unit type (void)
     pub fn unit() -> Self {
-        InferTy::Tuple(vec![])
+        InferTy::Void
     }
 }
 

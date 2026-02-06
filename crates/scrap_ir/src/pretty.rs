@@ -68,10 +68,9 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         write!(self.output, ")").unwrap();
 
         // Return type
-        if let Some(ret_ty) = sig.return_ty(self.db) {
-            write!(self.output, " -> ").unwrap();
-            self.print_type(&ret_ty);
-        }
+        let ret_ty = sig.return_ty(self.db);
+        write!(self.output, " -> ").unwrap();
+        self.print_type(&ret_ty);
 
         writeln!(self.output, " {{").unwrap();
         self.indent += 1;
@@ -342,6 +341,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                     scrap_shared::types::FloatVal::F64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
                 }.unwrap();
             }
+            Constant::Void => write!(self.output, "void").unwrap(),
             Constant::Bool(b) => write!(self.output, "{}", b).unwrap(),
             Constant::String(s) => write!(self.output, "\"{}\"", s.text(self.db)).unwrap(),
         }
@@ -349,6 +349,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn print_type(&mut self, ty: &Ty<'db>) {
         match ty {
+            Ty::Void => write!(self.output, "void").unwrap(),
             Ty::Bool => write!(self.output, "bool").unwrap(),
             Ty::Int(k) => write!(self.output, "{}", k.name_str()).unwrap(),
             Ty::Uint(k) => write!(self.output, "{}", k.name_str()).unwrap(),

@@ -382,6 +382,7 @@ impl<'db> TypeContext<'db> {
                         // Legacy alias
                         "int" => InferTy::Int(IntTy::I32),
                         // Other primitives
+                        "void" => InferTy::Void,
                         "bool" => InferTy::Bool,
                         "String" => InferTy::Str,
                         _ => {

@@ -105,14 +105,16 @@ pub struct Signature<'db> {
     #[tracked]
     #[returns(ref)]
     pub params: Vec<(Symbol<'db>, Ty<'db>)>,
-    /// The return type of the function.
-    pub return_ty: Option<Ty<'db>>,
+    /// The return type of the function. `Ty::Void` for functions with no return value.
+    pub return_ty: Ty<'db>,
 }
 
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum Ty<'db> {
+    /// The void type, for functions that return nothing.
+    Void,
     /// A primitive boolean type.
     Bool,
     /// A signed integer type.
@@ -255,6 +257,7 @@ pub enum AggregateKind<'db> {
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum Constant<'db> {
+    Void,
     Int(IntVal),
     Uint(UintVal),
     Float(FloatVal),

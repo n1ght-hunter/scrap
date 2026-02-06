@@ -338,6 +338,7 @@ impl<'db> TypeContext<'db> {
         let resolved = self.resolve(ty);
         match resolved {
             InferTy::Var(_) => ResolvedTy::Int(IntTy::I32), // Unsolved variable defaults to i32
+            InferTy::Void => ResolvedTy::Void,
             InferTy::Bool => ResolvedTy::Bool,
             InferTy::Int(k) => ResolvedTy::Int(k),
             InferTy::Uint(k) => ResolvedTy::Uint(k),
@@ -498,6 +499,7 @@ impl<'db> TypeContext<'db> {
     fn ty_to_string_inner(&self, ty: &InferTy<'db>) -> String {
         match ty {
             InferTy::Var(vid) => format!("?{}", vid.0),
+            InferTy::Void => "void".to_string(),
             InferTy::Bool => "bool".to_string(),
             InferTy::Int(k) => k.name_str().to_string(),
             InferTy::Uint(k) => k.name_str().to_string(),

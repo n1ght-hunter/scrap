@@ -2,7 +2,6 @@
 
 use scrap_ast::block::Block;
 use scrap_ir as ir;
-use scrap_shared::types::IntVal;
 
 use crate::{lowerer::ExprLowerer, MResult};
 
@@ -10,9 +9,9 @@ impl<'db> ExprLowerer<'db> {
     /// Lower a block expression
     pub(crate) fn lower_block_expr(&mut self, block: &Block<'db>) -> MResult<ir::Operand<'db>> {
         self.lower_block(block)?;
-        // Blocks produce unit value for now
+        // Blocks produce void for now
         // TODO: Handle implicit return from last expression
-        Ok(ir::Operand::Constant(ir::Constant::Int(IntVal::I32(0))))
+        Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 
     /// Lower a block's statements

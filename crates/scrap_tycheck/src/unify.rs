@@ -35,6 +35,7 @@ impl<'db> TypeContext<'db> {
             }
 
             // Primitive types must match exactly
+            (InferTy::Void, InferTy::Void) => true,
             (InferTy::Bool, InferTy::Bool) => true,
             (InferTy::Str, InferTy::Str) => true,
 
@@ -172,7 +173,8 @@ impl<'db> TypeContext<'db> {
             }
             InferTy::Tuple(elems) => elems.iter().any(|e| self.occurs_check(vid, e)),
             // Primitive types and ADTs don't contain type variables
-            InferTy::Bool
+            InferTy::Void
+            | InferTy::Bool
             | InferTy::Int(_)
             | InferTy::Uint(_)
             | InferTy::Float(_)

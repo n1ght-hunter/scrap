@@ -66,8 +66,8 @@ pub fn lower_signature<'db>(
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
-        Some(ty) => Some(lower_type(db, ty)?),
-        None => None,
+        Some(ty) => lower_type(db, ty)?,
+        None => ir::Ty::Void,
     };
 
     Ok(ir::Signature::new(db, name, params, return_ty))
