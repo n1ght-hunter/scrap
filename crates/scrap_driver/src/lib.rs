@@ -53,8 +53,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     // Phase 1.5: Module resolution
     let modules = utils::collect_modules(db, entry_file, other_files.clone());
-    let resolved_can = parsing::resolve_modules(db, &modules, entry_file)
-        .context("failed to resolve modules")?;
+    let resolved_can = parsing::resolve_modules(db, &modules, entry_file);
 
     let mode = pretty::PpMode::determine_pp_mode(args);
 
@@ -72,7 +71,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     handle_diagnostics(db)?;
 
     // Phase 3: Lower to IR with type information
-    let (entry_ir, other_ir) = utils::lower_input_files_to_ir(db, entry_file, other_files.to_vec(), type_table);
+    let (entry_ir, other_ir) =
+        utils::lower_input_files_to_ir(db, entry_file, other_files.to_vec(), type_table);
 
     handle_diagnostics(db)?;
 

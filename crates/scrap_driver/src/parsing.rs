@@ -84,7 +84,7 @@ pub fn resolve_modules<'db>(
     db: &'db dyn scrap_shared::Db,
     modules: &Modules<'db>,
     entry_file: scrap_parser::ParsedFile<'db>,
-) -> Option<scrap_ast::Can<'db>> {
+) -> scrap_ast::Can<'db> {
     let can = entry_file.ast(db).unwrap_can();
     let mut items = can.items(db).clone();
     items.par_iter_mut().for_each(|item| {
@@ -113,7 +113,7 @@ pub fn resolve_modules<'db>(
     });
 
     // Return the resolved AST
-    Some(create_can(db, can.id(db), *can.name(db), items))
+    create_can(db, can.id(db), *can.name(db), items)
 }
 
 fn resolve_module_recursive<'db>(
