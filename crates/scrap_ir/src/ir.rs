@@ -49,6 +49,7 @@ pub struct Module<'db> {
 )]
 pub enum Items<'db> {
     Function(Function<'db>),
+    ExternFunction(ExternFn<'db>),
     Struct(Struct<'db>),
     Enum(Enum<'db>),
 }
@@ -86,6 +87,15 @@ pub enum EnumVariant<'db> {
     Tuple(Symbol<'db>, Vec<Ty<'db>>),
     /// A struct variant with named fields.
     Struct(Symbol<'db>, Vec<(Symbol<'db>, Ty<'db>)>),
+}
+
+#[salsa::tracked(debug, persist)]
+/// An extern function declaration with its ABI and signature but no body.
+pub struct ExternFn<'db> {
+    /// The ABI of the extern function (e.g. "C").
+    pub abi: Symbol<'db>,
+    /// The signature of the extern function.
+    pub signature: Signature<'db>,
 }
 
 #[salsa::tracked(debug, persist)]

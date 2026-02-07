@@ -3,8 +3,8 @@ use strum_macros::{EnumDiscriminants, EnumIter};
 use thin_vec::ThinVec;
 
 use crate::{
-    Visibility, enumdef::EnumDef, fndef::FnDef, module::Module, node_id::NodeId,
-    structdef::StructDef,
+    Visibility, enumdef::EnumDef, fndef::FnDef, foreign::ForeignMod, module::Module,
+    node_id::NodeId, structdef::StructDef,
 };
 use scrap_shared::{ident::Ident, path::Path};
 
@@ -43,6 +43,7 @@ pub enum ItemKind<'db> {
     Struct(StructDef<'db>),
     Module(Module<'db>),
     Use(UseTree<'db>),
+    ForeignMod(ForeignMod<'db>),
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
@@ -63,6 +64,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
                 use_tree.pretty_print_indent(f, indent)?;
                 write!(f, ";")
             }
+            ItemKind::ForeignMod(foreign_mod) => foreign_mod.pretty_print_indent(f, indent),
         }
     }
 }

@@ -2,6 +2,7 @@
 
 use scrap_ast::{
     fndef::FnDef,
+    foreign::ForeignItem,
     item::{Item, ItemKind},
     module::ModuleKind,
     Can,
@@ -51,10 +52,48 @@ impl<'db> TypeContext<'db> {
                     }
                 }
             }
+            ItemKind::ForeignMod(foreign_mod) => {
+                for item in foreign_mod.items.iter() {
+                    self.collect_foreign_fn_signature(item);
+                }
+            }
             ItemKind::Use(_) => {
                 // Use statements don't contribute type signatures
             }
         }
+    }
+
+    /// Collect a foreign function signature.
+    fn collect_foreign_fn_signature(&mut self, item: &ForeignItem<'db>) {
+        let name = item.ident.name;
+
+        let type_params = vec![];
+        self.set_type_params(type_params.clone());
+
+        let params: Vec<_> = item
+            .args
+            .iter()
+            .map(|param| {
+                let ty = self.lower_ast_ty(&param.ty);
+                (param.ident.name, ty)
+            })
+            .collect();
+
+        let return_ty = item
+            .ret_type
+            .as_ref()
+            .map(|t| self.lower_ast_ty(t))
+            .unwrap_or_else(InferTy::unit);
+
+        self.clear_type_params();
+
+        let sig = FnSig {
+            type_params,
+            params,
+            return_ty,
+        };
+
+        self.register_function(name, sig);
     }
 
     /// Collect a function signature.
@@ -115,6 +154,9 @@ impl<'db> TypeContext<'db> {
                         self.check_item(sub_item);
                     }
                 }
+            }
+            ItemKind::ForeignMod(_) => {
+                // Extern functions have no body to type check
             }
             ItemKind::Use(_) => {
                 // Use statements don't need type checking

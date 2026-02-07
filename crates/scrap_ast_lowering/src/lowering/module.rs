@@ -2,6 +2,7 @@
 
 use scrap_ast::{
     fndef::FnDef,
+    foreign::ForeignItem,
     item::{Item, ItemKind},
     local::LocalKind,
     pat::PatKind,
@@ -28,8 +29,15 @@ pub fn lower_module<'db>(
                 let mir_function = lower_function(db, *fn_def, source, type_table)?;
                 items.push(ir::Items::Function(mir_function));
             }
+            ItemKind::ForeignMod(foreign_mod) => {
+                for foreign_item in foreign_mod.items.iter() {
+                    let sig = lower_foreign_signature(db, foreign_item)?;
+                    let extern_fn = ir::ExternFn::new(db, foreign_mod.abi, sig);
+                    items.push(ir::Items::ExternFunction(extern_fn));
+                }
+            }
             _ => {
-                // Skip non-function items for now
+                // Skip other items for now
                 continue;
             }
         }
@@ -66,6 +74,27 @@ pub fn lower_signature<'db>(
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
+        Some(ty) => lower_type(db, ty)?,
+        None => ir::Ty::Void,
+    };
+
+    Ok(ir::Signature::new(db, name, params, return_ty))
+}
+
+/// Lower a foreign (extern) function signature
+pub fn lower_foreign_signature<'db>(
+    db: &'db dyn scrap_shared::Db,
+    item: &ForeignItem<'db>,
+) -> MResult<ir::Signature<'db>> {
+    let name = item.ident.name;
+
+    let mut params = Vec::new();
+    for arg in item.args.iter() {
+        let param_ty = lower_type(db, &*arg.ty)?;
+        params.push(param_ty);
+    }
+
+    let return_ty = match item.ret_type.as_ref() {
         Some(ty) => lower_type(db, ty)?,
         None => ir::Ty::Void,
     };

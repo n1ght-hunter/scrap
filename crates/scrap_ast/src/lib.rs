@@ -10,6 +10,7 @@ pub mod enumdef;
 pub mod expr;
 pub mod field;
 pub mod fndef;
+pub mod foreign;
 pub mod item;
 pub mod lit;
 pub mod local;

@@ -40,6 +40,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         for item in module.items(self.db) {
             match item {
                 Items::Function(func) => self.print_function(*func),
+                Items::ExternFunction(ext) => self.print_extern_function(*ext),
                 Items::Struct(s) => self.print_struct(*s),
                 Items::Enum(e) => self.print_enum(*e),
             }
@@ -80,6 +81,29 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         self.indent -= 1;
         self.write_indent();
         writeln!(self.output, "}}").unwrap();
+    }
+
+    fn print_extern_function(&mut self, ext: ExternFn<'db>) {
+        let abi = ext.abi(self.db);
+        let sig = ext.signature(self.db);
+        self.write_indent();
+        write!(self.output, "extern \"{}\" fn {}", abi.text(self.db), sig.name(self.db).text(self.db)).unwrap();
+
+        write!(self.output, "(").unwrap();
+        let params = sig.params(self.db);
+        for (i, ty) in params.iter().enumerate() {
+            if i > 0 {
+                write!(self.output, ", ").unwrap();
+            }
+            write!(self.output, "_{}: ", i + 1).unwrap();
+            self.print_type(ty);
+        }
+        write!(self.output, ")").unwrap();
+
+        let ret_ty = sig.return_ty(self.db);
+        write!(self.output, " -> ").unwrap();
+        self.print_type(&ret_ty);
+        writeln!(self.output, ";").unwrap();
     }
 
     fn print_struct(&mut self, s: Struct<'db>) {

@@ -30,6 +30,8 @@ pub enum KeyWord {
     Mod,
     #[token("use")]
     Use,
+    #[token("extern")]
+    Extern,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -149,6 +151,8 @@ pub enum Delimiter {
     DoubleColon,
     #[token(";")]
     Semicolon,
+    #[token("!")]
+    Bang,
 }
 
 #[derive(Debug, PartialEq, Clone)]
