@@ -250,6 +250,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 args,
                 destination,
                 target,
+                unwind,
             } => {
                 self.print_place(destination);
                 write!(self.output, " = ").unwrap();
@@ -261,13 +262,20 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                     }
                     self.print_operand(arg);
                 }
-                writeln!(self.output, ") -> bb{};", target.0).unwrap();
+                writeln!(
+                    self.output,
+                    ") -> [return: bb{}, unwind {}];",
+                    target.0,
+                    self.unwind_str(unwind)
+                )
+                .unwrap();
             }
             Terminator::Assert {
                 cond,
                 expected,
                 msg,
                 target,
+                unwind,
             } => {
                 write!(self.output, "assert(").unwrap();
                 if !expected {
@@ -275,7 +283,13 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 }
                 self.print_operand(cond);
                 write!(self.output, ", \"{}\"", self.assert_msg_str(msg)).unwrap();
-                writeln!(self.output, ") -> bb{};", target.0).unwrap();
+                writeln!(
+                    self.output,
+                    ") -> [success: bb{}, unwind {}];",
+                    target.0,
+                    self.unwind_str(unwind)
+                )
+                .unwrap();
             }
             Terminator::Unreachable => {
                 writeln!(self.output, "unreachable;").unwrap();
@@ -454,6 +468,14 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             // Unary
             IntrinsicOp::Neg => "neg",
             IntrinsicOp::Not => "not",
+        }
+    }
+
+    fn unwind_str(&self, unwind: &UnwindAction) -> String {
+        match unwind {
+            UnwindAction::Continue => "continue".to_string(),
+            UnwindAction::Cleanup(bb) => format!("bb{}", bb.0),
+            UnwindAction::Unreachable => "unreachable".to_string(),
         }
     }
 

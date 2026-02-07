@@ -173,6 +173,19 @@ pub struct LocalDecl<'db> {
     pub ty: Ty<'db>,
 }
 
+/// What to do when unwinding reaches a Call or Assert terminator.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub enum UnwindAction {
+    /// Continue execution (abort on panic). Default for now.
+    Continue,
+    /// Unwind to a cleanup block (future: for drop glue).
+    Cleanup(BasicBlockId),
+    /// Unwinding is unreachable (e.g., inside a cleanup block).
+    Unreachable,
+}
+
 /// Terminators are instructions that end a basic block and transfer control.
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
@@ -191,15 +204,17 @@ pub enum Terminator<'db> {
         args: Vec<Operand<'db>>,
         destination: Place<'db>,
         target: BasicBlockId,
+        unwind: UnwindAction,
     },
-    /// Assert a condition holds, otherwise trap.
+    /// Assert a condition holds, otherwise panic.
     /// Used for overflow checks after checked arithmetic intrinsics.
-    /// `expected` is the value `cond` must equal; if `cond != expected`, trap.
+    /// `expected` is the value `cond` must equal; if `cond != expected`, panic.
     Assert {
         cond: Operand<'db>,
         expected: bool,
         msg: AssertMessage,
         target: BasicBlockId,
+        unwind: UnwindAction,
     },
     Unreachable,
 }

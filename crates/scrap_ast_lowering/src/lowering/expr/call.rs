@@ -37,6 +37,7 @@ impl<'db> ExprLowerer<'db> {
             args,
             destination,
             target: cont_bb,
+            unwind: ir::UnwindAction::Continue,
         };
         self.cfg_builder.finish_block(terminator);
         self.cfg_builder.set_current_block(cont_bb);

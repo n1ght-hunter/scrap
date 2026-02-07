@@ -639,6 +639,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 args,
                 destination,
                 target,
+                unwind: _,
             } => {
                 let func_id = match func {
                     ir::Operand::FunctionRef(fid) => {
@@ -688,8 +689,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Terminator::Assert {
                 cond,
                 expected,
-                msg: _,
+                msg,
                 target,
+                unwind: _,
             } => {
                 let cond_val = self.lower_operand(cond, builder, module)?;
                 let success_block = match self.block_map.get(&target.0) {
@@ -714,6 +716,35 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 }
 
                 builder.switch_to_block(fail_block);
+
+                // Call __scrap_panic(msg_ptr, msg_len) to print the error and exit
+                let msg_text = Self::assert_msg_str(msg);
+                let msg_bytes = msg_text.as_bytes();
+                let msg_len_val = msg_bytes.len();
+
+                // Create a data section for the message string
+                let id = self.next_data_id.get();
+                self.next_data_id.set(id + 1);
+                let data_name = format!(".Lpanic_msg.{id}");
+
+                let data_id = module
+                    .declare_data(&data_name, Linkage::Local, false, false)
+                    .or_emit(self.db)?;
+                let mut desc = DataDescription::new();
+                desc.define(msg_bytes.to_vec().into_boxed_slice());
+                module.define_data(data_id, &desc).or_emit(self.db)?;
+
+                let gv = module.declare_data_in_func(data_id, builder.func);
+                let msg_ptr = builder.ins().global_value(types::I64, gv);
+                let msg_len = builder.ins().iconst(types::I64, msg_len_val as i64);
+
+                // Call __scrap_panic
+                if let Some(&panic_func_id) = self.functions.get("__scrap_panic") {
+                    let panic_ref = module.declare_func_in_func(panic_func_id, builder.func);
+                    builder.ins().call(panic_ref, &[msg_ptr, msg_len]);
+                }
+
+                // Trap as fallback (panic function diverges via ExitProcess)
                 builder.ins().trap(TrapCode::user(2).unwrap());
 
                 Some(())
@@ -722,6 +753,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 builder.ins().trap(TrapCode::user(1).unwrap());
                 Some(())
             }
+        }
+    }
+
+    /// Get the human-readable message string for an AssertMessage.
+    fn assert_msg_str(msg: &ir::AssertMessage) -> &'static str {
+        match msg {
+            ir::AssertMessage::Overflow(ir::IntrinsicOp::AddWithOverflow) => {
+                "attempt to add with overflow\n"
+            }
+            ir::AssertMessage::Overflow(ir::IntrinsicOp::SubWithOverflow) => {
+                "attempt to subtract with overflow\n"
+            }
+            ir::AssertMessage::Overflow(ir::IntrinsicOp::MulWithOverflow) => {
+                "attempt to multiply with overflow\n"
+            }
+            ir::AssertMessage::Overflow(_) => "arithmetic overflow\n",
+            ir::AssertMessage::DivisionByZero => "attempt to divide by zero\n",
+            ir::AssertMessage::RemainderByZero => {
+                "attempt to calculate remainder with zero divisor\n"
+            }
+            ir::AssertMessage::ShiftOverflow => "attempt to shift with overflow\n",
         }
     }
 

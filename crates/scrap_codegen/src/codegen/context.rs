@@ -71,7 +71,9 @@ impl<'db> CodegenContext<'db> {
     /// Compile an entire IR module (declare then define).
     pub fn compile_module(&mut self, module: ir::Module<'db>) -> Option<()> {
         self.declare_items(module)?;
+        self.declare_panic_runtime()?;
         self.define_functions(module)?;
+        self.define_panic_function()?;
         Some(())
     }
 
@@ -118,6 +120,152 @@ impl<'db> CodegenContext<'db> {
             .or_emit(self.db)?;
 
         self.collect_unwind_info(start_func_id);
+        self.module.clear_context(&mut self.ctx);
+
+        Some(())
+    }
+
+    /// Declare the panic runtime: `__scrap_panic` and its Windows API dependencies.
+    /// Must be called before `define_functions()` so user code can reference `__scrap_panic`.
+    pub fn declare_panic_runtime(&mut self) -> Option<()> {
+        let ptr_ty = types::I64;
+        let call_conv = self.module.target_config().default_call_conv;
+
+        // Ensure Windows API imports exist
+        // GetStdHandle(nStdHandle: i64) -> i64
+        if !self.functions.contains_key("GetStdHandle") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty));
+            sig.returns.push(AbiParam::new(ptr_ty));
+            let fid = self
+                .module
+                .declare_function("GetStdHandle", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("GetStdHandle".to_string(), fid);
+        }
+
+        // WriteFile(hFile, lpBuffer, nBytes, lpBytesWritten, lpOverlapped) -> i64
+        if !self.functions.contains_key("WriteFile") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty)); // hFile
+            sig.params.push(AbiParam::new(ptr_ty)); // lpBuffer
+            sig.params.push(AbiParam::new(ptr_ty)); // nNumberOfBytesToWrite
+            sig.params.push(AbiParam::new(ptr_ty)); // lpNumberOfBytesWritten
+            sig.params.push(AbiParam::new(ptr_ty)); // lpOverlapped
+            sig.returns.push(AbiParam::new(ptr_ty));
+            let fid = self
+                .module
+                .declare_function("WriteFile", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("WriteFile".to_string(), fid);
+        }
+
+        // ExitProcess(exit_code: i64) -> !  (no return)
+        if !self.functions.contains_key("ExitProcess") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty));
+            let fid = self
+                .module
+                .declare_function("ExitProcess", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("ExitProcess".to_string(), fid);
+        }
+
+        // Declare __scrap_panic(msg_ptr: i64, msg_len: i64) -> !
+        let mut panic_sig = self.module.make_signature();
+        panic_sig.call_conv = call_conv;
+        panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_ptr
+        panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_len
+
+        let panic_func_id = self
+            .module
+            .declare_function("__scrap_panic", Linkage::Local, &panic_sig)
+            .or_emit(self.db)?;
+        self.functions
+            .insert("__scrap_panic".to_string(), panic_func_id);
+
+        Some(())
+    }
+
+    /// Define the `__scrap_panic` function body.
+    /// Must be called after `define_functions()`.
+    ///
+    /// Implementation:
+    ///   1. GetStdHandle(STD_ERROR_HANDLE) → handle
+    ///   2. WriteFile(handle, msg_ptr, msg_len, 0, 0)
+    ///   3. ExitProcess(101)
+    pub fn define_panic_function(&mut self) -> Option<()> {
+        let ptr_ty = types::I64;
+        let call_conv = self.module.target_config().default_call_conv;
+
+        let panic_func_id = match self.functions.get("__scrap_panic").copied() {
+            Some(id) => id,
+            None => {
+                emit_codegen_err(self.db, "function '__scrap_panic' not declared");
+                return None;
+            }
+        };
+
+        let mut panic_sig = self.module.make_signature();
+        panic_sig.call_conv = call_conv;
+        panic_sig.params.push(AbiParam::new(ptr_ty));
+        panic_sig.params.push(AbiParam::new(ptr_ty));
+
+        self.ctx.func.signature = panic_sig;
+
+        {
+            let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.func_ctx);
+            let entry_block = builder.create_block();
+            builder.append_block_params_for_function_params(entry_block);
+            builder.switch_to_block(entry_block);
+
+            let params = builder.block_params(entry_block).to_vec();
+            let msg_ptr = params[0];
+            let msg_len = params[1];
+
+            // 1. handle = GetStdHandle(STD_ERROR_HANDLE)
+            //    STD_ERROR_HANDLE = (DWORD)-12 = 0xFFFFFFF4 = 4294967284
+            let get_std_handle_id = self.functions["GetStdHandle"];
+            let get_std_handle_ref = self
+                .module
+                .declare_func_in_func(get_std_handle_id, builder.func);
+            let stderr_const = builder.ins().iconst(ptr_ty, 4294967284_i64);
+            let call_gsh = builder.ins().call(get_std_handle_ref, &[stderr_const]);
+            let handle = builder.inst_results(call_gsh)[0];
+
+            // 2. WriteFile(handle, msg_ptr, msg_len, 0, 0)
+            let write_file_id = self.functions["WriteFile"];
+            let write_file_ref = self
+                .module
+                .declare_func_in_func(write_file_id, builder.func);
+            let zero = builder.ins().iconst(ptr_ty, 0);
+            builder
+                .ins()
+                .call(write_file_ref, &[handle, msg_ptr, msg_len, zero, zero]);
+
+            // 3. ExitProcess(101)
+            let exit_process_id = self.functions["ExitProcess"];
+            let exit_process_ref = self
+                .module
+                .declare_func_in_func(exit_process_id, builder.func);
+            let exit_code = builder.ins().iconst(ptr_ty, 101);
+            builder.ins().call(exit_process_ref, &[exit_code]);
+
+            // Trap as fallback (ExitProcess never returns)
+            builder.ins().trap(TrapCode::user(1).unwrap());
+
+            builder.seal_all_blocks();
+            builder.finalize();
+        }
+
+        self.module
+            .define_function(panic_func_id, &mut self.ctx)
+            .or_emit(self.db)?;
+
+        self.collect_unwind_info(panic_func_id);
         self.module.clear_context(&mut self.ctx);
 
         Some(())

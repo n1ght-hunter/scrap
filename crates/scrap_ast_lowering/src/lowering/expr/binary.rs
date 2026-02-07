@@ -144,6 +144,7 @@ impl<'db> ExprLowerer<'db> {
             expected: false, // expect overflow to be false
             msg,
             target: success_bb,
+            unwind: ir::UnwindAction::Continue,
         });
 
         // Switch to success block
