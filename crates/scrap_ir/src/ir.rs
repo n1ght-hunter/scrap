@@ -139,6 +139,8 @@ pub enum Ty<'db> {
     Adt(TypeId<'db>),
     /// Represents a type that never returns a value, like a function that always panics.
     Never,
+    /// A tuple type, e.g. `(i32, bool)` for checked arithmetic results.
+    Tuple(Vec<Ty<'db>>),
 }
 
 #[salsa::tracked(debug, persist)]
@@ -190,6 +192,15 @@ pub enum Terminator<'db> {
         destination: Place<'db>,
         target: BasicBlockId,
     },
+    /// Assert a condition holds, otherwise trap.
+    /// Used for overflow checks after checked arithmetic intrinsics.
+    /// `expected` is the value `cond` must equal; if `cond != expected`, trap.
+    Assert {
+        cond: Operand<'db>,
+        expected: bool,
+        msg: AssertMessage,
+        target: BasicBlockId,
+    },
     Unreachable,
 }
 
@@ -218,8 +229,9 @@ pub enum StatementKind<'db> {
 )]
 pub enum Rvalue<'db> {
     Use(Operand<'db>),
-    BinaryOp(BinOp, Operand<'db>, Operand<'db>),
-    UnaryOp(UnOp, Operand<'db>),
+    /// A compiler-builtin intrinsic function call.
+    /// Replaces the old BinaryOp/UnaryOp — all operations are intrinsic calls.
+    Intrinsic(IntrinsicOp, Vec<Operand<'db>>),
     Constant(Constant<'db>),
     /// Constructs a struct or enum variant.
     /// Example: `MyStruct { field1: op1, field2: op2 }`
@@ -278,34 +290,63 @@ pub enum Constant<'db> {
     String(Symbol<'db>),
 }
 
+/// A compiler-builtin operation represented as an inline function call.
+///
+/// All operations in the IR (arithmetic, comparison, bitwise, unary) are
+/// represented as intrinsic calls rather than special IR constructs.
+/// Checked variants (e.g. `AddWithOverflow`) return `(T, bool)` where
+/// the bool indicates overflow/error; these are paired with `Assert` terminators.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum BinOp {
+pub enum IntrinsicOp {
+    // Checked integer arithmetic — return (T, bool)
+    AddWithOverflow,
+    SubWithOverflow,
+    MulWithOverflow,
+    DivWithZeroCheck,
+    RemWithZeroCheck,
+    ShlChecked,
+    ShrChecked,
+
+    // Unchecked arithmetic — return T (used for floats, or future wrapping ops)
     Add,
     Sub,
     Mul,
     Div,
     Rem,
-    And,
-    Or,
-    BitXor,
-    BitAnd,
-    BitOr,
-    Shl,
-    Shr,
+
+    // Comparisons — return bool
     Eq,
+    Ne,
     Lt,
     Le,
-    Ne,
-    Ge,
     Gt,
-}
+    Ge,
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
-)]
-pub enum UnOp {
+    // Logical — return bool
+    And,
+    Or,
+
+    // Bitwise — return T
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+
+    // Unary — return T
     Neg,
     Not,
+}
+
+/// Structured panic message for `Assert` terminators.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub enum AssertMessage {
+    Overflow(IntrinsicOp),
+    DivisionByZero,
+    RemainderByZero,
+    ShiftOverflow,
 }

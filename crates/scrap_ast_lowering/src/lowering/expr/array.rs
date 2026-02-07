@@ -118,8 +118,8 @@ mod tests {
         let result = lowerer.lower_expr(&array_expr);
         assert!(result.is_ok());
 
-        // Should have: 1, 2, add_result, 3, 4, mul_result, array = 7 locals
-        assert_eq!(lowerer.local_decls.len(), 7);
+        // Should have: 1, 2, pair1, add_result, 3, 4, pair2, mul_result, array = 9 locals
+        assert_eq!(lowerer.local_decls.len(), 9);
     }
 
     #[scrap_macros::salsa_test]

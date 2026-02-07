@@ -7,7 +7,7 @@ use scrap_ir as ir;
 use super::context::CodegenContext;
 use super::cranelift_ir::FuncTranslator;
 use super::emit_codegen_err;
-use super::ty::{build_cl_signature, ir_ty_to_cl};
+use super::ty::{build_cl_signature, ir_ty_to_cl, ir_ty_to_cl_required};
 use super::ResultExt;
 
 impl<'db> CodegenContext<'db> {
@@ -91,10 +91,18 @@ impl<'db> CodegenContext<'db> {
 
             // Declare all local variables
             let mut variables = std::collections::HashMap::new();
+            let mut tuple_variables = std::collections::HashMap::new();
             for (i, decl) in local_decls.iter().enumerate() {
                 let ty = decl.ty(self.db);
-                // Skip void/never typed locals (like _0 for void-returning functions)
-                if let Some(cl_ty) = ir_ty_to_cl(self.db, &ty)? {
+                if let ir::Ty::Tuple(ref fields) = ty {
+                    // Tuple locals are decomposed into per-field sub-variables
+                    for (field_idx, field_ty) in fields.iter().enumerate() {
+                        let cl_ty = ir_ty_to_cl_required(self.db, field_ty)?;
+                        let var = builder.declare_var(cl_ty);
+                        tuple_variables.insert((i, field_idx), var);
+                    }
+                } else if let Some(cl_ty) = ir_ty_to_cl(self.db, &ty)? {
+                    // Regular scalar local
                     let var = builder.declare_var(cl_ty);
                     variables.insert(i, var);
                 }
@@ -119,6 +127,7 @@ impl<'db> CodegenContext<'db> {
             let translator = FuncTranslator {
                 db: self.db,
                 variables: &variables,
+                tuple_variables: &tuple_variables,
                 block_map: &block_map,
                 functions: &self.functions,
                 local_decls,

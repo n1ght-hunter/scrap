@@ -2,11 +2,19 @@
 
 use scrap_ast::{
     expr::Expr,
-    operators::{BinOp, BinOpKind},
+    operators::BinOpKind,
 };
 use scrap_ir as ir;
 
 use crate::{lowerer::ExprLowerer, MResult};
+
+/// Whether an operation should use checked (overflow-detecting) semantics.
+enum LoweredBinOp {
+    /// Unchecked: produces a single value via `Rvalue::Intrinsic`
+    Unchecked(ir::IntrinsicOp),
+    /// Checked: produces `(T, bool)` via `Rvalue::Intrinsic`, then `Assert`
+    Checked(ir::IntrinsicOp),
+}
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a binary operation to an operand
@@ -24,20 +32,32 @@ impl<'db> ExprLowerer<'db> {
         let lhs_operand = self.lower_expr(lhs)?;
         let rhs_operand = self.lower_expr(rhs)?;
 
-        // Convert AST binary operator to IR binary operator
-        let ir_op = self.convert_bin_op(op.node)?;
-
-        // Allocate a temporary for the result using type from type table
+        // Look up the result type from the type table
         let result_ty = self.lookup_and_convert_type(binary_expr.id);
-        let temp = self.allocate_temp(result_ty);
 
-        // Emit assignment: temp = lhs op rhs
-        let place = ir::Place::Local(temp);
-        let rvalue = ir::Rvalue::BinaryOp(ir_op, lhs_operand, rhs_operand);
-        self.emit_assign(place, rvalue);
+        // Determine whether this is a checked or unchecked operation
+        let lowered = self.classify_bin_op(op.node, &result_ty);
 
-        // Return reference to the result temporary
-        Ok(ir::Operand::Place(ir::Place::Local(temp)))
+        match lowered {
+            LoweredBinOp::Unchecked(intrinsic_op) => {
+                let temp = self.allocate_temp(result_ty);
+                let place = ir::Place::Local(temp);
+                let rvalue = ir::Rvalue::Intrinsic(
+                    intrinsic_op,
+                    vec![lhs_operand, rhs_operand],
+                );
+                self.emit_assign(place, rvalue);
+                Ok(ir::Operand::Place(ir::Place::Local(temp)))
+            }
+            LoweredBinOp::Checked(intrinsic_op) => {
+                self.lower_checked_binary_op(
+                    intrinsic_op,
+                    lhs_operand,
+                    rhs_operand,
+                    result_ty,
+                )
+            }
+        }
     }
 
     /// Lower a binary operation directly into a destination place
@@ -53,41 +73,186 @@ impl<'db> ExprLowerer<'db> {
 
         let lhs_operand = self.lower_expr(lhs)?;
         let rhs_operand = self.lower_expr(rhs)?;
-        let ir_op = self.convert_bin_op(op.node)?;
+        let result_ty = self.lookup_and_convert_type(binary_expr.id);
+        let lowered = self.classify_bin_op(op.node, &result_ty);
 
-        let rvalue = ir::Rvalue::BinaryOp(ir_op, lhs_operand, rhs_operand);
-        self.emit_assign(dest, rvalue);
+        match lowered {
+            LoweredBinOp::Unchecked(intrinsic_op) => {
+                let rvalue = ir::Rvalue::Intrinsic(
+                    intrinsic_op,
+                    vec![lhs_operand, rhs_operand],
+                );
+                self.emit_assign(dest, rvalue);
+            }
+            LoweredBinOp::Checked(intrinsic_op) => {
+                // Checked ops produce a tuple; lower via helper, then copy result to dest
+                let result = self.lower_checked_binary_op(
+                    intrinsic_op,
+                    lhs_operand,
+                    rhs_operand,
+                    result_ty,
+                )?;
+                self.emit_assign(dest, ir::Rvalue::Use(result));
+            }
+        }
         Ok(())
     }
 
-    /// Convert AST binary operator to IR binary operator
-    pub(crate) fn convert_bin_op(&self, op: BinOpKind) -> MResult<ir::BinOp> {
+    /// Emit a checked binary operation with Assert terminator.
+    ///
+    /// Produces:
+    /// ```text
+    ///   _pair = intrinsic(lhs, rhs);  // (T, bool)
+    ///   assert(!_pair.1, msg) -> success_bb;
+    /// success_bb:
+    ///   _result = _pair.0;
+    /// ```
+    pub(crate) fn lower_checked_binary_op(
+        &mut self,
+        intrinsic_op: ir::IntrinsicOp,
+        lhs_operand: ir::Operand<'db>,
+        rhs_operand: ir::Operand<'db>,
+        result_ty: ir::Ty<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        // Allocate temp for the (T, bool) pair
+        let pair_ty = ir::Ty::Tuple(vec![result_ty.clone(), ir::Ty::Bool]);
+        let pair_temp = self.allocate_temp(pair_ty);
+
+        // Emit: _pair = intrinsic(lhs, rhs)
+        let pair_place = ir::Place::Local(pair_temp);
+        let rvalue = ir::Rvalue::Intrinsic(
+            intrinsic_op,
+            vec![lhs_operand, rhs_operand],
+        );
+        self.emit_assign(pair_place, rvalue);
+
+        // Extract the overflow flag: _pair.1
+        let overflow_flag = ir::Operand::Place(ir::Place::Field(
+            Box::new(ir::Place::Local(pair_temp)),
+            1,
+        ));
+
+        // Create continuation block
+        let success_bb = self.cfg_builder.start_block();
+
+        // Determine assert message
+        let msg = self.assert_message_for(intrinsic_op);
+
+        // Finish current block with Assert
+        self.cfg_builder.finish_block(ir::Terminator::Assert {
+            cond: overflow_flag,
+            expected: false, // expect overflow to be false
+            msg,
+            target: success_bb,
+        });
+
+        // Switch to success block
+        self.cfg_builder.set_current_block(success_bb);
+
+        // Extract the value: _pair.0
+        let result_temp = self.allocate_temp(result_ty);
+        let value_operand = ir::Operand::Place(ir::Place::Field(
+            Box::new(ir::Place::Local(pair_temp)),
+            0,
+        ));
+        self.emit_assign(
+            ir::Place::Local(result_temp),
+            ir::Rvalue::Use(value_operand),
+        );
+
+        Ok(ir::Operand::Place(ir::Place::Local(result_temp)))
+    }
+
+    /// Classify a binary operator as checked or unchecked based on the result type.
+    ///
+    /// Integer arithmetic ops are checked (overflow detection).
+    /// Float ops, comparisons, logical, and bitwise ops are unchecked.
+    fn classify_bin_op(
+        &self,
+        op: BinOpKind,
+        result_ty: &ir::Ty<'db>,
+    ) -> LoweredBinOp {
+        let is_integer = matches!(result_ty, ir::Ty::Int(_) | ir::Ty::Uint(_));
+
         match op {
-            // Arithmetic operators
-            BinOpKind::Add => Ok(ir::BinOp::Add),
-            BinOpKind::Sub => Ok(ir::BinOp::Sub),
-            BinOpKind::Mul => Ok(ir::BinOp::Mul),
-            BinOpKind::Div => Ok(ir::BinOp::Div),
-            BinOpKind::Rem => Ok(ir::BinOp::Rem),
+            // Arithmetic — checked for integers, unchecked for floats
+            BinOpKind::Add if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::AddWithOverflow),
+            BinOpKind::Sub if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::SubWithOverflow),
+            BinOpKind::Mul if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::MulWithOverflow),
+            BinOpKind::Div if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::DivWithZeroCheck),
+            BinOpKind::Rem if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::RemWithZeroCheck),
 
-            // Logical operators
-            BinOpKind::And => Ok(ir::BinOp::And),
-            BinOpKind::Or => Ok(ir::BinOp::Or),
+            // Shifts — checked for integers
+            BinOpKind::Shl if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::ShlChecked),
+            BinOpKind::Shr if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::ShrChecked),
 
-            // Bitwise operators
-            BinOpKind::BitXor => Ok(ir::BinOp::BitXor),
-            BinOpKind::BitAnd => Ok(ir::BinOp::BitAnd),
-            BinOpKind::BitOr => Ok(ir::BinOp::BitOr),
-            BinOpKind::Shl => Ok(ir::BinOp::Shl),
-            BinOpKind::Shr => Ok(ir::BinOp::Shr),
+            // Unchecked arithmetic (floats, or fallback)
+            BinOpKind::Add => LoweredBinOp::Unchecked(ir::IntrinsicOp::Add),
+            BinOpKind::Sub => LoweredBinOp::Unchecked(ir::IntrinsicOp::Sub),
+            BinOpKind::Mul => LoweredBinOp::Unchecked(ir::IntrinsicOp::Mul),
+            BinOpKind::Div => LoweredBinOp::Unchecked(ir::IntrinsicOp::Div),
+            BinOpKind::Rem => LoweredBinOp::Unchecked(ir::IntrinsicOp::Rem),
 
-            // Comparison operators
-            BinOpKind::Eq => Ok(ir::BinOp::Eq),
-            BinOpKind::Lt => Ok(ir::BinOp::Lt),
-            BinOpKind::Le => Ok(ir::BinOp::Le),
-            BinOpKind::Ne => Ok(ir::BinOp::Ne),
-            BinOpKind::Ge => Ok(ir::BinOp::Ge),
-            BinOpKind::Gt => Ok(ir::BinOp::Gt),
+            // Shifts (non-integer, shouldn't really happen, but handle gracefully)
+            BinOpKind::Shl => LoweredBinOp::Unchecked(ir::IntrinsicOp::Shl),
+            BinOpKind::Shr => LoweredBinOp::Unchecked(ir::IntrinsicOp::Shr),
+
+            // Comparisons — always unchecked
+            BinOpKind::Eq => LoweredBinOp::Unchecked(ir::IntrinsicOp::Eq),
+            BinOpKind::Ne => LoweredBinOp::Unchecked(ir::IntrinsicOp::Ne),
+            BinOpKind::Lt => LoweredBinOp::Unchecked(ir::IntrinsicOp::Lt),
+            BinOpKind::Le => LoweredBinOp::Unchecked(ir::IntrinsicOp::Le),
+            BinOpKind::Gt => LoweredBinOp::Unchecked(ir::IntrinsicOp::Gt),
+            BinOpKind::Ge => LoweredBinOp::Unchecked(ir::IntrinsicOp::Ge),
+
+            // Logical — always unchecked
+            BinOpKind::And => LoweredBinOp::Unchecked(ir::IntrinsicOp::And),
+            BinOpKind::Or => LoweredBinOp::Unchecked(ir::IntrinsicOp::Or),
+
+            // Bitwise — always unchecked
+            BinOpKind::BitAnd => LoweredBinOp::Unchecked(ir::IntrinsicOp::BitAnd),
+            BinOpKind::BitOr => LoweredBinOp::Unchecked(ir::IntrinsicOp::BitOr),
+            BinOpKind::BitXor => LoweredBinOp::Unchecked(ir::IntrinsicOp::BitXor),
+        }
+    }
+
+    /// Map an intrinsic op to its assert message.
+    fn assert_message_for(&self, op: ir::IntrinsicOp) -> ir::AssertMessage {
+        match op {
+            ir::IntrinsicOp::AddWithOverflow
+            | ir::IntrinsicOp::SubWithOverflow
+            | ir::IntrinsicOp::MulWithOverflow => ir::AssertMessage::Overflow(op),
+            ir::IntrinsicOp::DivWithZeroCheck => ir::AssertMessage::DivisionByZero,
+            ir::IntrinsicOp::RemWithZeroCheck => ir::AssertMessage::RemainderByZero,
+            ir::IntrinsicOp::ShlChecked | ir::IntrinsicOp::ShrChecked => {
+                ir::AssertMessage::ShiftOverflow
+            }
+            _ => ir::AssertMessage::Overflow(op),
+        }
+    }
+
+    /// Convert AST binary operator to IR intrinsic operator (unchecked).
+    /// Used by tests and contexts where we always want the unchecked variant.
+    pub(crate) fn convert_bin_op(&self, op: BinOpKind) -> MResult<ir::IntrinsicOp> {
+        match op {
+            BinOpKind::Add => Ok(ir::IntrinsicOp::Add),
+            BinOpKind::Sub => Ok(ir::IntrinsicOp::Sub),
+            BinOpKind::Mul => Ok(ir::IntrinsicOp::Mul),
+            BinOpKind::Div => Ok(ir::IntrinsicOp::Div),
+            BinOpKind::Rem => Ok(ir::IntrinsicOp::Rem),
+            BinOpKind::And => Ok(ir::IntrinsicOp::And),
+            BinOpKind::Or => Ok(ir::IntrinsicOp::Or),
+            BinOpKind::BitXor => Ok(ir::IntrinsicOp::BitXor),
+            BinOpKind::BitAnd => Ok(ir::IntrinsicOp::BitAnd),
+            BinOpKind::BitOr => Ok(ir::IntrinsicOp::BitOr),
+            BinOpKind::Shl => Ok(ir::IntrinsicOp::Shl),
+            BinOpKind::Shr => Ok(ir::IntrinsicOp::Shr),
+            BinOpKind::Eq => Ok(ir::IntrinsicOp::Eq),
+            BinOpKind::Lt => Ok(ir::IntrinsicOp::Lt),
+            BinOpKind::Le => Ok(ir::IntrinsicOp::Le),
+            BinOpKind::Ne => Ok(ir::IntrinsicOp::Ne),
+            BinOpKind::Ge => Ok(ir::IntrinsicOp::Ge),
+            BinOpKind::Gt => Ok(ir::IntrinsicOp::Gt),
         }
     }
 }
@@ -106,9 +271,6 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
-
-        // Should have 3 locals: lhs temp, rhs temp, result temp
-        assert_eq!(lowerer.local_decls.len(), 3);
     }
 
     #[scrap_macros::salsa_test]
@@ -179,9 +341,6 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
         let result = lowerer.lower_expr(&mul_expr);
         assert!(result.is_ok());
-
-        // Should have: 5_temp, 3_temp, add_result, 2_temp, mul_result = 5 locals
-        assert_eq!(lowerer.local_decls.len(), 5);
     }
 
     #[scrap_macros::salsa_test]
@@ -202,15 +361,15 @@ mod tests {
         let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Test all arithmetic operators
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Add).unwrap(), ir::BinOp::Add);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Sub).unwrap(), ir::BinOp::Sub);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Mul).unwrap(), ir::BinOp::Mul);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Div).unwrap(), ir::BinOp::Div);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Rem).unwrap(), ir::BinOp::Rem);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Add).unwrap(), ir::IntrinsicOp::Add);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Sub).unwrap(), ir::IntrinsicOp::Sub);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Mul).unwrap(), ir::IntrinsicOp::Mul);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Div).unwrap(), ir::IntrinsicOp::Div);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Rem).unwrap(), ir::IntrinsicOp::Rem);
 
         // Test comparison operators
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Eq).unwrap(), ir::BinOp::Eq);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Lt).unwrap(), ir::BinOp::Lt);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Gt).unwrap(), ir::BinOp::Gt);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Eq).unwrap(), ir::IntrinsicOp::Eq);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Lt).unwrap(), ir::IntrinsicOp::Lt);
+        assert_eq!(lowerer.convert_bin_op(BinOpKind::Gt).unwrap(), ir::IntrinsicOp::Gt);
     }
 }

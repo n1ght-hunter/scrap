@@ -155,8 +155,8 @@ mod tests {
         let result = lowerer.lower_expr(&call_expr);
         assert!(result.is_ok());
 
-        // Should have: max, x, y, 1, add_result, 2, mul_result, call_result = 8 locals
-        assert_eq!(lowerer.local_decls.len(), 8);
+        // Should have: max, x, y, 1, pair1, add_result, 2, pair2, mul_result, call_result = 10 locals
+        assert_eq!(lowerer.local_decls.len(), 10);
     }
 
     #[scrap_macros::salsa_test]

@@ -31,6 +31,8 @@ pub fn resolved_to_ir<'db>(
         ResolvedTy::Param(_) => panic!("Generic type parameters not yet supported in IR"),
         ResolvedTy::App(_, _) => panic!("Applied generic types not yet supported in IR"),
         ResolvedTy::Fn(_, _) => panic!("Function types not yet supported in IR"),
-        ResolvedTy::Tuple(_) => panic!("Tuple types not yet supported in IR"),
+        ResolvedTy::Tuple(fields) => {
+            ir::Ty::Tuple(fields.iter().map(|f| resolved_to_ir(db, f)).collect())
+        }
     }
 }

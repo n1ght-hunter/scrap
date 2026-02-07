@@ -55,7 +55,7 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Lower a compound assignment expression: lhs op= rhs
-    /// Desugars to: lhs = lhs op rhs
+    /// Desugars to: lhs = lhs op rhs (with checked arithmetic for integers)
     pub(crate) fn lower_assign_op(
         &mut self,
         op: &AssignOp<'db>,
@@ -71,32 +71,72 @@ impl<'db> ExprLowerer<'db> {
         // Create an operand for the LHS (to read its current value)
         let lhs_operand = ir::Operand::Place(place.clone());
 
-        // Convert the assignment operator to a binary operator
-        let bin_op = self.convert_assign_op(op.node)?;
+        // Get the type of the LHS to determine checked vs unchecked
+        let lhs_ty = self.lookup_and_convert_type(lhs.id);
+        let is_integer = matches!(lhs_ty, ir::Ty::Int(_) | ir::Ty::Uint(_));
 
-        // Create the binary operation: lhs op rhs
-        let rvalue = ir::Rvalue::BinaryOp(bin_op, lhs_operand, rhs_operand);
+        // Convert the assignment operator to an intrinsic op
+        let intrinsic_op = self.convert_assign_op(op.node, is_integer)?;
 
-        // Emit the assignment: place = lhs op rhs
-        self.emit_assign(place, rvalue);
+        if is_integer && Self::is_checked_intrinsic(intrinsic_op) {
+            // Checked path: produce (T, bool), assert, extract value
+            let result = self.lower_checked_binary_op(
+                intrinsic_op,
+                lhs_operand,
+                rhs_operand,
+                lhs_ty,
+            )?;
+            self.emit_assign(place, ir::Rvalue::Use(result));
+        } else {
+            // Unchecked path: direct intrinsic call
+            let rvalue = ir::Rvalue::Intrinsic(intrinsic_op, vec![lhs_operand, rhs_operand]);
+            self.emit_assign(place, rvalue);
+        }
 
         // Assignments produce void
         Ok(ir::Operand::Constant(ir::Constant::Void))
     }
 
-    /// Convert AST assignment operator to IR binary operator
-    pub(crate) fn convert_assign_op(&self, op: AssignOpKind) -> MResult<ir::BinOp> {
+    /// Check if an intrinsic op is a checked variant.
+    fn is_checked_intrinsic(op: ir::IntrinsicOp) -> bool {
+        matches!(
+            op,
+            ir::IntrinsicOp::AddWithOverflow
+                | ir::IntrinsicOp::SubWithOverflow
+                | ir::IntrinsicOp::MulWithOverflow
+                | ir::IntrinsicOp::DivWithZeroCheck
+                | ir::IntrinsicOp::RemWithZeroCheck
+                | ir::IntrinsicOp::ShlChecked
+                | ir::IntrinsicOp::ShrChecked
+        )
+    }
+
+    /// Convert AST assignment operator to IR intrinsic operator.
+    /// Returns the checked variant for integer types, unchecked for others.
+    pub(crate) fn convert_assign_op(
+        &self,
+        op: AssignOpKind,
+        is_integer: bool,
+    ) -> MResult<ir::IntrinsicOp> {
         match op {
-            AssignOpKind::AddAssign => Ok(ir::BinOp::Add),
-            AssignOpKind::SubAssign => Ok(ir::BinOp::Sub),
-            AssignOpKind::MulAssign => Ok(ir::BinOp::Mul),
-            AssignOpKind::DivAssign => Ok(ir::BinOp::Div),
-            AssignOpKind::RemAssign => Ok(ir::BinOp::Rem),
-            AssignOpKind::BitXorAssign => Ok(ir::BinOp::BitXor),
-            AssignOpKind::BitAndAssign => Ok(ir::BinOp::BitAnd),
-            AssignOpKind::BitOrAssign => Ok(ir::BinOp::BitOr),
-            AssignOpKind::ShlAssign => Ok(ir::BinOp::Shl),
-            AssignOpKind::ShrAssign => Ok(ir::BinOp::Shr),
+            AssignOpKind::AddAssign if is_integer => Ok(ir::IntrinsicOp::AddWithOverflow),
+            AssignOpKind::SubAssign if is_integer => Ok(ir::IntrinsicOp::SubWithOverflow),
+            AssignOpKind::MulAssign if is_integer => Ok(ir::IntrinsicOp::MulWithOverflow),
+            AssignOpKind::DivAssign if is_integer => Ok(ir::IntrinsicOp::DivWithZeroCheck),
+            AssignOpKind::RemAssign if is_integer => Ok(ir::IntrinsicOp::RemWithZeroCheck),
+            AssignOpKind::ShlAssign if is_integer => Ok(ir::IntrinsicOp::ShlChecked),
+            AssignOpKind::ShrAssign if is_integer => Ok(ir::IntrinsicOp::ShrChecked),
+
+            AssignOpKind::AddAssign => Ok(ir::IntrinsicOp::Add),
+            AssignOpKind::SubAssign => Ok(ir::IntrinsicOp::Sub),
+            AssignOpKind::MulAssign => Ok(ir::IntrinsicOp::Mul),
+            AssignOpKind::DivAssign => Ok(ir::IntrinsicOp::Div),
+            AssignOpKind::RemAssign => Ok(ir::IntrinsicOp::Rem),
+            AssignOpKind::BitXorAssign => Ok(ir::IntrinsicOp::BitXor),
+            AssignOpKind::BitAndAssign => Ok(ir::IntrinsicOp::BitAnd),
+            AssignOpKind::BitOrAssign => Ok(ir::IntrinsicOp::BitOr),
+            AssignOpKind::ShlAssign => Ok(ir::IntrinsicOp::Shl),
+            AssignOpKind::ShrAssign => Ok(ir::IntrinsicOp::Shr),
         }
     }
 }
@@ -162,8 +202,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have 2 locals: x, temp for 5
-        assert_eq!(lowerer.local_decls.len(), 2);
+        // Should have 4 locals: x, temp for 5, tuple pair (i32, bool), extracted result
+        assert_eq!(lowerer.local_decls.len(), 4);
     }
 
     #[scrap_macros::salsa_test]
@@ -235,8 +275,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have: x, 5_temp, 3_temp, add_result_temp
-        assert_eq!(lowerer.local_decls.len(), 4);
+        // Should have: x, 5_temp, 3_temp, tuple pair (i32, bool), add_result_temp
+        assert_eq!(lowerer.local_decls.len(), 5);
     }
 
     #[scrap_macros::salsa_test]
@@ -263,25 +303,30 @@ mod tests {
         assert!(result2.is_ok());
 
         // Should have accumulated locals from both operations
-        // x, 5_temp, 2_temp
-        assert_eq!(lowerer.local_decls.len(), 3);
+        // x, 5_temp, pair1, result1, 2_temp, pair2, result2
+        assert_eq!(lowerer.local_decls.len(), 7);
     }
 
     #[scrap_macros::salsa_test]
     fn test_assign_op_conversion(db: &dyn scrap_shared::Db) {
         let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
-        // Test all assignment operators
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::AddAssign).unwrap(), ir::BinOp::Add);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::SubAssign).unwrap(), ir::BinOp::Sub);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::MulAssign).unwrap(), ir::BinOp::Mul);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::DivAssign).unwrap(), ir::BinOp::Div);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::RemAssign).unwrap(), ir::BinOp::Rem);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitXorAssign).unwrap(), ir::BinOp::BitXor);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitAndAssign).unwrap(), ir::BinOp::BitAnd);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitOrAssign).unwrap(), ir::BinOp::BitOr);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShlAssign).unwrap(), ir::BinOp::Shl);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShrAssign).unwrap(), ir::BinOp::Shr);
+        // Test unchecked (non-integer) assignment operators
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::AddAssign, false).unwrap(), ir::IntrinsicOp::Add);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::SubAssign, false).unwrap(), ir::IntrinsicOp::Sub);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::MulAssign, false).unwrap(), ir::IntrinsicOp::Mul);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::DivAssign, false).unwrap(), ir::IntrinsicOp::Div);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::RemAssign, false).unwrap(), ir::IntrinsicOp::Rem);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitXorAssign, false).unwrap(), ir::IntrinsicOp::BitXor);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitAndAssign, false).unwrap(), ir::IntrinsicOp::BitAnd);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitOrAssign, false).unwrap(), ir::IntrinsicOp::BitOr);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShlAssign, false).unwrap(), ir::IntrinsicOp::Shl);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShrAssign, false).unwrap(), ir::IntrinsicOp::Shr);
+
+        // Test checked (integer) assignment operators
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::AddAssign, true).unwrap(), ir::IntrinsicOp::AddWithOverflow);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::SubAssign, true).unwrap(), ir::IntrinsicOp::SubWithOverflow);
+        assert_eq!(lowerer.convert_assign_op(AssignOpKind::MulAssign, true).unwrap(), ir::IntrinsicOp::MulWithOverflow);
     }
 
     #[scrap_macros::salsa_test]

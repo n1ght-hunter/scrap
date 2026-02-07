@@ -263,6 +263,20 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 }
                 writeln!(self.output, ") -> bb{};", target.0).unwrap();
             }
+            Terminator::Assert {
+                cond,
+                expected,
+                msg,
+                target,
+            } => {
+                write!(self.output, "assert(").unwrap();
+                if !expected {
+                    write!(self.output, "!").unwrap();
+                }
+                self.print_operand(cond);
+                write!(self.output, ", \"{}\"", self.assert_msg_str(msg)).unwrap();
+                writeln!(self.output, ") -> bb{};", target.0).unwrap();
+            }
             Terminator::Unreachable => {
                 writeln!(self.output, "unreachable;").unwrap();
             }
@@ -272,14 +286,15 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
     fn print_rvalue(&mut self, rvalue: &Rvalue<'db>) {
         match rvalue {
             Rvalue::Use(op) => self.print_operand(op),
-            Rvalue::BinaryOp(op, lhs, rhs) => {
-                self.print_operand(lhs);
-                write!(self.output, " {} ", self.binop_str(*op)).unwrap();
-                self.print_operand(rhs);
-            }
-            Rvalue::UnaryOp(op, operand) => {
-                write!(self.output, "{}", self.unop_str(*op)).unwrap();
-                self.print_operand(operand);
+            Rvalue::Intrinsic(op, operands) => {
+                write!(self.output, "{}(", self.intrinsic_str(*op)).unwrap();
+                for (i, operand) in operands.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.output, ", ").unwrap();
+                    }
+                    self.print_operand(operand);
+                }
+                write!(self.output, ")").unwrap();
             }
             Rvalue::Constant(c) => self.print_constant(c),
             Rvalue::Aggregate(kind, operands) => {
@@ -391,36 +406,72 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Ty::Str => write!(self.output, "str").unwrap(),
             Ty::Adt(type_id) => write!(self.output, "{}", type_id.name(self.db)).unwrap(),
             Ty::Never => write!(self.output, "!").unwrap(),
+            Ty::Tuple(fields) => {
+                write!(self.output, "(").unwrap();
+                for (i, ty) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.output, ", ").unwrap();
+                    }
+                    self.print_type(ty);
+                }
+                write!(self.output, ")").unwrap();
+            }
         }
     }
 
-    fn binop_str(&self, op: BinOp) -> &'static str {
+    fn intrinsic_str(&self, op: IntrinsicOp) -> &'static str {
         match op {
-            BinOp::Add => "+",
-            BinOp::Sub => "-",
-            BinOp::Mul => "*",
-            BinOp::Div => "/",
-            BinOp::Rem => "%",
-            BinOp::And => "&&",
-            BinOp::Or => "||",
-            BinOp::BitXor => "^",
-            BinOp::BitAnd => "&",
-            BinOp::BitOr => "|",
-            BinOp::Shl => "<<",
-            BinOp::Shr => ">>",
-            BinOp::Eq => "==",
-            BinOp::Lt => "<",
-            BinOp::Le => "<=",
-            BinOp::Ne => "!=",
-            BinOp::Ge => ">=",
-            BinOp::Gt => ">",
+            // Checked
+            IntrinsicOp::AddWithOverflow => "add_with_overflow",
+            IntrinsicOp::SubWithOverflow => "sub_with_overflow",
+            IntrinsicOp::MulWithOverflow => "mul_with_overflow",
+            IntrinsicOp::DivWithZeroCheck => "div_with_zero_check",
+            IntrinsicOp::RemWithZeroCheck => "rem_with_zero_check",
+            IntrinsicOp::ShlChecked => "shl_checked",
+            IntrinsicOp::ShrChecked => "shr_checked",
+            // Unchecked arithmetic
+            IntrinsicOp::Add => "add",
+            IntrinsicOp::Sub => "sub",
+            IntrinsicOp::Mul => "mul",
+            IntrinsicOp::Div => "div",
+            IntrinsicOp::Rem => "rem",
+            // Comparisons
+            IntrinsicOp::Eq => "eq",
+            IntrinsicOp::Ne => "ne",
+            IntrinsicOp::Lt => "lt",
+            IntrinsicOp::Le => "le",
+            IntrinsicOp::Gt => "gt",
+            IntrinsicOp::Ge => "ge",
+            // Logical
+            IntrinsicOp::And => "and",
+            IntrinsicOp::Or => "or",
+            // Bitwise
+            IntrinsicOp::BitAnd => "bit_and",
+            IntrinsicOp::BitOr => "bit_or",
+            IntrinsicOp::BitXor => "bit_xor",
+            IntrinsicOp::Shl => "shl",
+            IntrinsicOp::Shr => "shr",
+            // Unary
+            IntrinsicOp::Neg => "neg",
+            IntrinsicOp::Not => "not",
         }
     }
 
-    fn unop_str(&self, op: UnOp) -> &'static str {
-        match op {
-            UnOp::Neg => "-",
-            UnOp::Not => "!",
+    fn assert_msg_str(&self, msg: &AssertMessage) -> &'static str {
+        match msg {
+            AssertMessage::Overflow(IntrinsicOp::AddWithOverflow) => {
+                "attempt to add with overflow"
+            }
+            AssertMessage::Overflow(IntrinsicOp::SubWithOverflow) => {
+                "attempt to subtract with overflow"
+            }
+            AssertMessage::Overflow(IntrinsicOp::MulWithOverflow) => {
+                "attempt to multiply with overflow"
+            }
+            AssertMessage::Overflow(_) => "arithmetic overflow",
+            AssertMessage::DivisionByZero => "attempt to divide by zero",
+            AssertMessage::RemainderByZero => "attempt to calculate remainder with zero divisor",
+            AssertMessage::ShiftOverflow => "attempt to shift with overflow",
         }
     }
 
