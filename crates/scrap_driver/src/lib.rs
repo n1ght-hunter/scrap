@@ -84,11 +84,45 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if let Some(mode) = mode
         && mode.needs_ir()
     {
-        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
+        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir.clone());
 
         db.attach(|db| {
             pretty::print(db, mode, pretty::CompilationOutput::Ir(lowered_ir));
         });
+    }
+
+    // Phase 4: Code generation (when no pretty-print mode is active)
+    if mode.is_none() {
+        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
+
+        let obj_bytes = scrap_codegen::compile_to_object(db, lowered_ir.can(db));
+        handle_diagnostics(db)?;
+
+        let obj_bytes = obj_bytes.unwrap(); // safe: handle_diagnostics would have bailed
+
+        let out_dir = std::path::Path::new("target/scrap");
+        std::fs::create_dir_all(out_dir)?;
+        let obj_path = out_dir.join(format!("{}.obj", args.crate_name));
+        std::fs::write(&obj_path, &obj_bytes)?;
+
+        // Link with lld-link
+        let exe_path = out_dir.join(format!("{}.exe", args.crate_name));
+        let status = std::process::Command::new("lld-link.exe")
+            .args([
+                obj_path.to_str().unwrap(),
+                "kernel32.lib",
+                "/SUBSYSTEM:CONSOLE",
+                "/ENTRY:_start",
+                &format!("/OUT:{}", exe_path.display()),
+            ])
+            .status()
+            .map_err(|e| anyhow::anyhow!("Failed to run lld-link.exe: {e}"))?;
+
+        if !status.success() {
+            anyhow::bail!("Linking failed with exit code: {}", status.code().unwrap_or(-1));
+        }
+
+        eprintln!("Compiled to {}", exe_path.display());
     }
 
     Ok(())
