@@ -10,13 +10,10 @@ use scrap_shared::id::ModuleId;
 pub fn parse_input_files<'db>(
     args: &crate::args::Args,
     db: &'db dyn scrap_shared::Db,
-) -> anyhow::Result<(
-    scrap_parser::ParsedFile<'db>,
-    Vec<scrap_parser::ParsedFile<'db>>,
-)> {
+) -> Vec<scrap_parser::ParsedFile<'db>> {
     let root_path = &args.entry_source_file;
 
-    let mut modules = args
+    let modules = args
         .source_files
         .par_iter()
         .chain(rayon::iter::once(&args.entry_source_file))
@@ -41,7 +38,7 @@ pub fn parse_input_files<'db>(
             let input_path =
                 scrap_shared::salsa::get_input_path(db, file_path.to_path_buf(), modifed);
             let input_file = scrap_shared::salsa::load_file(db, input_path)?;
-            let lexed_tokens = scrap_lexer::lex_file(db, input_file)?;
+            let lexed_tokens = scrap_lexer::lex_file(db, input_file);
             let parsed_file = scrap_parser::parse_tokens(
                 db,
                 input_file,
@@ -53,13 +50,11 @@ pub fn parse_input_files<'db>(
         })
         .collect::<Vec<_>>();
 
-    let entry_file = modules
-        .pop()
-        .ok_or_else(|| anyhow::anyhow!("No entry file found"))?;
-    Ok((entry_file, modules))
+    modules
 }
 
-pub type Modules<'db> = indexmap::IndexMap<scrap_shared::id::ModuleId<'db>, scrap_ast::module::Module<'db>>;
+pub type Modules<'db> =
+    indexmap::IndexMap<scrap_shared::id::ModuleId<'db>, scrap_ast::module::Module<'db>>;
 
 #[salsa::tracked(persist)]
 fn create_module<'db>(

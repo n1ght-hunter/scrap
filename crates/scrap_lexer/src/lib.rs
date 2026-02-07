@@ -199,42 +199,33 @@ pub struct LexedTokens<'db> {
 pub fn lex_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_shared::salsa::InputFile<'db>,
-) -> Option<LexedTokens<'db>> {
+) -> LexedTokens<'db> {
     let content = file.content(db);
-    let (token_iter, mut lex_errs) = Token::lexer(content).spanned().fold(
-        (Vec::new(), Vec::new()),
-        |(mut tokens, mut token_errors), (new_tok, new_span)| {
+    let token_iter = Token::lexer(content)
+        .spanned()
+        .filter_map(|(new_tok, new_span)| {
             let span = scrap_span::Span::new(db, new_span.start, new_span.end);
             match new_tok {
-                Ok(new_tok) => tokens.push(Spanned::new(new_tok, span)),
-                Err(e) => token_errors.push((e, span)),
-            }
-            (tokens, token_errors)
-        },
-    );
-    if lex_errs.len() > 0 {
-        eprintln!("Lexing errors in file {}:", file.path(db).display());
-        for (err, span) in lex_errs.drain(..) {
-            eprintln!("  Error at {}-{}: {}", span.start(db), span.end(db), err);
-            db.dcx().emit_err(
-                Level::ERROR.primary_title(err.to_string()).element(
-                    Snippet::source(content)
-                        .path(file.path(db).to_string_lossy())
-                        .annotation(
-                            AnnotationKind::Primary
-                                .span(span.to_range(db))
-                                .label(err.to_string()),
+                Ok(new_tok) => Some(Spanned::new(new_tok, span)),
+                Err(e) => {
+                    db.dcx().emit_err(
+                        Level::ERROR.primary_title(e.to_string()).element(
+                            Snippet::source(content)
+                                .path(file.path(db).to_string_lossy())
+                                .annotation(
+                                    AnnotationKind::Primary
+                                        .span(span.to_range(db))
+                                        .label(e.to_string()),
+                                ),
                         ),
-                ),
-            );
-        }
+                    );
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>();
 
-        return None;
-    }
-    Some(LexedTokens::new(
-        db,
-        token_stream::TokenStream::new(token_iter),
-    ))
+    LexedTokens::new(db, token_stream::TokenStream::new(token_iter))
 }
 
 #[cfg(test)]

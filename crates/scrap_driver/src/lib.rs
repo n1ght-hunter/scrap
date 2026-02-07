@@ -8,11 +8,9 @@ mod utils;
 
 use std::ffi::OsString;
 
-use anyhow::Context;
 use clap::Parser;
 use salsa::Database;
 use scrap_errors::SimpleError;
-use scrap_shared::Db;
 
 #[salsa::tracked(debug)]
 struct TrackedArgs<'db> {
@@ -36,7 +34,9 @@ where
         cache::load_cache(&mut db, cache_path);
     }
 
-    run(&args, &mut db).sexpect("Compilation failed");
+    let res = run(&args, &mut db);
+    handle_diagnostics(&db).sexpect("Compilation failed");
+    res.sexpect("Compilation failed");
 
     if let Some(cache_path) = args.cache.as_ref() {
         cache::save_cache(&mut db, cache_path);
@@ -47,9 +47,14 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let db = &*db_mut;
 
     // Phase 1: Parse files
-    let (entry_file, other_files) = parsing::parse_input_files(args, db)?;
-
+    let mut files = parsing::parse_input_files(args, db);
     handle_diagnostics(db)?;
+
+    let entry_file = files
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("No entry file found"))?;
+    let other_files = files;
+
 
     // Phase 1.5: Module resolution
     let modules = utils::collect_modules(db, entry_file, other_files.clone());
