@@ -4,6 +4,7 @@
 //! allowing downstream passes (like IR lowering) to look up
 //! the type of any expression or local variable.
 
+use scrap_shared::ident::Symbol;
 use scrap_shared::NodeId;
 
 use crate::resolved::ResolvedTy;
@@ -21,6 +22,13 @@ pub struct TypeTable<'db> {
     #[tracked]
     #[returns(ref)]
     pub local_types: Vec<(NodeId, ResolvedTy<'db>)>,
+
+    /// Inferred function return types as (Symbol, ResolvedTy) pairs.
+    /// Only populated when the inferred return type differs from the declared one
+    /// (e.g., a function with no return annotation whose body diverges).
+    #[tracked]
+    #[returns(ref)]
+    pub fn_return_types: Vec<(Symbol<'db>, ResolvedTy<'db>)>,
 }
 
 impl<'db> TypeTable<'db> {
@@ -37,6 +45,14 @@ impl<'db> TypeTable<'db> {
         self.local_types(db)
             .iter()
             .find(|(node_id, _)| *node_id == id)
+            .map(|(_, ty)| ty)
+    }
+
+    /// Get the inferred return type of a function by its name.
+    pub fn fn_return_type(self, db: &'db dyn scrap_shared::Db, name: Symbol<'db>) -> Option<&'db ResolvedTy<'db>> {
+        self.fn_return_types(db)
+            .iter()
+            .find(|(sym, _)| *sym == name)
             .map(|(_, ty)| ty)
     }
 

@@ -90,6 +90,10 @@ pub struct TypeContext<'db> {
 
     /// Recorded local variable types (NodeId -> InferTy)
     local_types: HashMap<NodeId, InferTy<'db>>,
+
+    /// Inferred function return types (function name -> InferTy)
+    /// Populated during body checking when the inferred body type differs from the declared type.
+    fn_return_types: HashMap<Symbol<'db>, InferTy<'db>>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -110,6 +114,7 @@ impl<'db> TypeContext<'db> {
             constraints: Vec::new(),
             expr_types: HashMap::new(),
             local_types: HashMap::new(),
+            fn_return_types: HashMap::new(),
         }
     }
 
@@ -309,14 +314,20 @@ impl<'db> TypeContext<'db> {
         self.local_types.insert(node_id, ty);
     }
 
+    /// Record the inferred return type of a function.
+    pub fn record_fn_return_type(&mut self, name: Symbol<'db>, ty: InferTy<'db>) {
+        self.fn_return_types.insert(name, ty);
+    }
+
     /// Finalize all recorded types after unification.
     /// Converts InferTy to ResolvedTy by resolving all type variables.
-    /// Returns (expr_types, local_types) Vecs for creating a TypeTable.
+    /// Returns (expr_types, local_types, fn_return_types) Vecs for creating a TypeTable.
     pub fn finalize_types(
         &self,
     ) -> (
         Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
         Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
+        Vec<(Symbol<'db>, ResolvedTy<'db>)>,
     ) {
         let expr_types: Vec<_> = self
             .expr_types
@@ -330,7 +341,13 @@ impl<'db> TypeContext<'db> {
             .map(|(id, ty)| (*id, self.resolve_to_final(ty)))
             .collect();
 
-        (expr_types, local_types)
+        let fn_return_types: Vec<_> = self
+            .fn_return_types
+            .iter()
+            .map(|(name, ty)| (*name, self.resolve_to_final(ty)))
+            .collect();
+
+        (expr_types, local_types, fn_return_types)
     }
 
     /// Convert InferTy to ResolvedTy after solving constraints.

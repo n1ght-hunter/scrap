@@ -53,7 +53,7 @@ pub fn lower_function<'db>(
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Function<'db>> {
-    let signature = lower_signature(db, ast_function)?;
+    let signature = lower_signature(db, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
     let body = lower_body(db, ast_function, source, type_table, return_ty)?;
 
@@ -64,6 +64,7 @@ pub fn lower_function<'db>(
 pub fn lower_signature<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
+    type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Signature<'db>> {
     let name = ast_function.ident(db).name;
 
@@ -75,7 +76,13 @@ pub fn lower_signature<'db>(
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
         Some(ty) => lower_type(db, ty)?,
-        None => ir::Ty::Void,
+        None => {
+            // No explicit return type — check if the type checker inferred one
+            type_table
+                .fn_return_type(db, name)
+                .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
+                .unwrap_or(ir::Ty::Void)
+        }
     };
 
     Ok(ir::Signature::new(db, name, params, return_ty))

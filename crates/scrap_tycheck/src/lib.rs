@@ -56,9 +56,9 @@ pub fn check_types<'db>(
     ctx.check_can(can);
 
     // Finalize types after solving constraints
-    let (expr_types, local_types) = ctx.finalize_types();
+    let (expr_types, local_types, fn_return_types) = ctx.finalize_types();
 
-    TypeTable::new(db, expr_types, local_types)
+    TypeTable::new(db, expr_types, local_types, fn_return_types)
 }
 
 #[cfg(test)]
@@ -130,8 +130,8 @@ mod tests {
         ctx.record_local_type(local_id, InferTy::Bool);
 
         // Finalize types and create TypeTable
-        let (expr_types, local_types) = ctx.finalize_types();
-        let table = TypeTable::new(db, expr_types, local_types);
+        let (expr_types, local_types, fn_return_types) = ctx.finalize_types();
+        let table = TypeTable::new(db, expr_types, local_types, fn_return_types);
 
         // Verify types are recorded
         assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
@@ -157,8 +157,8 @@ mod tests {
         ctx.unify(&var, &InferTy::Int(IntTy::I32), span);
 
         // Finalize - should resolve the type variable to Int
-        let (expr_types, local_types) = ctx.finalize_types();
-        let table = TypeTable::new(db, expr_types, local_types);
+        let (expr_types, local_types, fn_return_types) = ctx.finalize_types();
+        let table = TypeTable::new(db, expr_types, local_types, fn_return_types);
 
         // The type should be resolved to Int, not a type variable
         assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));

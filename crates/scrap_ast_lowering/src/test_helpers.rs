@@ -344,7 +344,7 @@ pub fn create_call_expr<'db>(
 /// Create an empty TypeTable for tests.
 /// Suitable for tests that only use bool/string literals or non-literal expressions.
 pub fn create_empty_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tycheck::TypeTable<'db> {
-    scrap_tycheck::TypeTable::new(db, vec![], vec![])
+    scrap_tycheck::TypeTable::new(db, vec![], vec![], vec![])
 }
 
 /// Create a TypeTable with a default i32 entry for the test node ID.
@@ -356,6 +356,7 @@ pub fn create_test_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tyche
     scrap_tycheck::TypeTable::new(
         db,
         vec![(test_node_id(), ResolvedTy::Int(IntTy::I32))],
+        vec![],
         vec![],
     )
 }

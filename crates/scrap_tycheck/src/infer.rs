@@ -241,8 +241,8 @@ impl<'db> TypeContext<'db> {
             }
             StmtKind::Expr(expr) => self.infer_expr(expr),
             StmtKind::Semi(expr) => {
-                self.infer_expr(expr);
-                InferTy::unit()
+                let ty = self.infer_expr(expr);
+                if ty.is_never() { InferTy::Never } else { InferTy::unit() }
             }
             StmtKind::Item(_) => {
                 // Items are handled during signature collection
