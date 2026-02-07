@@ -1,13 +1,14 @@
 //! Translation of IR statements, terminators, operands, and rvalues to Cranelift instructions.
 
 use cranelift::prelude::*;
-use cranelift_module::{FuncId, Module};
+use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 use cranelift_object::ObjectModule;
 use scrap_ir as ir;
 use scrap_shared::types::{FloatVal, IntVal, UintVal};
 use std::collections::HashMap;
 
 use super::emit_codegen_err;
+use super::ResultExt;
 
 /// Per-function translation context (holds only immutable/shared data).
 pub struct FuncTranslator<'a, 'db> {
@@ -22,6 +23,8 @@ pub struct FuncTranslator<'a, 'db> {
     pub local_decls: &'db [ir::LocalDecl<'db>],
     /// Whether the function returns void/never
     pub returns_void: bool,
+    /// Counter for unique data section labels (interior mutability for &self methods)
+    pub next_data_id: &'a std::cell::Cell<usize>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -72,17 +75,16 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         builder: &mut FunctionBuilder,
         module: &mut ObjectModule,
     ) -> Option<Value> {
-        let _ = module; // may be used by future rvalue variants
         match rvalue {
-            ir::Rvalue::Use(operand) => self.lower_operand(operand, builder),
-            ir::Rvalue::Constant(c) => self.lower_constant(c, builder),
+            ir::Rvalue::Use(operand) => self.lower_operand(operand, builder, module),
+            ir::Rvalue::Constant(c) => self.lower_constant(c, builder, module),
             ir::Rvalue::BinaryOp(op, lhs, rhs) => {
-                let lhs_val = self.lower_operand(lhs, builder)?;
-                let rhs_val = self.lower_operand(rhs, builder)?;
+                let lhs_val = self.lower_operand(lhs, builder, module)?;
+                let rhs_val = self.lower_operand(rhs, builder, module)?;
                 self.lower_binop(*op, lhs_val, rhs_val, lhs, builder)
             }
             ir::Rvalue::UnaryOp(op, operand) => {
-                let val = self.lower_operand(operand, builder)?;
+                let val = self.lower_operand(operand, builder, module)?;
                 self.lower_unop(*op, val, operand, builder)
             }
             ir::Rvalue::Aggregate(_, _) => {
@@ -100,10 +102,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         &self,
         operand: &ir::Operand<'db>,
         builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
     ) -> Option<Value> {
         match operand {
             ir::Operand::Place(place) => self.lower_place(place, builder),
-            ir::Operand::Constant(c) => self.lower_constant(c, builder),
+            ir::Operand::Constant(c) => self.lower_constant(c, builder, module),
             ir::Operand::FunctionRef(_) => {
                 emit_codegen_err(
                     self.db,
@@ -142,6 +145,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         &self,
         c: &ir::Constant<'db>,
         builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
     ) -> Option<Value> {
         match c {
             ir::Constant::Int(int_val) => {
@@ -179,9 +183,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Constant::Bool(b) => {
                 Some(builder.ins().iconst(types::I8, *b as i64))
             }
-            ir::Constant::String(_) => {
-                emit_codegen_err(self.db, "string constant in codegen is not yet supported");
-                None
+            ir::Constant::String(sym) => {
+                let s = sym.text(self.db);
+                let bytes = s.as_bytes();
+
+                // Create a unique data label
+                let id = self.next_data_id.get();
+                self.next_data_id.set(id + 1);
+                let name = format!(".Lstr.{id}");
+
+                // Declare + define a read-only data section
+                let data_id = module
+                    .declare_data(&name, Linkage::Local, false, false)
+                    .or_emit(self.db)?;
+                let mut desc = DataDescription::new();
+                desc.define(bytes.to_vec().into_boxed_slice());
+                module.define_data(data_id, &desc).or_emit(self.db)?;
+
+                // Get the address as a pointer value
+                let gv = module.declare_data_in_func(data_id, builder.func);
+                let addr = builder.ins().global_value(types::I64, gv);
+                Some(addr)
             }
             ir::Constant::Void => {
                 emit_codegen_err(self.db, "void constant is not supported");
@@ -336,7 +358,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 Some(())
             }
             ir::Terminator::SwitchInt { discr, targets } => {
-                let discr_val = self.lower_operand(discr, builder)?;
+                let discr_val = self.lower_operand(discr, builder, module)?;
                 // IR convention: targets[0] = false branch, targets[1] = true branch
                 if targets.len() == 2 {
                     let false_block = self.block_map[&targets[0].0];
@@ -382,7 +404,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 // Lower arguments
                 let mut arg_vals = Vec::new();
                 for a in args.iter() {
-                    arg_vals.push(self.lower_operand(a, builder)?);
+                    arg_vals.push(self.lower_operand(a, builder, module)?);
                 }
 
                 let call = builder.ins().call(func_ref, &arg_vals);

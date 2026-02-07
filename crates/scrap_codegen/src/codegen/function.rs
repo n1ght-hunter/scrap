@@ -115,6 +115,7 @@ impl<'db> CodegenContext<'db> {
             }
 
             // Create the translator (holds only shared/immutable references)
+            let data_counter = std::cell::Cell::new(0);
             let translator = FuncTranslator {
                 db: self.db,
                 variables: &variables,
@@ -122,6 +123,7 @@ impl<'db> CodegenContext<'db> {
                 functions: &self.functions,
                 local_decls,
                 returns_void,
+                next_data_id: &data_counter,
             };
 
             // Lower each basic block
