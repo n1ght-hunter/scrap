@@ -162,6 +162,8 @@ impl<'db> CodegenContext<'db> {
         self.module
             .define_function(func_id, &mut self.ctx)
             .or_emit(self.db)?;
+
+        self.collect_unwind_info(func_id);
         self.module.clear_context(&mut self.ctx);
 
         Some(())
