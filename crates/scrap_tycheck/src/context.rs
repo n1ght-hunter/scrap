@@ -472,6 +472,52 @@ impl<'db> TypeContext<'db> {
         )
     }
 
+    /// Emit an error for an unknown field in a struct initializer.
+    pub fn emit_unknown_struct_field(
+        &self,
+        struct_name: &str,
+        field_name: &str,
+        field_span: Span<'db>,
+        note: String,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(format!("struct `{struct_name}` has no field named `{field_name}`"))
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(field_span.to_range(self.db))
+                                .label(format!("`{struct_name}` does not have this field")),
+                        ),
+                )
+                .element(Level::NOTE.message(note)),
+        )
+    }
+
+    /// Emit an error for a missing field in a struct initializer.
+    pub fn emit_missing_struct_field(
+        &self,
+        struct_name: &str,
+        field_name: &str,
+        span: Span<'db>,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(format!("missing field `{field_name}` in initializer of `{struct_name}`"))
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(self.db))
+                                .label(format!("field `{field_name}` is missing")),
+                        ),
+                ),
+        )
+    }
+
     /// Emit an infinite type error (occurs check failure).
     pub fn emit_infinite_type(
         &self,

@@ -427,11 +427,45 @@ impl<'db> TypeContext<'db> {
             }
         };
 
-        if fields.len() != struct_def.fields.len() {
-            self.emit_arity_mismatch(struct_def.fields.len(), fields.len(), span);
+        // Check for unknown fields (provided but not in struct def)
+        let mut has_error = false;
+        for field_init in fields.iter() {
+            let field_exists = struct_def
+                .fields
+                .iter()
+                .any(|(name, _)| *name == field_init.ident.name);
+            if !field_exists {
+                let sn = struct_name.text(self.db());
+                let fn_ = field_init.ident.name.text(self.db());
+                let note = if struct_def.fields.is_empty() {
+                    "all struct fields are already assigned".to_string()
+                } else {
+                    let available: Vec<_> = struct_def.fields.iter()
+                        .map(|(n, _)| format!("`{}`", n.text(self.db())))
+                        .collect();
+                    format!("available fields are: {}", available.join(", "))
+                };
+                self.emit_unknown_struct_field(&sn, &fn_, field_init.ident.span, note);
+                has_error = true;
+            }
+        }
+
+        // Check for missing fields (in struct def but not provided)
+        for (def_name, _) in struct_def.fields.iter() {
+            let provided = fields.iter().any(|f| f.ident.name == *def_name);
+            if !provided {
+                let sn = struct_name.text(self.db());
+                let fn_ = def_name.text(self.db());
+                self.emit_missing_struct_field(&sn, &fn_, span);
+                has_error = true;
+            }
+        }
+
+        if has_error {
             return InferTy::Error;
         }
 
+        // Constrain field types
         for field_init in fields.iter() {
             let field_ty = self.infer_expr(&field_init.expr);
             if let Some((_, expected_ty)) = struct_def
@@ -440,16 +474,6 @@ impl<'db> TypeContext<'db> {
                 .find(|(name, _)| *name == field_init.ident.name)
             {
                 self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
-            } else {
-                self.emit_undefined_variable(
-                    &format!(
-                        "{}.{}",
-                        struct_name.text(self.db()),
-                        field_init.ident.name.text(self.db())
-                    ),
-                    field_init.span,
-                );
-                return InferTy::Error;
             }
         }
 

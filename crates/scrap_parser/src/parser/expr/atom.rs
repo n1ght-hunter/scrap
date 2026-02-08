@@ -56,11 +56,11 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
             return Ok(ExprKind::Paren(Box::new(expr)));
         }
 
-        // Check for struct init: `Ident { Ident :`
+        // Check for struct init: `Ident { Ident :` or `Ident { }`
         if self.check(Token::Ident)
             && self.check_ahead(1, Token::LBrace)
-            && self.check_ahead(2, Token::Ident)
-            && self.check_ahead(3, Token::Colon)
+            && (self.check_ahead(2, Token::RBrace)
+                || (self.check_ahead(2, Token::Ident) && self.check_ahead(3, Token::Colon)))
         {
             return self.parse_struct_init_expr();
         }
