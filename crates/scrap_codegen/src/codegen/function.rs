@@ -124,6 +124,11 @@ impl<'db> CodegenContext<'db> {
 
             // Create the translator (holds only shared/immutable references)
             let data_counter = std::cell::Cell::new(0);
+            let gc_shapes_cell = std::cell::RefCell::new(std::collections::HashMap::new());
+            // Pre-populate from context's gc_shapes
+            for (k, v) in &self.gc_shapes {
+                gc_shapes_cell.borrow_mut().insert(k.clone(), *v);
+            }
             let translator = FuncTranslator {
                 db: self.db,
                 variables: &variables,
@@ -133,6 +138,7 @@ impl<'db> CodegenContext<'db> {
                 local_decls,
                 returns_void,
                 next_data_id: &data_counter,
+                gc_shapes: &gc_shapes_cell,
             };
 
             // Lower each basic block
@@ -156,6 +162,11 @@ impl<'db> CodegenContext<'db> {
 
             builder.seal_all_blocks();
             builder.finalize();
+
+            // Merge any new gc_shapes back into the context
+            for (k, v) in gc_shapes_cell.into_inner() {
+                self.gc_shapes.entry(k).or_insert(v);
+            }
         }
 
         // Define the function in the module

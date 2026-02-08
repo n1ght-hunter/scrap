@@ -4,7 +4,7 @@
 //! and transferred between compilation phases.
 
 use scrap_shared::ident::Symbol;
-use scrap_shared::types::{FloatTy, IntTy, UintTy};
+use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 
 /// Finalized type with no inference variables.
 /// Can be stored and transferred between compilation phases.
@@ -36,6 +36,10 @@ pub enum ResolvedTy<'db> {
     Fn(Vec<ResolvedTy<'db>>, Box<ResolvedTy<'db>>),
     /// Tuple type
     Tuple(Vec<ResolvedTy<'db>>),
+    /// GC-managed reference type: `&T` or `&mut T`
+    Ref(Box<ResolvedTy<'db>>, Mutability),
+    /// GC-managed pointer type: `*T`
+    Ptr(Box<ResolvedTy<'db>>),
     /// Error type (for unresolved inference variables or type errors)
     Error,
 }
@@ -55,6 +59,8 @@ impl<'db> ResolvedTy<'db> {
                 params.iter().any(|p| p.contains_error()) || ret.contains_error()
             }
             ResolvedTy::Tuple(elems) => elems.iter().any(|e| e.contains_error()),
+            ResolvedTy::Ref(inner, _) => inner.contains_error(),
+            ResolvedTy::Ptr(inner) => inner.contains_error(),
             _ => false,
         }
     }

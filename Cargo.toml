@@ -19,6 +19,7 @@ edition = "2024"
 
 [workspace.dependencies]
 # Local crates
+scrap_rt = { path = "crates/scrap_rt" }
 scrap_parser = { path = "crates/scrap_parser" }
 scrap_parser_rowan = { path = "crates/scrap_parser_rowan" }
 scrap_formatter = { path = "crates/scrap_formatter" }

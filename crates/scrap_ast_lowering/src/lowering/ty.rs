@@ -48,6 +48,14 @@ pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MRe
                 }
             }
         }
+        TyKind::Ref(inner, mutability) => {
+            let inner_ty = lower_type(db, inner)?;
+            Ok(ir::Ty::Ref(Box::new(inner_ty), *mutability))
+        }
+        TyKind::Ptr(inner) => {
+            let inner_ty = lower_type(db, inner)?;
+            Ok(ir::Ty::Ptr(Box::new(inner_ty)))
+        }
         TyKind::Never => Ok(ir::Ty::Never),
         TyKind::Tup(_) => panic!("Tuple types not yet supported in IR lowering"),
         TyKind::Dummy => panic!("Dummy type should not appear in IR lowering"),

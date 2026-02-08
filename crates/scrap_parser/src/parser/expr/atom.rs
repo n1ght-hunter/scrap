@@ -1,6 +1,7 @@
 //! Atomic (primary) expression parsing.
 
 use scrap_ast::expr::{Expr, ExprKind};
+use scrap_ast::operators::UnOp;
 use scrap_lexer::Token;
 use scrap_shared::path::Path;
 use scrap_span::Span;
@@ -24,6 +25,19 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
     /// Parse the kind of an atomic expression.
     pub fn parse_atom_kind(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        // Check for unary prefix operators: `*expr`, `-expr`, `!expr`
+        if self.check(Token::Mul) || self.check(Token::Sub) || self.check(Token::Bang) {
+            let op = match self.token.node {
+                Token::Mul => UnOp::Deref,
+                Token::Sub => UnOp::Neg,
+                Token::Bang => UnOp::Not,
+                _ => unreachable!(),
+            };
+            self.bump();
+            let inner = self.parse_atom()?;
+            return Ok(ExprKind::Unary(op, Box::new(inner)));
+        }
+
         // Check for block expression
         if self.check(Token::LBrace) {
             let block = self.parse_block()?;

@@ -10,6 +10,46 @@ use std::collections::HashMap;
 use super::emit_codegen_err;
 use super::ResultExt;
 
+/// Compute the (size, align, pointer_offsets) for a GC-allocated type.
+fn compute_type_layout(_db: &dyn scrap_shared::Db, ty: &ir::Ty) -> (u64, u64, Vec<u64>) {
+    match ty {
+        ir::Ty::Bool => (1, 1, vec![]),
+        ir::Ty::Int(k) => {
+            let bytes = match k {
+                scrap_shared::types::IntTy::I8 => 1,
+                scrap_shared::types::IntTy::I16 => 2,
+                scrap_shared::types::IntTy::I32 => 4,
+                scrap_shared::types::IntTy::I64 | scrap_shared::types::IntTy::Isize => 8,
+                scrap_shared::types::IntTy::I128 => 16,
+            };
+            (bytes, bytes, vec![])
+        }
+        ir::Ty::Uint(k) => {
+            let bytes = match k {
+                scrap_shared::types::UintTy::U8 => 1,
+                scrap_shared::types::UintTy::U16 => 2,
+                scrap_shared::types::UintTy::U32 => 4,
+                scrap_shared::types::UintTy::U64 | scrap_shared::types::UintTy::Usize => 8,
+                scrap_shared::types::UintTy::U128 => 16,
+            };
+            (bytes, bytes, vec![])
+        }
+        ir::Ty::Float(k) => {
+            let bytes = match k {
+                scrap_shared::types::FloatTy::F16 => 2,
+                scrap_shared::types::FloatTy::F32 => 4,
+                scrap_shared::types::FloatTy::F64 => 8,
+                scrap_shared::types::FloatTy::F128 => 16,
+            };
+            (bytes, bytes, vec![])
+        }
+        ir::Ty::Str => (8, 8, vec![]),
+        ir::Ty::Ref(_, _) => (8, 8, vec![0]),
+        ir::Ty::Ptr(_) => (8, 8, vec![0]),
+        _ => (8, 8, vec![]),
+    }
+}
+
 /// Per-function translation context (holds only immutable/shared data).
 pub struct FuncTranslator<'a, 'db> {
     pub db: &'db dyn scrap_shared::Db,
@@ -27,6 +67,8 @@ pub struct FuncTranslator<'a, 'db> {
     pub returns_void: bool,
     /// Counter for unique data section labels (interior mutability for &self methods)
     pub next_data_id: &'a std::cell::Cell<usize>,
+    /// GcShape DataIds for box allocation (interior mutability)
+    pub gc_shapes: &'a std::cell::RefCell<HashMap<String, cranelift_module::DataId>>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -94,6 +136,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     None
                 }
             }
+            ir::Place::Deref(inner) => {
+                // Write through a GC reference: store value at the address held by inner
+                let ptr = self.lower_place(inner, builder)?;
+                builder.ins().store(MemFlags::new(), value, ptr, 0);
+                Some(())
+            }
             ir::Place::__Phantom(_) => unreachable!(),
         }
     }
@@ -118,6 +166,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Rvalue::Array(_) => {
                 emit_codegen_err(self.db, "array literal is not yet supported");
                 None
+            }
+            ir::Rvalue::Box(inner_ty, value_op) => {
+                self.lower_box_alloc(inner_ty, value_op, builder, module)
             }
         }
     }
@@ -378,6 +429,13 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     emit_codegen_err(self.db, "nested field projection not supported");
                     None
                 }
+            }
+            ir::Place::Deref(inner) => {
+                // Read through a GC reference: load value from the address held by inner
+                let ptr = self.lower_place(inner, builder)?;
+                // Determine the pointed-to type for the load
+                let result_ty = self.deref_result_type(inner)?;
+                Some(builder.ins().load(result_ty, MemFlags::new(), ptr, 0))
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
@@ -788,6 +846,94 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             return matches!(c, ir::Constant::Float(_));
         }
         false
+    }
+
+    /// Lower a `Rvalue::Box(inner_ty, value)`: allocate GC memory and store the value.
+    fn lower_box_alloc(
+        &self,
+        inner_ty: &ir::Ty<'db>,
+        value_op: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
+        // 1. Get or create GcShape for inner_ty
+        let shape_data_id = {
+            let key = format!("{:?}", inner_ty);
+            let mut shapes = self.gc_shapes.borrow_mut();
+            if let Some(&id) = shapes.get(&key) {
+                id
+            } else {
+                // Compute the shape inline (mirrors CodegenContext::compute_type_layout)
+                let (size, align, pointer_offsets) = compute_type_layout(self.db, inner_ty);
+                let num_pointers = pointer_offsets.len() as u64;
+                let mut data = Vec::new();
+                data.extend_from_slice(&size.to_le_bytes());
+                data.extend_from_slice(&align.to_le_bytes());
+                data.extend_from_slice(&num_pointers.to_le_bytes());
+                for offset in &pointer_offsets {
+                    data.extend_from_slice(&offset.to_le_bytes());
+                }
+
+                let name = format!(".Lgcshape.{}", shapes.len());
+                let data_id = module
+                    .declare_data(&name, Linkage::Local, false, false)
+                    .or_emit(self.db)?;
+                let mut desc = DataDescription::new();
+                desc.define(data.into_boxed_slice());
+                desc.set_align(8);
+                module.define_data(data_id, &desc).or_emit(self.db)?;
+
+                shapes.insert(key, data_id);
+                data_id
+            }
+        };
+
+        // 2. Load GcShape address
+        let gv = module.declare_data_in_func(shape_data_id, builder.func);
+        let shape_addr = builder.ins().global_value(types::I64, gv);
+
+        // 3. Call __scrap_gc_alloc(shape_addr) → pointer to user data
+        let alloc_func_id = match self.functions.get("__scrap_gc_alloc") {
+            Some(&id) => id,
+            None => {
+                emit_codegen_err(self.db, "__scrap_gc_alloc not declared");
+                return None;
+            }
+        };
+        let alloc_ref = module.declare_func_in_func(alloc_func_id, builder.func);
+        let call_inst = builder.ins().call(alloc_ref, &[shape_addr]);
+        let ptr = builder.inst_results(call_inst)[0];
+
+        // 4. Lower the value operand
+        let value = self.lower_operand(value_op, builder, module)?;
+
+        // 5. Store value at the allocated pointer
+        builder.ins().store(MemFlags::new(), value, ptr, 0);
+
+        // 6. Return the pointer
+        Some(ptr)
+    }
+
+    /// Determine the Cranelift type of a dereferenced place.
+    /// Given Place::Deref(inner), looks at the inner local's type to figure out what
+    /// the reference points to (e.g., `&mut i32` → `I32`).
+    fn deref_result_type(&self, inner_place: &ir::Place<'db>) -> Option<types::Type> {
+        use super::ty::ir_ty_to_cl_required;
+
+        match inner_place {
+            ir::Place::Local(local_id) => {
+                let decl = self.local_decls.get(local_id.0)?;
+                match decl.ty(self.db) {
+                    ir::Ty::Ref(inner_ty, _) => ir_ty_to_cl_required(self.db, &inner_ty),
+                    ir::Ty::Ptr(inner_ty) => ir_ty_to_cl_required(self.db, &inner_ty),
+                    _ => {
+                        // Fallback: assume pointer-sized
+                        Some(types::I64)
+                    }
+                }
+            }
+            _ => Some(types::I64), // fallback
+        }
     }
 
     /// Check if an operand refers to a signed integer type.

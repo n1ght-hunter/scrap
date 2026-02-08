@@ -2,7 +2,7 @@
 
 use cranelift::prelude::*;
 use cranelift::codegen::isa::unwind::UnwindInfo;
-use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use scrap_ir as ir;
 use std::collections::HashMap;
@@ -29,6 +29,8 @@ pub struct CodegenContext<'db> {
     pub(crate) functions: HashMap<String, FuncId>,
     /// Collected unwind info for each compiled function.
     pub(crate) unwind_entries: Vec<UnwindEntry>,
+    /// GcShape data sections: type descriptor key → DataId.
+    pub(crate) gc_shapes: HashMap<String, DataId>,
 }
 
 impl<'db> CodegenContext<'db> {
@@ -65,6 +67,7 @@ impl<'db> CodegenContext<'db> {
             func_ctx: FunctionBuilderContext::new(),
             functions: HashMap::new(),
             unwind_entries: Vec::new(),
+            gc_shapes: HashMap::new(),
         })
     }
 
@@ -72,6 +75,7 @@ impl<'db> CodegenContext<'db> {
     pub fn compile_module(&mut self, module: ir::Module<'db>) -> Option<()> {
         self.declare_items(module)?;
         self.declare_panic_runtime()?;
+        self.declare_gc_runtime()?;
         self.define_functions(module)?;
         self.define_panic_function()?;
         Some(())
@@ -102,6 +106,13 @@ impl<'db> CodegenContext<'db> {
             let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.func_ctx);
             let entry_block = builder.create_block();
             builder.switch_to_block(entry_block);
+
+            // Call __scrap_gc_init before main
+            if let Some(&gc_init_id) = self.functions.get("__scrap_gc_init") {
+                let gc_init_ref =
+                    self.module.declare_func_in_func(gc_init_id, builder.func);
+                builder.ins().call(gc_init_ref, &[]);
+            }
 
             // Call main
             let main_ref =
@@ -188,6 +199,142 @@ impl<'db> CodegenContext<'db> {
             .insert("__scrap_panic".to_string(), panic_func_id);
 
         Some(())
+    }
+
+    /// Declare the GC runtime functions (imported from scrap_rt.lib).
+    pub fn declare_gc_runtime(&mut self) -> Option<()> {
+        let ptr_ty = types::I64;
+        let call_conv = self.module.target_config().default_call_conv;
+
+        // __scrap_gc_init()
+        if !self.functions.contains_key("__scrap_gc_init") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_init", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("__scrap_gc_init".to_string(), fid);
+        }
+
+        // __scrap_gc_alloc(shape: *const GcShape) -> *mut u8
+        if !self.functions.contains_key("__scrap_gc_alloc") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty)); // shape
+            sig.returns.push(AbiParam::new(ptr_ty)); // pointer
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_alloc", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("__scrap_gc_alloc".to_string(), fid);
+        }
+
+        // __scrap_gc_push_frame(slots: *mut *mut u8, count: u64)
+        if !self.functions.contains_key("__scrap_gc_push_frame") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty)); // slots
+            sig.params.push(AbiParam::new(ptr_ty)); // count
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_push_frame", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_gc_push_frame".to_string(), fid);
+        }
+
+        // __scrap_gc_pop_frame()
+        if !self.functions.contains_key("__scrap_gc_pop_frame") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_pop_frame", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_gc_pop_frame".to_string(), fid);
+        }
+
+        Some(())
+    }
+
+    /// Get or create a GcShape data section for a given IR type.
+    /// Returns the DataId for the shape.
+    pub fn get_or_create_gc_shape(&mut self, ty: &ir::Ty<'db>) -> Option<DataId> {
+        let key = format!("{:?}", ty);
+        if let Some(&data_id) = self.gc_shapes.get(&key) {
+            return Some(data_id);
+        }
+
+        // Compute shape: size, align, num_pointers, pointer_offsets
+        let (size, align, pointer_offsets) = self.compute_type_layout(ty);
+
+        // Build the data: [size: u64, align: u64, num_pointers: u64, offsets: [u64; N]]
+        let num_pointers = pointer_offsets.len() as u64;
+        let mut data = Vec::new();
+        data.extend_from_slice(&size.to_le_bytes());
+        data.extend_from_slice(&align.to_le_bytes());
+        data.extend_from_slice(&num_pointers.to_le_bytes());
+        for offset in &pointer_offsets {
+            data.extend_from_slice(&offset.to_le_bytes());
+        }
+
+        let data_name = format!(".Lgcshape.{}", self.gc_shapes.len());
+        let data_id = self
+            .module
+            .declare_data(&data_name, Linkage::Local, false, false)
+            .or_emit(self.db)?;
+
+        let mut desc = DataDescription::new();
+        desc.define(data.into_boxed_slice());
+        desc.set_align(8);
+        self.module
+            .define_data(data_id, &desc)
+            .or_emit(self.db)?;
+
+        self.gc_shapes.insert(key, data_id);
+        Some(data_id)
+    }
+
+    /// Compute the (size, align, pointer_offsets) for a type.
+    fn compute_type_layout(&self, ty: &ir::Ty<'db>) -> (u64, u64, Vec<u64>) {
+        match ty {
+            ir::Ty::Bool => (1, 1, vec![]),
+            ir::Ty::Int(k) => {
+                let bytes = match k {
+                    scrap_shared::types::IntTy::I8 => 1,
+                    scrap_shared::types::IntTy::I16 => 2,
+                    scrap_shared::types::IntTy::I32 => 4,
+                    scrap_shared::types::IntTy::I64 | scrap_shared::types::IntTy::Isize => 8,
+                    scrap_shared::types::IntTy::I128 => 16,
+                };
+                (bytes, bytes, vec![])
+            }
+            ir::Ty::Uint(k) => {
+                let bytes = match k {
+                    scrap_shared::types::UintTy::U8 => 1,
+                    scrap_shared::types::UintTy::U16 => 2,
+                    scrap_shared::types::UintTy::U32 => 4,
+                    scrap_shared::types::UintTy::U64 | scrap_shared::types::UintTy::Usize => 8,
+                    scrap_shared::types::UintTy::U128 => 16,
+                };
+                (bytes, bytes, vec![])
+            }
+            ir::Ty::Float(k) => {
+                let bytes = match k {
+                    scrap_shared::types::FloatTy::F16 => 2,
+                    scrap_shared::types::FloatTy::F32 => 4,
+                    scrap_shared::types::FloatTy::F64 => 8,
+                    scrap_shared::types::FloatTy::F128 => 16,
+                };
+                (bytes, bytes, vec![])
+            }
+            ir::Ty::Str => (8, 8, vec![]), // pointer
+            ir::Ty::Ref(_, _) => (8, 8, vec![0]), // reference that the GC must trace
+            ir::Ty::Ptr(_) => (8, 8, vec![0]), // pointer that the GC must trace
+            _ => (8, 8, vec![]), // default: pointer-sized
+        }
     }
 
     /// Define the `__scrap_panic` function body.

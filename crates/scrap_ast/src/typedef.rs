@@ -1,6 +1,6 @@
 use crate::node_id::NodeId;
 use scrap_errors::ErrorGuaranteed;
-use scrap_shared::{path::Path, pretty_print::PrettyPrint};
+use scrap_shared::{path::Path, pretty_print::PrettyPrint, types::Mutability};
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
@@ -25,6 +25,10 @@ impl<'db> PrettyPrint for Ty<'db> {
 pub enum TyKind<'db> {
     Path(Path<'db>),
     Tup(ThinVec<Box<Ty<'db>>>),
+    /// A reference type: `&T` or `&mut T`
+    Ref(Box<Ty<'db>>, Mutability),
+    /// A GC-managed pointer type: `*T`
+    Ptr(Box<Ty<'db>>),
     Dummy,
     Never,
     Err(ErrorGuaranteed),
@@ -43,6 +47,14 @@ impl<'db> PrettyPrint for TyKind<'db> {
                     ty.pretty_print(f)?;
                 }
                 write!(f, ")")
+            }
+            TyKind::Ref(inner, mutability) => {
+                write!(f, "{}", mutability.ref_prefix_str())?;
+                inner.pretty_print(f)
+            }
+            TyKind::Ptr(inner) => {
+                write!(f, "*")?;
+                inner.pretty_print(f)
             }
             TyKind::Dummy => write!(f, "<dummy type>"),
             TyKind::Never => write!(f, "!"),

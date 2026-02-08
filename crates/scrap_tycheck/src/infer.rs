@@ -7,7 +7,7 @@ use scrap_ast::{
     expr::{Expr, ExprKind},
     lit::{Lit, LitKind},
     local::{Local, LocalKind},
-    operators::{AssignOp, BinOp, BinOpKind},
+    operators::{AssignOp, BinOp, BinOpKind, UnOp},
     pat::PatKind,
     stmt::{Stmt, StmtKind},
     typedef::{Ty, TyKind},
@@ -49,6 +49,8 @@ impl<'db> TypeContext<'db> {
             ExprKind::Assign(lhs, rhs, _) => self.infer_assign(lhs, rhs, expr.span),
 
             ExprKind::AssignOp(op, lhs, rhs) => self.infer_assign_op(op, lhs, rhs, expr.span),
+
+            ExprKind::Unary(op, inner) => self.infer_unary_op(op, inner, expr.span),
 
             ExprKind::Err => InferTy::Error,
         };
@@ -140,6 +142,40 @@ impl<'db> TypeContext<'db> {
         }
     }
 
+    /// Infer the type of a unary operation.
+    fn infer_unary_op(
+        &mut self,
+        op: &UnOp,
+        inner: &Expr<'db>,
+        _span: Span<'db>,
+    ) -> InferTy<'db> {
+        let inner_ty = self.infer_expr(inner);
+        match op {
+            UnOp::Deref => {
+                // Dereference: &T -> T, &mut T -> T, or *T -> T
+                match &inner_ty {
+                    InferTy::Ref(pointee, _) => (**pointee).clone(),
+                    InferTy::Ptr(pointee) => (**pointee).clone(),
+                    InferTy::Var(_) => {
+                        // If the inner type is unknown, create a fresh var for the result
+                        // and constrain the inner to be a pointer to that result
+                        let result = self.fresh_ty_var();
+                        let expected_ptr = InferTy::Ptr(Box::new(result.clone()));
+                        self.constrain_eq(inner_ty, expected_ptr, inner.span);
+                        result
+                    }
+                    InferTy::Error => InferTy::Error,
+                    _ => {
+                        self.emit_type_mismatch("&_ or *_", &self.ty_to_string(&inner_ty), inner.span);
+                        InferTy::Error
+                    }
+                }
+            }
+            UnOp::Neg => inner_ty, // Negation preserves type
+            UnOp::Not => inner_ty, // Logical NOT preserves type
+        }
+    }
+
     /// Infer the type of a function call.
     fn infer_call(
         &mut self,
@@ -151,6 +187,16 @@ impl<'db> TypeContext<'db> {
         if let ExprKind::Path(path) = &callee.kind {
             if let Some(segment) = path.single_segment() {
                 let name = segment.ident.name;
+
+                // Built-in: box(value) -> *T
+                if name.text(self.db()) == "box" {
+                    if args.len() != 1 {
+                        self.emit_arity_mismatch(1, args.len(), span);
+                        return InferTy::Error;
+                    }
+                    let arg_ty = self.infer_expr(&args[0]);
+                    return InferTy::Ptr(Box::new(arg_ty));
+                }
 
                 if let Some(sig) = self.lookup_function(name).cloned() {
                     // Check argument count
@@ -403,6 +449,14 @@ impl<'db> TypeContext<'db> {
                 let elem_tys: Vec<_> = elems.iter().map(|e| self.lower_ast_ty(e)).collect();
                 InferTy::Tuple(elem_tys)
             }
+            TyKind::Ref(inner, mutability) => {
+                let inner_ty = self.lower_ast_ty(inner);
+                InferTy::Ref(Box::new(inner_ty), *mutability)
+            }
+            TyKind::Ptr(inner) => {
+                let inner_ty = self.lower_ast_ty(inner);
+                InferTy::Ptr(Box::new(inner_ty))
+            }
             TyKind::Never => InferTy::Never,
             TyKind::Dummy => self.fresh_ty_var(),
             TyKind::Err(_) => InferTy::Error,
@@ -431,6 +485,12 @@ impl<'db> TypeContext<'db> {
                 let new_elems: Vec<_> =
                     elems.iter().map(|e| self.substitute(e, subst)).collect();
                 InferTy::Tuple(new_elems)
+            }
+            InferTy::Ref(inner, m) => {
+                InferTy::Ref(Box::new(self.substitute(inner, subst)), *m)
+            }
+            InferTy::Ptr(inner) => {
+                InferTy::Ptr(Box::new(self.substitute(inner, subst)))
             }
             _ => ty.clone(),
         }

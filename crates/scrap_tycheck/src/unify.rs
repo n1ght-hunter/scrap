@@ -119,6 +119,24 @@ impl<'db> TypeContext<'db> {
                 self.unify(ret1, ret2, span)
             }
 
+            // Reference types: inner must unify, mutability must match
+            (InferTy::Ref(inner1, m1), InferTy::Ref(inner2, m2)) => {
+                if m1 != m2 {
+                    self.emit_type_mismatch(
+                        &self.ty_to_string(&t1),
+                        &self.ty_to_string(&t2),
+                        span,
+                    );
+                    return false;
+                }
+                self.unify(inner1, inner2, span)
+            }
+
+            // Pointer types: inner must unify
+            (InferTy::Ptr(inner1), InferTy::Ptr(inner2)) => {
+                self.unify(inner1, inner2, span)
+            }
+
             // Tuple types
             (InferTy::Tuple(elems1), InferTy::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
@@ -172,6 +190,8 @@ impl<'db> TypeContext<'db> {
                 params.iter().any(|p| self.occurs_check(vid, p)) || self.occurs_check(vid, ret)
             }
             InferTy::Tuple(elems) => elems.iter().any(|e| self.occurs_check(vid, e)),
+            InferTy::Ref(inner, _) => self.occurs_check(vid, inner),
+            InferTy::Ptr(inner) => self.occurs_check(vid, inner),
             // Primitive types and ADTs don't contain type variables
             InferTy::Void
             | InferTy::Bool

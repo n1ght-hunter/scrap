@@ -10,8 +10,10 @@ mod call;
 mod control;
 mod lit;
 mod path;
+mod unary;
 
 use scrap_ast::expr::{Expr, ExprKind};
+use scrap_ast::operators::UnOp;
 use scrap_ir as ir;
 
 use crate::{lowerer::ExprLowerer, BuilderError, MResult};
@@ -33,11 +35,10 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Block(block) => self.lower_block_expr(block),
             ExprKind::Array(_) => self.lower_array(expr),
             ExprKind::Call(_, _) => self.lower_call(expr),
+            ExprKind::Unary(UnOp::Deref, inner) => self.lower_deref(inner, expr.id),
+            ExprKind::Unary(UnOp::Neg, inner) => self.lower_unary_neg(inner, expr.id),
+            ExprKind::Unary(UnOp::Not, inner) => self.lower_unary_not(inner, expr.id),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
-            _ => {
-                // Unsupported expression types for now
-                Err(BuilderError::LowerExpressionError)
-            }
         }
     }
 

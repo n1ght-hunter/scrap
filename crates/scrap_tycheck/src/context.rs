@@ -169,6 +169,14 @@ impl<'db> TypeContext<'db> {
                 let resolved: Vec<_> = elems.iter().map(|e| self.resolve(e)).collect();
                 InferTy::Tuple(resolved)
             }
+            InferTy::Ref(inner, m) => {
+                let resolved_inner = self.resolve(inner);
+                InferTy::Ref(Box::new(resolved_inner), *m)
+            }
+            InferTy::Ptr(inner) => {
+                let resolved_inner = self.resolve(inner);
+                InferTy::Ptr(Box::new(resolved_inner))
+            }
             _ => ty.clone(),
         }
     }
@@ -374,6 +382,12 @@ impl<'db> TypeContext<'db> {
             InferTy::Tuple(elems) => {
                 ResolvedTy::Tuple(elems.iter().map(|e| self.resolve_to_final(e)).collect())
             }
+            InferTy::Ref(inner, m) => {
+                ResolvedTy::Ref(Box::new(self.resolve_to_final(&inner)), m)
+            }
+            InferTy::Ptr(inner) => {
+                ResolvedTy::Ptr(Box::new(self.resolve_to_final(&inner)))
+            }
             InferTy::Error => ResolvedTy::Error,
         }
     }
@@ -542,6 +556,12 @@ impl<'db> TypeContext<'db> {
                         elems.iter().map(|e| self.ty_to_string_inner(e)).collect();
                     format!("({})", elems_str.join(", "))
                 }
+            }
+            InferTy::Ref(inner, m) => {
+                format!("{}{}", m.ref_prefix_str(), self.ty_to_string_inner(inner))
+            }
+            InferTy::Ptr(inner) => {
+                format!("*{}", self.ty_to_string_inner(inner))
             }
             InferTy::Error => "<error>".to_string(),
         }

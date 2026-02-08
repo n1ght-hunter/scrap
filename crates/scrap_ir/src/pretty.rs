@@ -347,6 +347,13 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 }
                 write!(self.output, "]").unwrap();
             }
+            Rvalue::Box(ty, op) => {
+                write!(self.output, "box(").unwrap();
+                self.print_operand(op);
+                write!(self.output, ": ").unwrap();
+                self.print_type(ty);
+                write!(self.output, ")").unwrap();
+            }
         }
     }
 
@@ -368,6 +375,11 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Place::Field(base, field_idx) => {
                 self.print_place(base);
                 write!(self.output, ".{}", field_idx).unwrap();
+            }
+            Place::Deref(inner) => {
+                write!(self.output, "(*").unwrap();
+                self.print_place(inner);
+                write!(self.output, ")").unwrap();
             }
             Place::__Phantom(_) => unreachable!(),
         }
@@ -429,6 +441,14 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                     self.print_type(ty);
                 }
                 write!(self.output, ")").unwrap();
+            }
+            Ty::Ref(inner, mutability) => {
+                write!(self.output, "{}", mutability.ref_prefix_str()).unwrap();
+                self.print_type(inner);
+            }
+            Ty::Ptr(inner) => {
+                write!(self.output, "*").unwrap();
+                self.print_type(inner);
             }
         }
     }

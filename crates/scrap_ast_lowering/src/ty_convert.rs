@@ -26,6 +26,14 @@ pub fn resolved_to_ir<'db>(
             ir::Ty::Adt(type_id)
         }
 
+        ResolvedTy::Ref(inner, mutability) => {
+            ir::Ty::Ref(Box::new(resolved_to_ir(db, inner)), *mutability)
+        }
+
+        ResolvedTy::Ptr(inner) => {
+            ir::Ty::Ptr(Box::new(resolved_to_ir(db, inner)))
+        }
+
         // Unsupported types should be caught during type checking
         ResolvedTy::Error => panic!("Cannot lower Error type to IR - type checking should have failed"),
         ResolvedTy::Param(_) => panic!("Generic type parameters not yet supported in IR"),

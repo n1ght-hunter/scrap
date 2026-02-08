@@ -6,7 +6,7 @@ use crate::{
     block::Block,
     lit::Lit,
     node_id::NodeId,
-    operators::{AssignOp, BinOp},
+    operators::{AssignOp, BinOp, UnOp},
 };
 use scrap_shared::path::Path;
 
@@ -62,6 +62,8 @@ pub enum ExprKind<'db> {
     Assign(Box<Expr<'db>>, Box<Expr<'db>>, Span<'db>),
     /// An assignment with an operator (`place += expr`)
     AssignOp(AssignOp<'db>, Box<Expr<'db>>, Box<Expr<'db>>),
+    /// A unary operation (e.g., `*x`, `-x`, `!x`)
+    Unary(UnOp, Box<Expr<'db>>),
     /// Error placeholder
     Err,
 }
@@ -135,6 +137,15 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                 op.node.pretty_print(f)?;
                 write!(f, " ")?;
                 rhs.pretty_print_indent(f, indent)
+            }
+            ExprKind::Unary(op, expr) => {
+                let op_str = match op {
+                    UnOp::Deref => "*",
+                    UnOp::Neg => "-",
+                    UnOp::Not => "!",
+                };
+                write!(f, "{}", op_str)?;
+                expr.pretty_print_indent(f, indent)
             }
             ExprKind::Err => write!(f, "<error>"),
         }

@@ -1,7 +1,7 @@
 //! Type representation for type checking and inference.
 
 use scrap_shared::ident::Symbol;
-use scrap_shared::types::{FloatTy, IntTy, UintTy};
+use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 
 /// Type variable ID for inference.
 /// Represents an unknown type that will be solved during unification.
@@ -53,6 +53,12 @@ pub enum InferTy<'db> {
 
     /// Tuple type (including unit `()` as empty tuple)
     Tuple(Vec<InferTy<'db>>),
+
+    /// GC-managed reference type: `&T` or `&mut T`
+    Ref(Box<InferTy<'db>>, Mutability),
+
+    /// GC-managed pointer type: `*T`
+    Ptr(Box<InferTy<'db>>),
 
     /// Error type (for error recovery - unifies with anything)
     Error,

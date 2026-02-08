@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use scrap_shared::types::{FloatTy, FloatVal, IntTy, IntVal, UintTy, UintVal};
+use scrap_shared::types::{FloatTy, FloatVal, IntTy, IntVal, Mutability, UintTy, UintVal};
 use scrap_shared::{id::ModuleId, ident::Symbol};
 
 #[derive(
@@ -141,6 +141,10 @@ pub enum Ty<'db> {
     Never,
     /// A tuple type, e.g. `(i32, bool)` for checked arithmetic results.
     Tuple(Vec<Ty<'db>>),
+    /// A GC-managed reference type: `&T` or `&mut T`.
+    Ref(Box<Ty<'db>>, Mutability),
+    /// A GC-managed pointer type: `*T`.
+    Ptr(Box<Ty<'db>>),
 }
 
 #[salsa::tracked(debug, persist)]
@@ -253,6 +257,9 @@ pub enum Rvalue<'db> {
     Aggregate(AggregateKind<'db>, Vec<Operand<'db>>),
     /// Array literal.
     Array(Vec<Operand<'db>>),
+    /// Heap-allocate a value and return a GC-managed reference.
+    /// `Box(inner_ty, value)` — allocates space for `inner_ty`, stores `value`, returns pointer.
+    Box(Ty<'db>, Operand<'db>),
 }
 
 /// An `Operand` is an input to an `Rvalue`.
@@ -276,7 +283,8 @@ pub enum Place<'db> {
     /// A projection into a field of a struct or enum variant.
     /// Example: `my_struct.field2` would be `Place::Field(Box::new(Place::Local(my_struct_id)), 1)`
     Field(Box<Place<'db>>, usize),
-    // Future additions: Index for arrays, Deref for pointers.
+    /// Dereference a GC reference: `*place`.
+    Deref(Box<Place<'db>>),
     #[doc(hidden)]
     __Phantom(PhantomData<&'db ()>),
 }

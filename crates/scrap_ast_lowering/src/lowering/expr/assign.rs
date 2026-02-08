@@ -26,9 +26,22 @@ impl<'db> ExprLowerer<'db> {
 
                 Ok(ir::Place::Local(local_id))
             }
+            ExprKind::Unary(scrap_ast::operators::UnOp::Deref, inner) => {
+                // *x as a place — dereference through a reference
+                let inner_operand = self.lower_expr(inner)?;
+                let inner_place = match inner_operand {
+                    ir::Operand::Place(place) => place,
+                    other => {
+                        let ref_ty = self.lookup_and_convert_type(inner.id);
+                        let temp = self.allocate_temp(ref_ty);
+                        self.emit_assign(ir::Place::Local(temp), ir::Rvalue::Use(other));
+                        ir::Place::Local(temp)
+                    }
+                };
+                Ok(ir::Place::Deref(Box::new(inner_place)))
+            }
             _ => {
-                // Only paths can be places for now
-                // Future: field access, array indexing, etc.
+                // Only paths and dereferences can be places for now
                 Err(BuilderError::LowerExpressionError)
             }
         }

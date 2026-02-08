@@ -6,6 +6,19 @@ use scrap_span::Spanned;
 pub type BinOp<'db> = Spanned<'db, BinOpKind>;
 pub type AssignOp<'db> = Spanned<'db, AssignOpKind>;
 
+/// Unary operator kinds.
+#[derive(
+    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub enum UnOp {
+    /// The `*` operator (dereference)
+    Deref,
+    /// The `-` operator (negation)
+    Neg,
+    /// The `!` operator (logical/bitwise NOT)
+    Not,
+}
+
 #[derive(
     Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]

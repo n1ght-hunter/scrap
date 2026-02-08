@@ -43,11 +43,56 @@ impl<'db> ExprLowerer<'db> {
         self.cfg_builder.set_current_block(cont_bb);
     }
 
+    /// Check if a call expression is a `box(value)` builtin.
+    fn is_box_call(&self, call_expr: &Expr<'db>) -> bool {
+        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind {
+            if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind {
+                if let Some(seg) = path.single_segment() {
+                    return seg.ident.name.text(self.db) == "box";
+                }
+            }
+        }
+        false
+    }
+
+    /// Lower a `box(value)` expression to `Rvalue::Box`.
+    fn lower_box_call(
+        &mut self,
+        call_expr: &Expr<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        let args = match &call_expr.kind {
+            scrap_ast::expr::ExprKind::Call(_, a) => a,
+            _ => return Err(crate::BuilderError::LowerExpressionError),
+        };
+
+        // box(value) takes exactly one argument
+        let value_operand = self.lower_expr(&args[0])?;
+
+        // The result type of box(value) is *T — extract the inner type T
+        let result_ty = self.lookup_and_convert_type(call_expr.id);
+        let inner_ty = match &result_ty {
+            ir::Ty::Ptr(inner) => (**inner).clone(),
+            ir::Ty::Ref(inner, _) => (**inner).clone(),
+            _ => self.lookup_and_convert_type(args[0].id),
+        };
+
+        let result_temp = self.allocate_temp(result_ty);
+        let destination = ir::Place::Local(result_temp);
+
+        self.emit_assign(destination.clone(), ir::Rvalue::Box(inner_ty, value_operand));
+        Ok(ir::Operand::Place(destination))
+    }
+
     /// Lower a function call to an operand (allocates a temporary).
     pub(crate) fn lower_call(
         &mut self,
         call_expr: &Expr<'db>,
     ) -> MResult<ir::Operand<'db>> {
+        // Intercept box(value) builtin
+        if self.is_box_call(call_expr) {
+            return self.lower_box_call(call_expr);
+        }
+
         let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
@@ -64,6 +109,13 @@ impl<'db> ExprLowerer<'db> {
         call_expr: &Expr<'db>,
         dest: ir::Place<'db>,
     ) -> MResult<()> {
+        // Intercept box(value) builtin
+        if self.is_box_call(call_expr) {
+            let operand = self.lower_box_call(call_expr)?;
+            self.emit_assign(dest, ir::Rvalue::Use(operand));
+            return Ok(());
+        }
+
         let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
         self.emit_call(func_operand, arg_operands, dest);
         Ok(())

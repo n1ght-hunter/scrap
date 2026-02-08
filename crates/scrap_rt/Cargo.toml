@@ -1,0 +1,10 @@
+[package]
+name = "scrap_rt"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+
+[lints]
+workspace = true
