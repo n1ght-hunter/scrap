@@ -354,6 +354,21 @@ impl<'db> CodegenContext<'db> {
             self.functions.insert("__scrap_gc_alloc".to_string(), fid);
         }
 
+        // __scrap_gc_alloc_array(element_shape: *const GcShape, count: u64) -> *mut u8
+        if !self.functions.contains_key("__scrap_gc_alloc_array") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty)); // element_shape
+            sig.params.push(AbiParam::new(types::I64)); // count: u64
+            sig.returns.push(AbiParam::new(ptr_ty)); // pointer
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_alloc_array", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_gc_alloc_array".to_string(), fid);
+        }
+
         Some(())
     }
 

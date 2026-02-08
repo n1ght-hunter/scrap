@@ -261,7 +261,7 @@ fn rvalue_uses(rv: &ir::Rvalue) -> Vec<usize> {
         }
     };
     match rv {
-        ir::Rvalue::Use(o) | ir::Rvalue::Box(_, o) => add(o),
+        ir::Rvalue::Use(o) | ir::Rvalue::Box(_, o) | ir::Rvalue::AllocArray(_, o) => add(o),
         ir::Rvalue::Intrinsic(_, ops) | ir::Rvalue::Array(ops) | ir::Rvalue::Aggregate(_, ops) => {
             ops.iter().for_each(&mut add)
         }

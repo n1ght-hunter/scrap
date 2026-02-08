@@ -294,6 +294,9 @@ pub enum Rvalue<'db> {
     /// Heap-allocate a value and return a GC-managed reference.
     /// `Box(inner_ty, value)` — allocates space for `inner_ty`, stores `value`, returns pointer.
     Box(Ty<'db>, Operand<'db>),
+    /// Heap-allocate a GC-managed array and return a pointer to the first element.
+    /// `AllocArray(element_ty, count)` — count is a runtime operand of type usize.
+    AllocArray(Ty<'db>, Operand<'db>),
     /// Read the discriminant (tag) of an enum value.
     Discriminant(Place<'db>),
     /// Take a reference to a place: `&place` or `&mut place`.

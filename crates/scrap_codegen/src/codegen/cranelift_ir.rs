@@ -300,6 +300,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Rvalue::Box(inner_ty, value_op) => {
                 self.lower_box_alloc(inner_ty, value_op, builder, module)
             }
+            ir::Rvalue::AllocArray(element_ty, count_op) => {
+                self.lower_alloc_array(element_ty, count_op, builder, module)
+            }
             ir::Rvalue::Ref(_mutability, place) => {
                 // Take the address of a place
                 match place {
@@ -1774,6 +1777,91 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             let value = self.lower_operand(value_op, builder, module)?;
             builder.ins().store(MemFlagsData::new(), value, ptr, 0);
         }
+
+        Some(ptr)
+    }
+
+    /// Lower a `Rvalue::AllocArray(element_ty, count)`: allocate a GC-managed array.
+    /// Returns pointer to zero-initialized element data.
+    fn lower_alloc_array(
+        &self,
+        element_ty: &ir::Ty<'db>,
+        count_op: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
+        if !matches!(
+            element_ty,
+            ir::Ty::Bool
+                | ir::Ty::Int(_)
+                | ir::Ty::Uint(_)
+                | ir::Ty::Float(_)
+                | ir::Ty::Ref(_, _)
+                | ir::Ty::Ptr(_)
+        ) {
+            emit_codegen_err(
+                self.db,
+                format!("alloc_array: unsupported element type {element_ty:?}"),
+            );
+            return None;
+        }
+
+        // 1. Get or create GcShape for element_ty. Layout matches `lower_box_alloc`:
+        //    [size: u64, align: u64, num_pointers: u64, finalizer: u64, offsets…]
+        // Keyed separately from `box`'s shapes (`array:` prefix): the two lowerings
+        // write different finalizer fields for the same `element_ty`, and sharing
+        // the cache would let whichever ran first silently hand its shape to the
+        // other (a box losing its drop wrapper, or an array inheriting one that
+        // would run once instead of per element).
+        let shape_data_id = {
+            let key = format!("array:{:?}", element_ty);
+            let mut shapes = self.gc_shapes.borrow_mut();
+            if let Some(&id) = shapes.get(&key) {
+                id
+            } else {
+                let (size, align, pointer_offsets) = compute_type_layout(self.db, element_ty);
+                let num_pointers = pointer_offsets.len() as u64;
+                let mut data = Vec::new();
+                data.extend_from_slice(&size.to_le_bytes());
+                data.extend_from_slice(&align.to_le_bytes());
+                data.extend_from_slice(&num_pointers.to_le_bytes());
+                data.extend_from_slice(&0u64.to_le_bytes()); // finalizer: array elements are not dropped
+                for offset in &pointer_offsets {
+                    data.extend_from_slice(&offset.to_le_bytes());
+                }
+
+                let name = format!(".Lgcshape.{}", shapes.len());
+                let data_id = module
+                    .declare_data(&name, Linkage::Local, false, false)
+                    .or_emit(self.db)?;
+                let mut desc = DataDescription::new();
+                desc.define(data.into_boxed_slice());
+                desc.set_align(8);
+                module.define_data(data_id, &desc).or_emit(self.db)?;
+
+                shapes.insert(key, data_id);
+                data_id
+            }
+        };
+
+        // 2. Load GcShape address
+        let gv = module.declare_data_in_func(shape_data_id, builder.func);
+        let shape_addr = builder.ins().symbol_value(types::I64, gv);
+
+        // 3. Lower the count operand
+        let count = self.lower_operand(count_op, builder, module)?;
+
+        // 4. Call __scrap_gc_alloc_array(shape_addr, count) → pointer
+        let alloc_func_id = match self.functions.get("__scrap_gc_alloc_array") {
+            Some(&id) => id,
+            None => {
+                emit_codegen_err(self.db, "__scrap_gc_alloc_array not declared");
+                return None;
+            }
+        };
+        let alloc_ref = module.declare_func_in_func(alloc_func_id, builder.func);
+        let call_inst = builder.ins().call(alloc_ref, &[shape_addr, count]);
+        let ptr = builder.inst_results(call_inst)[0];
 
         Some(ptr)
     }

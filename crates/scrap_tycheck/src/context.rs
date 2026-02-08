@@ -147,6 +147,10 @@ pub struct TypeContext<'db> {
 
     /// Generic function instantiations: (fn_name, call_node_id, type_param → concrete_type)
     generic_instantiations: Vec<(Symbol, NodeId, HashMap<Symbol, InferTy>)>,
+
+    /// Element type variables from `alloc_array` calls, paired with the call span,
+    /// checked once unification has finished solving as much as it can.
+    pending_alloc_array_elems: Vec<(InferTy, Span)>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -173,6 +177,7 @@ impl<'db> TypeContext<'db> {
             fn_return_types: HashMap::new(),
             loop_depth: 0,
             generic_instantiations: Vec::new(),
+            pending_alloc_array_elems: Vec::new(),
         }
     }
 
@@ -402,6 +407,12 @@ impl<'db> TypeContext<'db> {
     /// Look up the visibility facts of a Rust interop type by name.
     pub fn rust_type_meta(&self, name: Symbol) -> Option<&RustTypeVis> {
         self.rust_struct_meta.get(&name)
+    }
+
+    /// Record an `alloc_array` element type variable to be checked, once
+    /// unification has run, for being both solved and a supported element type.
+    pub fn record_pending_alloc_array_elem(&mut self, elem_ty: InferTy, span: Span) {
+        self.pending_alloc_array_elems.push((elem_ty, span));
     }
 
     /// Add an equality constraint between two types.
@@ -725,6 +736,56 @@ impl<'db> TypeContext<'db> {
                         ),
                 ),
         )
+    }
+
+    /// Check every `alloc_array` element type var recorded during inference,
+    /// once unification has run as far as it will go. Must run before
+    /// `finalize_types`, whose `InferTy::Var(_) => i32` default would otherwise
+    /// silently paper over an unconstrained element type.
+    pub fn check_pending_alloc_array_elems(&self) {
+        for (elem_ty, span) in &self.pending_alloc_array_elems {
+            let resolved = self.resolve(elem_ty);
+            match resolved {
+                InferTy::Var(_) => {
+                    self.db.dcx().emit_err(
+                        Level::ERROR
+                            .primary_title("cannot infer element type for `alloc_array`")
+                            .element(
+                                Snippet::source(self.source)
+                                    .path(self.file_name)
+                                    .annotation(
+                                        AnnotationKind::Primary
+                                            .span(span.range())
+                                            .label("type must be known from context"),
+                                    ),
+                            )
+                            .element(Level::HELP.message(
+                                "annotate the binding, e.g. `let arr: *usize = alloc_array(n)`",
+                            )),
+                    );
+                }
+                InferTy::Bool
+                | InferTy::Int(_)
+                | InferTy::Uint(_)
+                | InferTy::Float(_)
+                | InferTy::Ptr(_)
+                | InferTy::Ref(_, _) => {}
+                other => {
+                    let ty_str = self.ty_to_string_inner(&other);
+                    self.db.dcx().emit_err(
+                        Level::ERROR
+                            .primary_title(format!(
+                                "`alloc_array` does not support element type `{ty_str}`"
+                            ))
+                            .element(
+                                Snippet::source(self.source)
+                                    .path(self.file_name)
+                                    .annotation(AnnotationKind::Primary.span(span.range())),
+                            ),
+                    );
+                }
+            }
+        }
     }
 
     /// Emit an error for an unknown field in a struct initializer.

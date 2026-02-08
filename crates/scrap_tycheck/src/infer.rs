@@ -308,6 +308,20 @@ impl<'db> TypeContext<'db> {
                     return InferTy::Ptr(Box::new(arg_ty));
                 }
 
+                // Built-in: alloc_array(count) -> *T
+                // Element type T is inferred from context (e.g. let arr: *i32 = alloc_array(10))
+                if name.text() == "alloc_array" {
+                    if args.len() != 1 {
+                        self.emit_arity_mismatch(1, args.len(), span);
+                        return InferTy::Error;
+                    }
+                    let count_ty = self.infer_expr(&args[0]);
+                    self.constrain_eq(count_ty, InferTy::Uint(UintTy::Usize), args[0].span);
+                    let elem_ty = self.fresh_ty_var();
+                    self.record_pending_alloc_array_elem(elem_ty.clone(), span);
+                    return InferTy::Ptr(Box::new(elem_ty));
+                }
+
                 if let Some(sig) = self.lookup_function(name).cloned() {
                     // Check argument count
                     if args.len() != sig.params.len() {

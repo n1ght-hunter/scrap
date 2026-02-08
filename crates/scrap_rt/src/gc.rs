@@ -55,6 +55,10 @@ struct ObjHeader {
     _pad: [u8; 7],
     size: u64,
     shape: *const GcShape,
+    /// Number of elements this allocation holds: `1` for a scalar object,
+    /// `count` for an array allocation. Lets the tracer walk both uniformly —
+    /// `shape` describes one element, repeated `element_count` times.
+    element_count: u64,
     next: *mut ObjHeader,
 }
 
@@ -395,7 +399,7 @@ pub extern "C" fn __scrap_gc_alloc(shape: *const GcShape) -> *mut u8 {
                 gc_log!("alloc: OOM after collection, exiting");
                 std::process::exit(101);
             }
-            init_obj_header(ptr, size, shape, &mut heap);
+            init_obj_header(ptr, size, shape, 1, &mut heap);
             let data = (*ptr).data_ptr();
             gc_log!(
                 "alloc: ok (retry) header={:?}, data={:?}, heap_bytes={}",
@@ -406,7 +410,7 @@ pub extern "C" fn __scrap_gc_alloc(shape: *const GcShape) -> *mut u8 {
             return data;
         }
 
-        init_obj_header(ptr, size, shape, &mut heap);
+        init_obj_header(ptr, size, shape, 1, &mut heap);
         let data = (*ptr).data_ptr();
         gc_log!(
             "alloc: ok header={:?}, data={:?}, heap_bytes={}",
@@ -422,15 +426,84 @@ unsafe fn init_obj_header(
     ptr: *mut ObjHeader,
     size: usize,
     shape: *const GcShape,
+    element_count: u64,
     heap: &mut HeapState,
 ) {
     unsafe {
         (*ptr).mark.store(MARK_WHITE, Ordering::Relaxed);
         (*ptr).size = size as u64;
         (*ptr).shape = shape;
+        (*ptr).element_count = element_count;
         (*ptr).next = heap.all_objects;
         heap.all_objects = ptr;
         heap.bytes_allocated += std::mem::size_of::<ObjHeader>() + size;
+    }
+}
+
+/// Allocate a GC-managed array of `count` elements laid out per `element_shape`.
+/// Returns a pointer to the zero-initialized first element.
+#[unsafe(no_mangle)]
+pub extern "C" fn __scrap_gc_alloc_array(element_shape: *const GcShape, count: u64) -> *mut u8 {
+    unsafe {
+        let elem_size = (*element_shape).size as usize;
+        // An overflowing size request would otherwise under-allocate and turn
+        // every element write into a heap overflow.
+        let Some(data_size) = elem_size.checked_mul(count as usize) else {
+            gc_log!(
+                "alloc_array: size overflow ({} x {}), exiting",
+                elem_size,
+                count
+            );
+            std::process::exit(101);
+        };
+        let total = std::mem::size_of::<ObjHeader>() + data_size;
+
+        gc_log!(
+            "alloc_array: elem_size={}, count={}, total={} (header+data)",
+            elem_size,
+            count,
+            total
+        );
+
+        let mut heap = mutex_lock!(HEAP);
+
+        if heap.bytes_allocated + total > heap.threshold {
+            gc_log!(
+                "alloc_array: threshold exceeded ({} + {} > {}), triggering collection",
+                heap.bytes_allocated,
+                total,
+                heap.threshold
+            );
+            collect(&mut heap);
+            if heap.bytes_allocated + total > heap.threshold {
+                #[cfg(feature = "gc-debug")]
+                let old = heap.threshold;
+                heap.threshold = (heap.bytes_allocated + total) * 2;
+                gc_log!("alloc_array: grew threshold {} -> {}", old, heap.threshold);
+            }
+        }
+
+        let layout = std::alloc::Layout::from_size_align(total, 8).unwrap();
+        let mut ptr = std::alloc::alloc_zeroed(layout) as *mut ObjHeader;
+        if ptr.is_null() {
+            gc_log!("alloc_array: first alloc failed, retrying after collection");
+            collect(&mut heap);
+            ptr = std::alloc::alloc_zeroed(layout) as *mut ObjHeader;
+            if ptr.is_null() {
+                gc_log!("alloc_array: OOM after collection, exiting");
+                std::process::exit(101);
+            }
+        }
+
+        init_obj_header(ptr, data_size, element_shape, count, &mut heap);
+        let data = (*ptr).data_ptr();
+        gc_log!(
+            "alloc_array: ok header={:?}, data={:?}, heap_bytes={}",
+            ptr,
+            data,
+            heap.bytes_allocated
+        );
+        data
     }
 }
 
@@ -552,14 +625,22 @@ fn collect(heap: &mut HeapState) {
             let shape = (*obj).shape;
             if !shape.is_null() && (*shape).num_pointers > 0 {
                 let data = (*obj).data_ptr();
-                for &offset in (*shape).pointer_offsets() {
-                    let field_ptr = *(data.add(offset as usize) as *const *mut u8);
-                    if !field_ptr.is_null()
-                        && let Some(child_header) = data_ptr_to_header(field_ptr)
-                        && (*child_header).mark.load(Ordering::Relaxed) == MARK_WHITE
-                    {
-                        (*child_header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                        worklist.push(child_header);
+                // A scalar object is one element repeated once; an array repeats
+                // the same shape `element_count` times. Either way `shape` describes
+                // a single element and `stride` is its size.
+                let elements = (*obj).element_count as usize;
+                let stride = (*shape).size as usize;
+                for i in 0..elements {
+                    let elem_base = data.add(i * stride);
+                    for &offset in (*shape).pointer_offsets() {
+                        let field_ptr = *(elem_base.add(offset as usize) as *const *mut u8);
+                        if !field_ptr.is_null()
+                            && let Some(child_header) = data_ptr_to_header(field_ptr)
+                            && (*child_header).mark.load(Ordering::Relaxed) == MARK_WHITE
+                        {
+                            (*child_header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                            worklist.push(child_header);
+                        }
                     }
                 }
             }
@@ -618,6 +699,9 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
                 }
                 // If it has a finalizer, hand it to the finalizer thread (which
                 // runs the destructor then frees it); otherwise free immediately.
+                // Array shapes never carry a finalizer (codegen keys them separately
+                // from `box`'s shapes), so this single call is never expected to run
+                // once per element.
                 let shape = (*current).shape;
                 let finalizer = if shape.is_null() {
                     0

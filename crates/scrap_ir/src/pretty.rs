@@ -375,6 +375,13 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 self.print_type(ty);
                 write!(self.output, ")").unwrap();
             }
+            Rvalue::AllocArray(ty, count_op) => {
+                write!(self.output, "alloc_array(").unwrap();
+                self.print_type(ty);
+                write!(self.output, ", ").unwrap();
+                self.print_operand(count_op);
+                write!(self.output, ")").unwrap();
+            }
             Rvalue::Discriminant(place) => {
                 write!(self.output, "discriminant(").unwrap();
                 self.print_place(place);

@@ -143,6 +143,44 @@ impl<'db> ExprLowerer<'db> {
         Ok(ir::Operand::Place(destination))
     }
 
+    /// Check if a call expression is an `alloc_array(count)` builtin.
+    fn is_alloc_array_call(&self, call_expr: &Expr<'db>) -> bool {
+        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind
+            && let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
+            && let Some(seg) = path.single_segment()
+        {
+            return seg.ident.name.text() == "alloc_array";
+        }
+        false
+    }
+
+    /// Lower an `alloc_array(count)` expression to `Rvalue::AllocArray`.
+    fn lower_alloc_array_call(&mut self, call_expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
+        let scrap_ast::expr::ExprKind::Call(_, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
+        };
+
+        let count_operand = self.lower_expr(&args[0])?;
+
+        // The result type is *T — extract the element type T. Tycheck guarantees
+        // this resolves to `Ptr` (or has already reported an error) before
+        // lowering ever runs, so anything else here is a compiler bug.
+        let result_ty = self.lookup_and_convert_type(call_expr.id);
+        let element_ty = match &result_ty {
+            ir::Ty::Ptr(inner) => (**inner).clone(),
+            _ => return Err(crate::BuilderError::LowerExpressionError),
+        };
+
+        let result_temp = self.allocate_temp(result_ty);
+        let destination = ir::Place::Local(result_temp);
+
+        self.emit_assign(
+            destination.clone(),
+            ir::Rvalue::AllocArray(element_ty, count_operand),
+        );
+        Ok(ir::Operand::Place(destination))
+    }
+
     /// Check if a call is an enum tuple variant construction (e.g. Option::Some(42))
     fn is_enum_variant_call(
         &self,
@@ -171,6 +209,11 @@ impl<'db> ExprLowerer<'db> {
         // Intercept box(value) builtin
         if self.is_box_call(call_expr) {
             return self.lower_box_call(call_expr);
+        }
+
+        // Intercept alloc_array(count) builtin
+        if self.is_alloc_array_call(call_expr) {
+            return self.lower_alloc_array_call(call_expr);
         }
 
         // Intercept enum tuple variant construction (e.g. Option::Some(42))
@@ -296,6 +339,13 @@ impl<'db> ExprLowerer<'db> {
         // Intercept box(value) builtin
         if self.is_box_call(call_expr) {
             let operand = self.lower_box_call(call_expr)?;
+            self.emit_assign(dest, ir::Rvalue::Use(operand));
+            return Ok(());
+        }
+
+        // Intercept alloc_array(count) builtin
+        if self.is_alloc_array_call(call_expr) {
+            let operand = self.lower_alloc_array_call(call_expr)?;
             self.emit_assign(dest, ir::Rvalue::Use(operand));
             return Ok(());
         }

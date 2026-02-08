@@ -63,6 +63,7 @@ pub fn check_types<'db>(
     }
 
     ctx.check_can(can);
+    ctx.check_pending_alloc_array_elems();
 
     let (expr_types, local_types, fn_return_types, generic_instantiations) = ctx.finalize_types();
 
