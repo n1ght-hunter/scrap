@@ -281,8 +281,8 @@ pub enum Place<'db> {
     /// A local variable, temporary, or argument (e.g., `x`).
     Local(LocalId),
     /// A projection into a field of a struct or enum variant.
-    /// Example: `my_struct.field2` would be `Place::Field(Box::new(Place::Local(my_struct_id)), 1)`
-    Field(Box<Place<'db>>, usize),
+    /// Example: `my_struct.field2` would be `Place::Field(Box::new(Place::Local(my_struct_id)), 1, Some(sym))`
+    Field(Box<Place<'db>>, usize, Option<Symbol<'db>>),
     /// Dereference a GC reference: `*place`.
     Deref(Box<Place<'db>>),
     #[doc(hidden)]
@@ -294,8 +294,8 @@ pub enum Place<'db> {
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum AggregateKind<'db> {
-    /// Constructing a struct, identified by its `TypeId`.
-    Struct(TypeId<'db>),
+    /// Constructing a struct, identified by its `TypeId` and field names.
+    Struct(TypeId<'db>, Vec<Symbol<'db>>),
     /// Constructing an enum variant. We need the `TypeId` of the whole enum
     /// and the `variant_idx` of the specific variant being constructed.
     EnumVariant(TypeId<'db>, usize),

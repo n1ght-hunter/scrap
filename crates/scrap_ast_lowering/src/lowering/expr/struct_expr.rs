@@ -36,12 +36,14 @@ impl<'db> ExprLowerer<'db> {
 
         // Lower each field expression to an operand
         let mut operands = Vec::new();
+        let mut field_names = Vec::new();
         for field_init in struct_expr.fields.iter() {
             let op = self.lower_expr(&field_init.expr)?;
             operands.push(op);
+            field_names.push(field_init.ident.name);
         }
 
-        let rvalue = ir::Rvalue::Aggregate(ir::AggregateKind::Struct(type_id), operands);
+        let rvalue = ir::Rvalue::Aggregate(ir::AggregateKind::Struct(type_id, field_names), operands);
         self.emit_assign(dest, rvalue);
         Ok(())
     }
@@ -61,7 +63,7 @@ impl<'db> ExprLowerer<'db> {
         };
 
         let field_idx = self.resolve_field_index(base.id, field_ident.name)?;
-        let field_place = ir::Place::Field(Box::new(base_place), field_idx);
+        let field_place = ir::Place::Field(Box::new(base_place), field_idx, Some(field_ident.name));
         Ok(ir::Operand::Place(field_place))
     }
 

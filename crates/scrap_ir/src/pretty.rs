@@ -313,8 +313,18 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Rvalue::Constant(c) => self.print_constant(c),
             Rvalue::Aggregate(kind, operands) => {
                 match kind {
-                    AggregateKind::Struct(type_id) => {
-                        write!(self.output, "{}{{", type_id.name(self.db)).unwrap();
+                    AggregateKind::Struct(type_id, field_names) => {
+                        write!(self.output, "{} {{ ", type_id.name(self.db)).unwrap();
+                        for (i, op) in operands.iter().enumerate() {
+                            if i > 0 {
+                                write!(self.output, ", ").unwrap();
+                            }
+                            if let Some(name) = field_names.get(i) {
+                                write!(self.output, "{}: ", name.text(self.db)).unwrap();
+                            }
+                            self.print_operand(op);
+                        }
+                        write!(self.output, " }}").unwrap();
                     }
                     AggregateKind::EnumVariant(type_id, variant_idx) => {
                         write!(
@@ -324,17 +334,14 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                             variant_idx
                         )
                         .unwrap();
+                        for (i, op) in operands.iter().enumerate() {
+                            if i > 0 {
+                                write!(self.output, ", ").unwrap();
+                            }
+                            self.print_operand(op);
+                        }
+                        write!(self.output, ")").unwrap();
                     }
-                }
-                for (i, op) in operands.iter().enumerate() {
-                    if i > 0 {
-                        write!(self.output, ", ").unwrap();
-                    }
-                    self.print_operand(op);
-                }
-                match kind {
-                    AggregateKind::Struct(_) => write!(self.output, "}}").unwrap(),
-                    AggregateKind::EnumVariant(_, _) => write!(self.output, ")").unwrap(),
                 }
             }
             Rvalue::Array(operands) => {
@@ -372,9 +379,13 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Place::Local(local_id) => {
                 write!(self.output, "_{}", local_id.0).unwrap();
             }
-            Place::Field(base, field_idx) => {
+            Place::Field(base, field_idx, field_name) => {
                 self.print_place(base);
-                write!(self.output, ".{}", field_idx).unwrap();
+                if let Some(name) = field_name {
+                    write!(self.output, ".{}", name.text(self.db)).unwrap();
+                } else {
+                    write!(self.output, ".{}", field_idx).unwrap();
+                }
             }
             Place::Deref(inner) => {
                 write!(self.output, "(*").unwrap();

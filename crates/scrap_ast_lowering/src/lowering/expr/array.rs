@@ -70,8 +70,8 @@ mod tests {
         let result = lowerer.lower_expr(&array_expr);
         assert!(result.is_ok());
 
-        // Should have: 1_temp, 2_temp, 3_temp, array_temp = 4 locals
-        assert_eq!(lowerer.local_decls.len(), 4);
+        // Should have: array_temp = 1 local (literals are constants)
+        assert_eq!(lowerer.local_decls.len(), 1);
     }
 
     #[scrap_macros::salsa_test]
@@ -118,8 +118,8 @@ mod tests {
         let result = lowerer.lower_expr(&array_expr);
         assert!(result.is_ok());
 
-        // Should have: 1, 2, pair1, add_result, 3, 4, pair2, mul_result, array = 9 locals
-        assert_eq!(lowerer.local_decls.len(), 9);
+        // Should have: pair1, add_result, pair2, mul_result, array = 5 locals
+        assert_eq!(lowerer.local_decls.len(), 5);
     }
 
     #[scrap_macros::salsa_test]
@@ -140,8 +140,8 @@ mod tests {
         let result = lowerer.lower_expr(&outer);
         assert!(result.is_ok());
 
-        // Should have: 1, 2, inner1_array, 3, 4, inner2_array, outer_array = 7 locals
-        assert_eq!(lowerer.local_decls.len(), 7);
+        // Should have: inner1_array, inner2_array, outer_array = 3 locals
+        assert_eq!(lowerer.local_decls.len(), 3);
     }
 
     #[scrap_macros::salsa_test]
@@ -167,7 +167,7 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have: arr, 1, 2, 3, array_temp = 5 locals
-        assert_eq!(lowerer.local_decls.len(), 5);
+        // Should have: arr, array_temp = 2 locals
+        assert_eq!(lowerer.local_decls.len(), 2);
     }
 }

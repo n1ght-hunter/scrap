@@ -121,7 +121,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 builder.def_var(*var, value);
                 Some(())
             }
-            ir::Place::Field(base, field_idx) => {
+            ir::Place::Field(base, field_idx, _) => {
                 if let ir::Place::Local(local_id) = base.as_ref() {
                     let var = match self.tuple_variables.get(&(local_id.0, *field_idx)) {
                         Some(v) => v,
@@ -450,7 +450,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 };
                 Some(builder.use_var(*var))
             }
-            ir::Place::Field(base, field_idx) => {
+            ir::Place::Field(base, field_idx, _) => {
                 if let ir::Place::Local(local_id) = base.as_ref() {
                     let var = match self.tuple_variables.get(&(local_id.0, *field_idx)) {
                         Some(v) => v,

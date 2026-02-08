@@ -130,6 +130,7 @@ impl<'db> ExprLowerer<'db> {
         let overflow_flag = ir::Operand::Place(ir::Place::Field(
             Box::new(ir::Place::Local(pair_temp)),
             1,
+            None,
         ));
 
         // Create continuation block
@@ -155,6 +156,7 @@ impl<'db> ExprLowerer<'db> {
         let value_operand = ir::Operand::Place(ir::Place::Field(
             Box::new(ir::Place::Local(pair_temp)),
             0,
+            None,
         ));
         self.emit_assign(
             ir::Place::Local(result_temp),
@@ -353,8 +355,8 @@ mod tests {
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 
-        // Parentheses don't add anything, just unwrap
-        assert_eq!(lowerer.local_decls.len(), 1);
+        // Parentheses don't add anything, just unwrap; literal is a constant
+        assert_eq!(lowerer.local_decls.len(), 0);
     }
 
     #[scrap_macros::salsa_test]

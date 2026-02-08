@@ -171,8 +171,8 @@ mod tests {
         let result = lowerer.lower_expr(&call_expr);
         assert!(result.is_ok());
 
-        // Should have: add, 1_temp, 2_temp, result_temp = 4 locals
-        assert_eq!(lowerer.local_decls.len(), 4);
+        // Should have: add, result_temp = 2 locals (literals are constants)
+        assert_eq!(lowerer.local_decls.len(), 2);
     }
 
     #[scrap_macros::salsa_test]
@@ -208,8 +208,8 @@ mod tests {
         let result = lowerer.lower_expr(&call_expr);
         assert!(result.is_ok());
 
-        // Should have: max, x, y, 1, pair1, add_result, 2, pair2, mul_result, call_result = 10 locals
-        assert_eq!(lowerer.local_decls.len(), 10);
+        // Should have: max, x, y, pair1, add_result, pair2, mul_result, call_result = 8 locals
+        assert_eq!(lowerer.local_decls.len(), 8);
     }
 
     #[scrap_macros::salsa_test]
@@ -238,8 +238,8 @@ mod tests {
         let result = lowerer.lower_expr(&outer_call);
         assert!(result.is_ok());
 
-        // Should have: outer, inner, 1, inner_result, outer_result = 5 locals
-        assert_eq!(lowerer.local_decls.len(), 5);
+        // Should have: outer, inner, inner_result, outer_result = 4 locals
+        assert_eq!(lowerer.local_decls.len(), 4);
 
         // Should have multiple blocks for nested calls
         assert!(lowerer.cfg_builder.block_count() >= 3);
@@ -272,8 +272,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have: result, foo, 1, 2, call_result = 5 locals
-        assert_eq!(lowerer.local_decls.len(), 5);
+        // Should have: result, foo, call_result = 3 locals
+        assert_eq!(lowerer.local_decls.len(), 3);
     }
 
     #[scrap_macros::salsa_test]

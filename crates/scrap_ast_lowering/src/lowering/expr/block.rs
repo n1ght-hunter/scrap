@@ -67,7 +67,7 @@ mod tests {
         let result = lowerer.lower_expr(&block_expr);
         assert!(result.is_ok());
 
-        // Should have created locals for x and the literal
-        assert_eq!(lowerer.local_decls.len(), 2);
+        // Should have created local for x (literal is a constant)
+        assert_eq!(lowerer.local_decls.len(), 1);
     }
 }

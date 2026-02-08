@@ -218,13 +218,10 @@ mod tests {
         assert!(result.is_ok());
 
         let operand = result.unwrap();
-        assert!(matches!(operand, ir::Operand::Place(ir::Place::Local(_))));
+        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::Int(_))));
 
-        // Should have created one local declaration
-        assert_eq!(lowerer.local_decls.len(), 1);
-
-        // Check the local declaration type
-        assert_eq!(lowerer.local_decls[0].ty(db), ir::Ty::Int(IntTy::I32));
+        // Literals no longer allocate temporaries
+        assert_eq!(lowerer.local_decls.len(), 0);
     }
 
     #[scrap_macros::salsa_test]
@@ -235,8 +232,9 @@ mod tests {
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 
-        assert_eq!(lowerer.local_decls.len(), 1);
-        assert_eq!(lowerer.local_decls[0].ty(db), ir::Ty::Bool);
+        let operand = result.unwrap();
+        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::Bool(_))));
+        assert_eq!(lowerer.local_decls.len(), 0);
     }
 
     #[scrap_macros::salsa_test]
@@ -247,7 +245,8 @@ mod tests {
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 
-        assert_eq!(lowerer.local_decls.len(), 1);
-        assert_eq!(lowerer.local_decls[0].ty(db), ir::Ty::Str);
+        let operand = result.unwrap();
+        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::String(_))));
+        assert_eq!(lowerer.local_decls.len(), 0);
     }
 }

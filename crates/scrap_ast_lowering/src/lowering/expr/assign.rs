@@ -180,8 +180,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have 2 locals: x, and temp for 5
-        assert_eq!(lowerer.local_decls.len(), 2);
+        // Should have 1 local: x (literals are constants, no temp)
+        assert_eq!(lowerer.local_decls.len(), 1);
     }
 
     #[scrap_macros::salsa_test]
@@ -215,8 +215,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have 4 locals: x, temp for 5, tuple pair (i32, bool), extracted result
-        assert_eq!(lowerer.local_decls.len(), 4);
+        // Should have 3 locals: x, tuple pair (i32, bool), extracted result
+        assert_eq!(lowerer.local_decls.len(), 3);
     }
 
     #[scrap_macros::salsa_test]
@@ -288,8 +288,8 @@ mod tests {
         let result = lowerer.lower_expr(&assign_expr);
         assert!(result.is_ok());
 
-        // Should have: x, 5_temp, 3_temp, tuple pair (i32, bool), add_result_temp
-        assert_eq!(lowerer.local_decls.len(), 5);
+        // Should have: x, tuple pair (i32, bool), add_result_temp
+        assert_eq!(lowerer.local_decls.len(), 3);
     }
 
     #[scrap_macros::salsa_test]
@@ -316,8 +316,8 @@ mod tests {
         assert!(result2.is_ok());
 
         // Should have accumulated locals from both operations
-        // x, 5_temp, pair1, result1, 2_temp, pair2, result2
-        assert_eq!(lowerer.local_decls.len(), 7);
+        // x, pair1, result1, pair2, result2
+        assert_eq!(lowerer.local_decls.len(), 5);
     }
 
     #[scrap_macros::salsa_test]
