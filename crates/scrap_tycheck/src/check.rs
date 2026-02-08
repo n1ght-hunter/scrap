@@ -1,10 +1,12 @@
 //! Top-level type checking for modules and items.
 
 use scrap_ast::{
+    enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
     item::{Item, ItemKind},
     module::ModuleKind,
+    structdef::StructDef,
     Can,
 };
 
@@ -38,8 +40,8 @@ impl<'db> TypeContext<'db> {
             ItemKind::Fn(fn_def) => {
                 self.collect_fn_signature(*fn_def);
             }
-            ItemKind::Struct(_struct_def) => {
-                // TODO: Collect struct definition
+            ItemKind::Struct(struct_def) => {
+                self.collect_struct_definition(struct_def);
             }
             ItemKind::Enum(_enum_def) => {
                 // TODO: Collect enum definition
@@ -161,6 +163,29 @@ impl<'db> TypeContext<'db> {
             ItemKind::Use(_) => {
                 // Use statements don't need type checking
             }
+        }
+    }
+
+    /// Collect a struct definition.
+    fn collect_struct_definition(&mut self, struct_def: &StructDef<'db>) {
+        let name = struct_def.ident.name;
+
+        if let VariantData::Struct { fields } = &struct_def.data {
+            let field_defs: Vec<_> = fields
+                .iter()
+                .filter_map(|field| {
+                    let field_name = field.ident.as_ref()?.name;
+                    let field_ty = self.lower_ast_ty(&field.ty);
+                    Some((field_name, field_ty))
+                })
+                .collect();
+
+            let def = crate::context::StructDef {
+                type_params: vec![],
+                fields: field_defs,
+            };
+
+            self.register_struct(name, def);
         }
     }
 

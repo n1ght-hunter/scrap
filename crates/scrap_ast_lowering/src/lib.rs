@@ -118,7 +118,7 @@ mod tests {
         };
         let fn_def = FnDef::new(db, node_id, ident, ThinVec::new(), None, body, span);
 
-        let result = lower_function(db, fn_def, "", create_empty_type_table(db));
+        let result = lower_function(db, fn_def, "", create_empty_type_table(db), &std::collections::HashMap::new());
         if result.is_err() {
             return false;
         }
@@ -213,7 +213,7 @@ mod tests {
         let args = ThinVec::from([param_a, param_b]);
         let fn_def = FnDef::new(db, node_id, ident, args, None, body, span);
 
-        let result = lower_function(db, fn_def, "", create_empty_type_table(db));
+        let result = lower_function(db, fn_def, "", create_empty_type_table(db), &std::collections::HashMap::new());
         if result.is_err() {
             return false;
         }

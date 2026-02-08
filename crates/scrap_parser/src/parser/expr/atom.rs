@@ -1,6 +1,6 @@
 //! Atomic (primary) expression parsing.
 
-use scrap_ast::expr::{Expr, ExprKind};
+use scrap_ast::expr::{Expr, ExprField, ExprKind, StructExpr};
 use scrap_ast::operators::UnOp;
 use scrap_lexer::Token;
 use scrap_shared::path::Path;
@@ -56,6 +56,15 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
             return Ok(ExprKind::Paren(Box::new(expr)));
         }
 
+        // Check for struct init: `Ident { Ident :`
+        if self.check(Token::Ident)
+            && self.check_ahead(1, Token::LBrace)
+            && self.check_ahead(2, Token::Ident)
+            && self.check_ahead(3, Token::Colon)
+        {
+            return self.parse_struct_init_expr();
+        }
+
         // Check for function call or path
         if self.check_path(Token::LParen) {
             return self.parse_function_call_expr();
@@ -88,6 +97,33 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         }
 
         Err(self.raise_unexpected_token_error())
+    }
+
+    fn parse_struct_init_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        let path = self.parse_path(Token::LBrace)?;
+        self.expect(Token::LBrace)?;
+
+        let mut fields = thin_vec::ThinVec::new();
+        while !self.check(Token::RBrace) {
+            let field_start = self.token.span.start(self.db);
+            let field_ident = self.parse_ident()?;
+            self.expect(Token::Colon)?;
+            let field_expr = self.parse_expr()?;
+            let field_end = field_expr.span.end(self.db);
+
+            fields.push(ExprField {
+                ident: field_ident,
+                expr: Box::new(field_expr),
+                span: Span::new(self.db, field_start, field_end),
+            });
+
+            if !self.eat(Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(ExprKind::Struct(Box::new(StructExpr { path, fields })))
     }
 
     fn parse_array_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {

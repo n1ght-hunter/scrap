@@ -31,6 +31,8 @@ pub struct CodegenContext<'db> {
     pub(crate) unwind_entries: Vec<UnwindEntry>,
     /// GcShape data sections: type descriptor key → DataId.
     pub(crate) gc_shapes: HashMap<String, DataId>,
+    /// Struct layout: struct name → list of field IR types.
+    pub(crate) struct_layouts: HashMap<String, Vec<ir::Ty<'db>>>,
 }
 
 impl<'db> CodegenContext<'db> {
@@ -68,6 +70,7 @@ impl<'db> CodegenContext<'db> {
             functions: HashMap::new(),
             unwind_entries: Vec::new(),
             gc_shapes: HashMap::new(),
+            struct_layouts: HashMap::new(),
         })
     }
 

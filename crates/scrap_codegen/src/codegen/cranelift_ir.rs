@@ -69,6 +69,8 @@ pub struct FuncTranslator<'a, 'db> {
     pub next_data_id: &'a std::cell::Cell<usize>,
     /// GcShape DataIds for box allocation (interior mutability)
     pub gc_shapes: &'a std::cell::RefCell<HashMap<String, cranelift_module::DataId>>,
+    /// Struct name → field types (for aggregate construction)
+    pub struct_layouts: &'a HashMap<String, Vec<ir::Ty<'db>>>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -87,6 +89,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                             &place, op, operands, builder, module,
                         );
                     }
+                }
+
+                // Special handling for aggregate (struct/tuple) construction
+                if let ir::Rvalue::Aggregate(_, ref fields) = rvalue {
+                    return self.lower_aggregate_assign(&place, fields, builder, module);
                 }
 
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
@@ -268,6 +275,40 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         };
         builder.def_var(*var0, result);
         builder.def_var(*var1, overflow);
+        Some(())
+    }
+
+    /// Lower an aggregate (struct/tuple) assignment by storing each field into
+    /// the corresponding tuple sub-variable.
+    fn lower_aggregate_assign(
+        &self,
+        place: &ir::Place<'db>,
+        fields: &[ir::Operand<'db>],
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<()> {
+        let local_id = match place {
+            ir::Place::Local(id) => id.0,
+            _ => {
+                emit_codegen_err(self.db, "aggregate must assign to a local");
+                return None;
+            }
+        };
+
+        for (field_idx, operand) in fields.iter().enumerate() {
+            let value = self.lower_operand(operand, builder, module)?;
+            let var = match self.tuple_variables.get(&(local_id, field_idx)) {
+                Some(v) => v,
+                None => {
+                    emit_codegen_err(
+                        self.db,
+                        format!("tuple variable '_{}.{}' not found", local_id, field_idx),
+                    );
+                    return None;
+                }
+            };
+            builder.def_var(*var, value);
+        }
         Some(())
     }
 

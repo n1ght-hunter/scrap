@@ -1,6 +1,9 @@
 //! Module and function lowering from AST to IR
 
+use std::collections::HashMap;
+
 use scrap_ast::{
+    enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
     item::{Item, ItemKind},
@@ -10,6 +13,7 @@ use scrap_ast::{
 };
 use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
+use scrap_shared::ident::Symbol;
 
 use crate::{lowerer::ExprLowerer, lowering::lower_type, MResult};
 
@@ -23,10 +27,27 @@ pub fn lower_module<'db>(
 ) -> MResult<ir::Module<'db>> {
     let mut items = Vec::new();
 
+    // Collect struct field maps for expression lowering (field name → index)
+    let mut struct_field_maps: HashMap<String, HashMap<Symbol<'db>, usize>> = HashMap::new();
+    for item in ast_items {
+        if let ItemKind::Struct(struct_def) = &item.kind {
+            if let VariantData::Struct { fields } = &struct_def.data {
+                let name = struct_def.ident.name.text(db).to_string();
+                let field_map = fields
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
+                    .collect();
+                struct_field_maps.insert(name, field_map);
+            }
+        }
+    }
+
     for item in ast_items {
         match &item.kind {
             ItemKind::Fn(fn_def) => {
-                let mir_function = lower_function(db, *fn_def, source, type_table)?;
+                let mir_function =
+                    lower_function(db, *fn_def, source, type_table, &struct_field_maps)?;
                 items.push(ir::Items::Function(mir_function));
             }
             ItemKind::ForeignMod(foreign_mod) => {
@@ -36,8 +57,22 @@ pub fn lower_module<'db>(
                     items.push(ir::Items::ExternFunction(extern_fn));
                 }
             }
+            ItemKind::Struct(struct_def) => {
+                if let VariantData::Struct { fields } = &struct_def.data {
+                    let name = struct_def.ident.name;
+                    let ir_fields: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+                        .iter()
+                        .filter_map(|field| {
+                            let field_name = field.ident.as_ref()?.name;
+                            let field_ty = lower_type(db, &field.ty).unwrap_or(ir::Ty::Void);
+                            Some((field_name, field_ty))
+                        })
+                        .collect();
+                    let ir_struct = ir::Struct::new(db, name, ir_fields);
+                    items.push(ir::Items::Struct(ir_struct));
+                }
+            }
             _ => {
-                // Skip other items for now
                 continue;
             }
         }
@@ -52,10 +87,11 @@ pub fn lower_function<'db>(
     ast_function: FnDef<'db>,
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
 ) -> MResult<ir::Function<'db>> {
     let signature = lower_signature(db, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
-    let body = lower_body(db, ast_function, source, type_table, return_ty)?;
+    let body = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps)?;
 
     Ok(ir::Function::new(db, signature, body))
 }
@@ -116,8 +152,10 @@ pub fn lower_body<'db>(
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
     return_ty: ir::Ty<'db>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
 ) -> MResult<ir::Body<'db>> {
     let mut lowerer = ExprLowerer::new(db, source, type_table);
+    lowerer.struct_fields = struct_field_maps.clone();
 
     // _0 is always the return place
     let is_void_return = matches!(return_ty, ir::Ty::Void);

@@ -10,6 +10,7 @@ mod call;
 mod control;
 mod lit;
 mod path;
+mod struct_expr;
 mod unary;
 
 use scrap_ast::expr::{Expr, ExprKind};
@@ -38,6 +39,8 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Unary(UnOp::Deref, inner) => self.lower_deref(inner, expr.id),
             ExprKind::Unary(UnOp::Neg, inner) => self.lower_unary_neg(inner, expr.id),
             ExprKind::Unary(UnOp::Not, inner) => self.lower_unary_not(inner, expr.id),
+            ExprKind::Struct(struct_expr) => self.lower_struct_init(struct_expr, expr.id),
+            ExprKind::Field(base, field_ident) => self.lower_field_access(base, field_ident, expr.id),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
         }
     }
@@ -61,6 +64,9 @@ impl<'db> ExprLowerer<'db> {
             }
             ExprKind::Paren(inner) => {
                 self.lower_expr_into(inner, dest)
+            }
+            ExprKind::Struct(struct_expr) => {
+                self.lower_struct_init_into(struct_expr, dest)
             }
             // For other expressions, fall back to lower_expr + assign
             _ => {

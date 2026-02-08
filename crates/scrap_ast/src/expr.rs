@@ -8,6 +8,7 @@ use crate::{
     node_id::NodeId,
     operators::{AssignOp, BinOp, UnOp},
 };
+use scrap_shared::ident::Ident;
 use scrap_shared::path::Path;
 
 /// An expression node in the AST
@@ -64,8 +65,31 @@ pub enum ExprKind<'db> {
     AssignOp(AssignOp<'db>, Box<Expr<'db>>, Box<Expr<'db>>),
     /// A unary operation (e.g., `*x`, `-x`, `!x`)
     Unary(UnOp, Box<Expr<'db>>),
+    /// A struct literal expression (e.g., `Point { x: 5, y: 10 }`)
+    Struct(Box<StructExpr<'db>>),
+    /// Field access (e.g., `p.x`)
+    Field(Box<Expr<'db>>, Ident<'db>),
     /// Error placeholder
     Err,
+}
+
+/// A struct literal expression (e.g., `Point { x: 5, y: 10 }`).
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct StructExpr<'db> {
+    pub path: Path<'db>,
+    pub fields: ThinVec<ExprField<'db>>,
+}
+
+/// A single field initializer in a struct literal expression.
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct ExprField<'db> {
+    pub ident: Ident<'db>,
+    pub expr: Box<Expr<'db>>,
+    pub span: Span<'db>,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
@@ -146,6 +170,24 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                 };
                 write!(f, "{}", op_str)?;
                 expr.pretty_print_indent(f, indent)
+            }
+            ExprKind::Struct(struct_expr) => {
+                struct_expr.path.pretty_print_indent(f, indent)?;
+                write!(f, " {{ ")?;
+                for (i, field) in struct_expr.fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    field.ident.pretty_print(f)?;
+                    write!(f, ": ")?;
+                    field.expr.pretty_print_indent(f, indent)?;
+                }
+                write!(f, " }}")
+            }
+            ExprKind::Field(base, field_name) => {
+                base.pretty_print_indent(f, indent)?;
+                write!(f, ".")?;
+                field_name.pretty_print(f)
             }
             ExprKind::Err => write!(f, "<error>"),
         }

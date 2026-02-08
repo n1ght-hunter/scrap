@@ -52,6 +52,10 @@ impl<'db> TypeContext<'db> {
 
             ExprKind::Unary(op, inner) => self.infer_unary_op(op, inner, expr.span),
 
+            ExprKind::Struct(struct_expr) => self.infer_struct_init(&struct_expr.path, &struct_expr.fields, expr.span),
+
+            ExprKind::Field(base, field_ident) => self.infer_field_access(base, field_ident, expr.span),
+
             ExprKind::Err => InferTy::Error,
         };
 
@@ -400,6 +404,105 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Convert an AST type to an InferTy.
+    /// Infer the type of a struct initialization expression.
+    fn infer_struct_init(
+        &mut self,
+        path: &Path<'db>,
+        fields: &thin_vec::ThinVec<scrap_ast::expr::ExprField<'db>>,
+        span: Span<'db>,
+    ) -> InferTy<'db> {
+        let struct_name = match path.single_segment() {
+            Some(seg) => seg.ident.name,
+            None => {
+                self.emit_type_mismatch("struct name", "multi-segment path", span);
+                return InferTy::Error;
+            }
+        };
+
+        let struct_def = match self.lookup_struct(struct_name) {
+            Some(def) => def.clone(),
+            None => {
+                self.emit_undefined_variable(&struct_name.text(self.db()), span);
+                return InferTy::Error;
+            }
+        };
+
+        if fields.len() != struct_def.fields.len() {
+            self.emit_arity_mismatch(struct_def.fields.len(), fields.len(), span);
+            return InferTy::Error;
+        }
+
+        for field_init in fields.iter() {
+            let field_ty = self.infer_expr(&field_init.expr);
+            if let Some((_, expected_ty)) = struct_def
+                .fields
+                .iter()
+                .find(|(name, _)| *name == field_init.ident.name)
+            {
+                self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
+            } else {
+                self.emit_undefined_variable(
+                    &format!(
+                        "{}.{}",
+                        struct_name.text(self.db()),
+                        field_init.ident.name.text(self.db())
+                    ),
+                    field_init.span,
+                );
+                return InferTy::Error;
+            }
+        }
+
+        InferTy::Adt(struct_name)
+    }
+
+    /// Infer the type of a field access expression.
+    fn infer_field_access(
+        &mut self,
+        base: &Expr<'db>,
+        field_ident: &scrap_shared::ident::Ident<'db>,
+        span: Span<'db>,
+    ) -> InferTy<'db> {
+        let base_ty = self.infer_expr(base);
+        let resolved_base = self.resolve(&base_ty);
+
+        match &resolved_base {
+            InferTy::Adt(struct_name) => {
+                let struct_def = match self.lookup_struct(*struct_name) {
+                    Some(def) => def.clone(),
+                    None => {
+                        self.emit_type_mismatch("struct", &self.ty_to_string(&base_ty), span);
+                        return InferTy::Error;
+                    }
+                };
+
+                let field_name = field_ident.name;
+                if let Some((_, field_ty)) = struct_def
+                    .fields
+                    .iter()
+                    .find(|(name, _)| *name == field_name)
+                {
+                    field_ty.clone()
+                } else {
+                    self.emit_undefined_variable(
+                        &format!(
+                            "{}.{}",
+                            struct_name.text(self.db()),
+                            field_name.text(self.db())
+                        ),
+                        span,
+                    );
+                    InferTy::Error
+                }
+            }
+            InferTy::Error => InferTy::Error,
+            _ => {
+                self.emit_type_mismatch("struct type", &self.ty_to_string(&base_ty), span);
+                InferTy::Error
+            }
+        }
+    }
+
     pub fn lower_ast_ty(&mut self, ty: &Ty<'db>) -> InferTy<'db> {
         match &ty.kind {
             TyKind::Path(path) => {

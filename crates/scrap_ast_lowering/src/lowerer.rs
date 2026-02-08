@@ -30,6 +30,9 @@ pub struct ExprLowerer<'db> {
     pub cfg_builder: BasicBlockBuilder<'db>,
     /// Symbol table mapping names to local IDs
     pub(crate) symbol_table: HashMap<Symbol<'db>, ir::LocalId>,
+    /// Struct field name → index mapping for field access resolution.
+    /// Key: struct name, Value: map of field_name Symbol → field_index
+    pub(crate) struct_fields: HashMap<String, HashMap<Symbol<'db>, usize>>,
 }
 
 impl<'db> ExprLowerer<'db> {
@@ -46,6 +49,7 @@ impl<'db> ExprLowerer<'db> {
             local_decls: Vec::new(),
             cfg_builder: BasicBlockBuilder::new(db),
             symbol_table: HashMap::new(),
+            struct_fields: HashMap::new(),
         }
     }
 

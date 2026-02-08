@@ -50,8 +50,8 @@ pub fn ir_ty_to_cl(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<Option<type
         },
         ir::Ty::Str => Some(Some(types::I64)), // pointer
         ir::Ty::Adt(_) => {
-            emit_codegen_err(db, "ADT types are not yet supported");
-            None
+            // Struct locals are decomposed into per-field sub-variables (like tuples).
+            Some(None)
         }
         ir::Ty::Ref(_, _) => Some(Some(types::I64)), // reference
         ir::Ty::Ptr(_) => Some(Some(types::I64)), // GC-managed pointer

@@ -39,7 +39,7 @@ pub enum Literal {
     #[regex(r#""(\\.|[^"\\])*""#)]
     Str,
 
-    #[regex(r"[0-9]+\.[0-9]*")]
+    #[regex(r"[0-9]+\.[0-9]+")]
     Float,
 
     #[regex(r"[0-9]+")]
@@ -153,6 +153,8 @@ pub enum Delimiter {
     Semicolon,
     #[token("!")]
     Bang,
+    #[token(".")]
+    Dot,
 }
 
 #[derive(Debug, PartialEq, Clone)]

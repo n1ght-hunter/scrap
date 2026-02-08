@@ -4,6 +4,7 @@ use scrap_ast::{
     expr::{Expr, ExprKind},
     operators::{AssocOp, BinOpKind},
 };
+use scrap_lexer::Token;
 use scrap_span::Span;
 
 impl<'a, 'db> crate::parser::Parser<'a, 'db> {
@@ -18,6 +19,20 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         let mut lhs = self.parse_atom()?;
 
         loop {
+            // Postfix field access: highest precedence
+            if self.check(Token::Dot) {
+                self.bump();
+                let field_ident = self.parse_ident()?;
+                let start = lhs.span.start(self.db);
+                let end = field_ident.span.end(self.db);
+                lhs = Expr {
+                    id: self.state.new_node_id(),
+                    kind: ExprKind::Field(Box::new(lhs), field_ident),
+                    span: Span::new(self.db, start, end),
+                };
+                continue;
+            }
+
             let op = match AssocOp::from_token(&self.token.node) {
                 Some(op) => op,
                 None => break,

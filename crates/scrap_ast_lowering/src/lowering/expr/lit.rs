@@ -142,7 +142,7 @@ impl<'db> ExprLowerer<'db> {
         }
     }
 
-    /// Lower a literal to an operand (allocates a temporary).
+    /// Lower a literal to an operand (returns Operand::Constant directly).
     pub(crate) fn lower_literal(
         &mut self,
         lit: &Lit<'db>,
@@ -150,10 +150,7 @@ impl<'db> ExprLowerer<'db> {
     ) -> MResult<ir::Operand<'db>> {
         let ty = self.infer_literal_type(lit, expr_id)?;
         let constant = self.build_constant(lit, &ty)?;
-
-        let temp = self.allocate_temp(ty);
-        self.emit_assign(ir::Place::Local(temp), ir::Rvalue::Constant(constant));
-        Ok(ir::Operand::Place(ir::Place::Local(temp)))
+        Ok(ir::Operand::Constant(constant))
     }
 
     /// Lower a literal directly into a destination place.

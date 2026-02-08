@@ -35,8 +35,14 @@ impl<'db> CodegenContext<'db> {
                         .or_emit(self.db)?;
                     self.functions.insert(name.to_string(), func_id);
                 }
-                ir::Items::Struct(_) | ir::Items::Enum(_) => {
-                    // Skip type definitions for now
+                ir::Items::Struct(s) => {
+                    let name = s.name(self.db).text(self.db).to_string();
+                    let field_tys: Vec<ir::Ty<'db>> =
+                        s.fields(self.db).iter().map(|(_, ty)| ty.clone()).collect();
+                    self.struct_layouts.insert(name, field_tys);
+                }
+                ir::Items::Enum(_) => {
+                    // Skip enum definitions for now
                 }
             }
         }
@@ -101,6 +107,22 @@ impl<'db> CodegenContext<'db> {
                         let var = builder.declare_var(cl_ty);
                         tuple_variables.insert((i, field_idx), var);
                     }
+                } else if let ir::Ty::Adt(type_id) = &ty {
+                    // Struct locals are decomposed into per-field sub-variables (like tuples)
+                    let struct_name = type_id.name(self.db);
+                    if let Some(field_tys) = self.struct_layouts.get(struct_name.as_str()) {
+                        for (field_idx, field_ty) in field_tys.iter().enumerate() {
+                            let cl_ty = ir_ty_to_cl_required(self.db, field_ty)?;
+                            let var = builder.declare_var(cl_ty);
+                            tuple_variables.insert((i, field_idx), var);
+                        }
+                    } else {
+                        emit_codegen_err(
+                            self.db,
+                            format!("struct '{}' layout not found", struct_name),
+                        );
+                        return None;
+                    }
                 } else if let Some(cl_ty) = ir_ty_to_cl(self.db, &ty)? {
                     // Regular scalar local
                     let var = builder.declare_var(cl_ty);
@@ -139,6 +161,7 @@ impl<'db> CodegenContext<'db> {
                 returns_void,
                 next_data_id: &data_counter,
                 gc_shapes: &gc_shapes_cell,
+                struct_layouts: &self.struct_layouts,
             };
 
             // Lower each basic block
