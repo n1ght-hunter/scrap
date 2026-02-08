@@ -25,22 +25,35 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Emit a call terminator writing the result to `destination`.
+    /// If `never` is true, the callee returns `!` and there is no continuation block.
     fn emit_call(
         &mut self,
         func: ir::Operand<'db>,
         args: Vec<ir::Operand<'db>>,
         destination: ir::Place<'db>,
+        never: bool,
     ) {
-        let cont_bb = self.cfg_builder.start_block();
-        let terminator = ir::Terminator::Call {
-            func,
-            args,
-            destination,
-            target: cont_bb,
-            unwind: ir::UnwindAction::Continue,
-        };
-        self.cfg_builder.finish_block(terminator);
-        self.cfg_builder.set_current_block(cont_bb);
+        if never {
+            let terminator = ir::Terminator::Call {
+                func,
+                args,
+                destination,
+                target: None,
+                unwind: ir::UnwindAction::Unreachable,
+            };
+            self.cfg_builder.finish_block(terminator);
+        } else {
+            let cont_bb = self.cfg_builder.start_block();
+            let terminator = ir::Terminator::Call {
+                func,
+                args,
+                destination,
+                target: Some(cont_bb),
+                unwind: ir::UnwindAction::Continue,
+            };
+            self.cfg_builder.finish_block(terminator);
+            self.cfg_builder.set_current_block(cont_bb);
+        }
     }
 
     /// Check if a call expression is a `box(value)` builtin.
@@ -96,10 +109,11 @@ impl<'db> ExprLowerer<'db> {
         let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
+        let never = matches!(result_ty, ir::Ty::Never);
         let result_temp = self.allocate_temp(result_ty);
         let destination = ir::Place::Local(result_temp);
 
-        self.emit_call(func_operand, arg_operands, destination.clone());
+        self.emit_call(func_operand, arg_operands, destination.clone(), never);
         Ok(ir::Operand::Place(destination))
     }
 
@@ -116,8 +130,10 @@ impl<'db> ExprLowerer<'db> {
             return Ok(());
         }
 
+        let result_ty = self.lookup_and_convert_type(call_expr.id);
+        let never = matches!(result_ty, ir::Ty::Never);
         let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
-        self.emit_call(func_operand, arg_operands, dest);
+        self.emit_call(func_operand, arg_operands, dest, never);
         Ok(())
     }
 }

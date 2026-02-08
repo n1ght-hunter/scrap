@@ -262,13 +262,25 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                     }
                     self.print_operand(arg);
                 }
-                writeln!(
-                    self.output,
-                    ") -> [return: bb{}, unwind {}];",
-                    target.0,
-                    self.unwind_str(unwind)
-                )
-                .unwrap();
+                match target {
+                    Some(bb) => {
+                        writeln!(
+                            self.output,
+                            ") -> [return: bb{}, unwind {}];",
+                            bb.0,
+                            self.unwind_str(unwind)
+                        )
+                        .unwrap();
+                    }
+                    None => {
+                        writeln!(
+                            self.output,
+                            ") -> unwind {};",
+                            self.unwind_str(unwind)
+                        )
+                        .unwrap();
+                    }
+                }
             }
             Terminator::Assert {
                 cond,
@@ -366,7 +378,10 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn print_operand(&mut self, operand: &Operand<'db>) {
         match operand {
-            Operand::Place(place) => self.print_place(place),
+            Operand::Place(place) => {
+                write!(self.output, "copy ").unwrap();
+                self.print_place(place);
+            }
             Operand::Constant(c) => self.print_constant(c),
             Operand::FunctionRef(func_id) => {
                 write!(self.output, "{}", func_id.text(self.db)).unwrap();

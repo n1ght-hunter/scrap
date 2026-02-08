@@ -775,14 +775,19 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     self.assign_to_place(destination, result_val, builder)?;
                 }
 
-                let target_block = match self.block_map.get(&target.0) {
-                    Some(b) => b,
-                    None => {
-                        emit_codegen_err(self.db, format!("unknown block bb{}", target.0));
-                        return None;
-                    }
-                };
-                builder.ins().jump(*target_block, &[]);
+                if let Some(target_bb) = target {
+                    let target_block = match self.block_map.get(&target_bb.0) {
+                        Some(b) => b,
+                        None => {
+                            emit_codegen_err(self.db, format!("unknown block bb{}", target_bb.0));
+                            return None;
+                        }
+                    };
+                    builder.ins().jump(*target_block, &[]);
+                } else {
+                    // Callee returns `!` — no continuation, trap as unreachable
+                    builder.ins().trap(TrapCode::user(1).unwrap());
+                }
                 Some(())
             }
             ir::Terminator::Assert {

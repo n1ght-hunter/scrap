@@ -207,7 +207,8 @@ pub enum Terminator<'db> {
         func: Operand<'db>,
         args: Vec<Operand<'db>>,
         destination: Place<'db>,
-        target: BasicBlockId,
+        /// `None` when the callee returns `!` (never returns).
+        target: Option<BasicBlockId>,
         unwind: UnwindAction,
     },
     /// Assert a condition holds, otherwise panic.
