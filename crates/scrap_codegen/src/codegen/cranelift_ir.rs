@@ -71,6 +71,12 @@ pub struct FuncTranslator<'a, 'db> {
     pub gc_shapes: &'a std::cell::RefCell<HashMap<String, cranelift_module::DataId>>,
     /// Struct name → field types (for aggregate construction)
     pub struct_layouts: &'a HashMap<String, Vec<ir::Ty<'db>>>,
+    /// Enum name → per-variant field types
+    pub enum_layouts: &'a HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
+    /// IR local index → Cranelift Variable for the discriminant
+    pub enum_discriminants: &'a HashMap<usize, Variable>,
+    /// (local_id, variant_idx, field_idx) → Cranelift Variable for variant fields
+    pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -91,9 +97,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     }
                 }
 
-                // Special handling for aggregate (struct/tuple) construction
-                if let ir::Rvalue::Aggregate(_, ref fields) = rvalue {
-                    return self.lower_aggregate_assign(&place, fields, builder, module);
+                // Special handling for aggregate (struct/tuple/enum) construction
+                if let ir::Rvalue::Aggregate(ref kind, ref fields) = rvalue {
+                    return self.lower_aggregate_assign_with_kind(&place, kind, fields, builder, module);
                 }
 
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
@@ -122,6 +128,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 Some(())
             }
             ir::Place::Field(base, field_idx, _) => {
+                // Check for enum variant field: Field(Downcast(Local(x), variant_idx), field_idx)
+                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref() {
+                    if let ir::Place::Local(local_id) = inner.as_ref() {
+                        let var = match self.enum_variant_variables.get(&(local_id.0, *variant_idx, *field_idx)) {
+                            Some(v) => v,
+                            None => {
+                                emit_codegen_err(
+                                    self.db,
+                                    format!(
+                                        "enum variant variable '_{}.variant{}.{}' not found",
+                                        local_id.0, variant_idx, field_idx
+                                    ),
+                                );
+                                return None;
+                            }
+                        };
+                        builder.def_var(*var, value);
+                        return Some(());
+                    }
+                }
+                // Struct/tuple field: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
                     let var = match self.tuple_variables.get(&(local_id.0, *field_idx)) {
                         Some(v) => v,
@@ -148,6 +175,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let ptr = self.lower_place(inner, builder)?;
                 builder.ins().store(MemFlags::new(), value, ptr, 0);
                 Some(())
+            }
+            ir::Place::Downcast(_, _, _) => {
+                // Downcast alone is not a valid assignment target;
+                // it should always be wrapped in Field(Downcast(...), ...)
+                emit_codegen_err(self.db, "downcast alone is not a valid assignment target");
+                None
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
@@ -176,6 +209,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Rvalue::Box(inner_ty, value_op) => {
                 self.lower_box_alloc(inner_ty, value_op, builder, module)
+            }
+            ir::Rvalue::Discriminant(place) => {
+                // Read the discriminant variable for an enum local
+                let local_id = match place {
+                    ir::Place::Local(id) => id.0,
+                    _ => {
+                        emit_codegen_err(self.db, "discriminant must operate on a local");
+                        return None;
+                    }
+                };
+                let disc_var = match self.enum_discriminants.get(&local_id) {
+                    Some(v) => v,
+                    None => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("enum discriminant for '_{local_id}' not found"),
+                        );
+                        return None;
+                    }
+                };
+                Some(builder.use_var(*disc_var))
             }
         }
     }
@@ -278,11 +332,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         Some(())
     }
 
-    /// Lower an aggregate (struct/tuple) assignment by storing each field into
-    /// the corresponding tuple sub-variable.
-    fn lower_aggregate_assign(
+    /// Lower an aggregate (struct/tuple/enum variant) assignment.
+    fn lower_aggregate_assign_with_kind(
         &self,
         place: &ir::Place<'db>,
+        kind: &ir::AggregateKind<'db>,
         fields: &[ir::Operand<'db>],
         builder: &mut FunctionBuilder,
         module: &mut ObjectModule,
@@ -295,21 +349,61 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
         };
 
-        for (field_idx, operand) in fields.iter().enumerate() {
-            let value = self.lower_operand(operand, builder, module)?;
-            let var = match self.tuple_variables.get(&(local_id, field_idx)) {
-                Some(v) => v,
-                None => {
-                    emit_codegen_err(
-                        self.db,
-                        format!("tuple variable '_{}.{}' not found", local_id, field_idx),
-                    );
-                    return None;
+        match kind {
+            ir::AggregateKind::EnumVariant(_, variant_idx) => {
+                // Set discriminant to variant_idx
+                let disc_var = match self.enum_discriminants.get(&local_id) {
+                    Some(v) => v,
+                    None => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("enum discriminant for '_{local_id}' not found"),
+                        );
+                        return None;
+                    }
+                };
+                let disc_val = builder.ins().iconst(types::I64, *variant_idx as i64);
+                builder.def_var(*disc_var, disc_val);
+
+                // Set variant field variables
+                for (field_idx, operand) in fields.iter().enumerate() {
+                    let value = self.lower_operand(operand, builder, module)?;
+                    let var = match self.enum_variant_variables.get(&(local_id, *variant_idx, field_idx)) {
+                        Some(v) => v,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!(
+                                    "enum variant variable '_{}.variant{}.{}' not found",
+                                    local_id, variant_idx, field_idx
+                                ),
+                            );
+                            return None;
+                        }
+                    };
+                    builder.def_var(*var, value);
                 }
-            };
-            builder.def_var(*var, value);
+                Some(())
+            }
+            ir::AggregateKind::Struct(_, _) => {
+                // Struct/tuple: store each field into tuple sub-variables
+                for (field_idx, operand) in fields.iter().enumerate() {
+                    let value = self.lower_operand(operand, builder, module)?;
+                    let var = match self.tuple_variables.get(&(local_id, field_idx)) {
+                        Some(v) => v,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!("tuple variable '_{}.{}' not found", local_id, field_idx),
+                            );
+                            return None;
+                        }
+                    };
+                    builder.def_var(*var, value);
+                }
+                Some(())
+            }
         }
-        Some(())
     }
 
     /// Lower a checked intrinsic to produce (result, overflow_flag).
@@ -451,6 +545,26 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 Some(builder.use_var(*var))
             }
             ir::Place::Field(base, field_idx, _) => {
+                // Check for enum variant field read: Field(Downcast(Local(x), variant_idx), field_idx)
+                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref() {
+                    if let ir::Place::Local(local_id) = inner.as_ref() {
+                        let var = match self.enum_variant_variables.get(&(local_id.0, *variant_idx, *field_idx)) {
+                            Some(v) => v,
+                            None => {
+                                emit_codegen_err(
+                                    self.db,
+                                    format!(
+                                        "enum variant variable '_{}.variant{}.{}' not found",
+                                        local_id.0, variant_idx, field_idx
+                                    ),
+                                );
+                                return None;
+                            }
+                        };
+                        return Some(builder.use_var(*var));
+                    }
+                }
+                // Struct/tuple field read: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
                     let var = match self.tuple_variables.get(&(local_id.0, *field_idx)) {
                         Some(v) => v,
@@ -477,6 +591,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 // Determine the pointed-to type for the load
                 let result_ty = self.deref_result_type(inner)?;
                 Some(builder.ins().load(result_ty, MemFlags::new(), ptr, 0))
+            }
+            ir::Place::Downcast(_, _, _) => {
+                // Downcast alone is not a valid read target;
+                // it should always be wrapped in Field(Downcast(...), ...)
+                emit_codegen_err(self.db, "downcast alone is not a valid read target");
+                None
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
@@ -721,15 +841,39 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Terminator::SwitchInt { discr, targets } => {
                 let discr_val = self.lower_operand(discr, builder, module)?;
-                if targets.len() == 2 {
-                    let false_block = self.block_map[&targets[0].0];
-                    let true_block = self.block_map[&targets[1].0];
+                let otherwise_block = self.block_map[&targets.otherwise.0];
+
+                if targets.values.is_empty() {
+                    // No specific values — unconditional jump to otherwise
+                    builder.ins().jump(otherwise_block, &[]);
+                } else if targets.values.len() == 1 && targets.values[0].0 == 0 {
+                    // Special case: boolean switch (0 → false_block, otherwise → true_block)
+                    let false_block = self.block_map[&targets.values[0].1 .0];
                     builder
                         .ins()
-                        .brif(discr_val, true_block, &[], false_block, &[]);
+                        .brif(discr_val, otherwise_block, &[], false_block, &[]);
                 } else {
-                    emit_codegen_err(self.db, "switchInt with != 2 targets is not supported");
-                    return None;
+                    // N-way switch: chain of comparisons
+                    let cl_ty = builder.func.dfg.value_type(discr_val);
+                    for (i, (val, bb)) in targets.values.iter().enumerate() {
+                        let target_block = self.block_map[&bb.0];
+                        let val_const = builder.ins().iconst(cl_ty, *val as i64);
+                        let cmp = builder.ins().icmp(IntCC::Equal, discr_val, val_const);
+
+                        if i == targets.values.len() - 1 {
+                            // Last value: branch to target or otherwise
+                            builder
+                                .ins()
+                                .brif(cmp, target_block, &[], otherwise_block, &[]);
+                        } else {
+                            // More values follow: branch to target or fall through to next comparison
+                            let next_cmp_block = builder.create_block();
+                            builder
+                                .ins()
+                                .brif(cmp, target_block, &[], next_cmp_block, &[]);
+                            builder.switch_to_block(next_cmp_block);
+                        }
+                    }
                 }
                 Some(())
             }

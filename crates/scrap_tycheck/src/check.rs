@@ -11,7 +11,7 @@ use scrap_ast::{
 };
 
 use crate::{
-    context::{FnSig, TypeContext},
+    context::{EnumVariantDef, FnSig, TypeContext},
     types::InferTy,
 };
 
@@ -43,8 +43,8 @@ impl<'db> TypeContext<'db> {
             ItemKind::Struct(struct_def) => {
                 self.collect_struct_definition(struct_def);
             }
-            ItemKind::Enum(_enum_def) => {
-                // TODO: Collect enum definition
+            ItemKind::Enum(enum_def) => {
+                self.collect_enum_definition(enum_def);
             }
             ItemKind::Module(module) => {
                 // Recursively collect signatures from submodule
@@ -187,6 +187,48 @@ impl<'db> TypeContext<'db> {
 
             self.register_struct(name, def);
         }
+    }
+
+    /// Collect an enum definition.
+    fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef<'db>) {
+        let name = enum_def.ident.name;
+
+        let variants: Vec<_> = enum_def
+            .variants
+            .iter()
+            .map(|variant| {
+                let variant_name = variant.ident.name;
+                let data = match &variant.data {
+                    VariantData::Unit(_) => EnumVariantDef::Unit,
+                    VariantData::Tuple(fields, _) => {
+                        let field_tys: Vec<_> = fields
+                            .iter()
+                            .map(|field| self.lower_ast_ty(&field.ty))
+                            .collect();
+                        EnumVariantDef::Tuple(field_tys)
+                    }
+                    VariantData::Struct { fields } => {
+                        let field_defs: Vec<_> = fields
+                            .iter()
+                            .filter_map(|field| {
+                                let field_name = field.ident.as_ref()?.name;
+                                let field_ty = self.lower_ast_ty(&field.ty);
+                                Some((field_name, field_ty))
+                            })
+                            .collect();
+                        EnumVariantDef::Struct(field_defs)
+                    }
+                };
+                (variant_name, data)
+            })
+            .collect();
+
+        let def = crate::context::EnumDef {
+            type_params: vec![],
+            variants,
+        };
+
+        self.register_enum(name, def);
     }
 
     /// Type check a function body.

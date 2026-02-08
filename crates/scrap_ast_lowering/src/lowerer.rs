@@ -18,6 +18,21 @@ use crate::cfg_builder::BasicBlockBuilder;
 /// - CFG builder for managing basic blocks and control flow
 /// - Source text for extracting literal values from spans
 /// - Type table for looking up types resolved during type checking
+/// Info about a single enum variant for lowering.
+#[derive(Debug, Clone)]
+pub enum VariantInfo<'db> {
+    Unit,
+    Tuple(Vec<ir::Ty<'db>>),
+    Struct(Vec<(Symbol<'db>, ir::Ty<'db>)>),
+}
+
+/// Info about all variants of an enum.
+#[derive(Debug, Clone)]
+pub struct EnumInfo<'db> {
+    /// (variant_name, variant_index, variant_data)
+    pub variants: Vec<(Symbol<'db>, usize, VariantInfo<'db>)>,
+}
+
 pub struct ExprLowerer<'db> {
     pub(crate) db: &'db dyn scrap_shared::Db,
     /// Source text for extracting literal values
@@ -33,6 +48,8 @@ pub struct ExprLowerer<'db> {
     /// Struct field name → index mapping for field access resolution.
     /// Key: struct name, Value: map of field_name Symbol → field_index
     pub(crate) struct_fields: HashMap<String, HashMap<Symbol<'db>, usize>>,
+    /// Enum name → variant info mapping.
+    pub(crate) enum_info: HashMap<String, EnumInfo<'db>>,
 }
 
 impl<'db> ExprLowerer<'db> {
@@ -50,6 +67,7 @@ impl<'db> ExprLowerer<'db> {
             cfg_builder: BasicBlockBuilder::new(db),
             symbol_table: HashMap::new(),
             struct_fields: HashMap::new(),
+            enum_info: HashMap::new(),
         }
     }
 

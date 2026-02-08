@@ -7,6 +7,7 @@ use crate::{
     lit::Lit,
     node_id::NodeId,
     operators::{AssignOp, BinOp, UnOp},
+    pat::Pat,
 };
 use scrap_shared::ident::Ident;
 use scrap_shared::path::Path;
@@ -69,8 +70,20 @@ pub enum ExprKind<'db> {
     Struct(Box<StructExpr<'db>>),
     /// Field access (e.g., `p.x`)
     Field(Box<Expr<'db>>, Ident<'db>),
+    /// Match expression: `match expr { pat => expr, ... }`
+    Match(Box<Expr<'db>>, Vec<Arm<'db>>),
     /// Error placeholder
     Err,
+}
+
+/// A single arm of a match expression.
+#[derive(
+    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct Arm<'db> {
+    pub pat: Pat<'db>,
+    pub body: Box<Expr<'db>>,
+    pub span: Span<'db>,
 }
 
 /// A struct literal expression (e.g., `Point { x: 5, y: 10 }`).
@@ -188,6 +201,25 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                 base.pretty_print_indent(f, indent)?;
                 write!(f, ".")?;
                 field_name.pretty_print(f)
+            }
+            ExprKind::Match(scrutinee, arms) => {
+                write!(f, "match ")?;
+                scrutinee.pretty_print_indent(f, indent)?;
+                writeln!(f, " {{")?;
+                for arm in arms {
+                    let arm_indent = indent + 1;
+                    for _ in 0..arm_indent {
+                        write!(f, "    ")?;
+                    }
+                    arm.pat.pretty_print_indent(f, arm_indent)?;
+                    write!(f, " => ")?;
+                    arm.body.pretty_print_indent(f, arm_indent)?;
+                    writeln!(f, ",")?;
+                }
+                for _ in 0..indent {
+                    write!(f, "    ")?;
+                }
+                write!(f, "}}")
             }
             ExprKind::Err => write!(f, "<error>"),
         }

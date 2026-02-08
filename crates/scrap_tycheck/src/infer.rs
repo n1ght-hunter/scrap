@@ -56,6 +56,8 @@ impl<'db> TypeContext<'db> {
 
             ExprKind::Field(base, field_ident) => self.infer_field_access(base, field_ident, expr.span),
 
+            ExprKind::Match(scrutinee, arms) => self.infer_match(scrutinee, arms, expr.span),
+
             ExprKind::Err => InferTy::Error,
         };
 
@@ -100,8 +102,32 @@ impl<'db> TypeContext<'db> {
 
             self.emit_undefined_variable(&name.text(self.db()), span);
             InferTy::Error
+        } else if path.segments.len() == 2 {
+            // Multi-segment path: check for enum unit variant (e.g. Option::None)
+            let enum_name = path.segments[0].ident.name;
+            let variant_name = path.segments[1].ident.name;
+
+            if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
+                if let Some((_, variant_def)) = enum_def
+                    .variants
+                    .iter()
+                    .find(|(name, _)| *name == variant_name)
+                {
+                    match variant_def {
+                        crate::context::EnumVariantDef::Unit => {
+                            return InferTy::Adt(enum_name);
+                        }
+                        _ => {
+                            // Tuple/struct variant used without args — handled in call/struct init
+                            return InferTy::Adt(enum_name);
+                        }
+                    }
+                }
+            }
+
+            // Could be a module::item path — return fresh var for now
+            self.fresh_ty_var()
         } else {
-            // Multi-segment paths (module::item) - handle later
             self.fresh_ty_var()
         }
     }
@@ -228,6 +254,37 @@ impl<'db> TypeContext<'db> {
 
                 self.emit_undefined_function(&name.text(self.db()), span);
                 return InferTy::Error;
+            }
+
+            // Multi-segment path: check for enum tuple variant (e.g. Option::Some(42))
+            if path.segments.len() == 2 {
+                let enum_name = path.segments[0].ident.name;
+                let variant_name = path.segments[1].ident.name;
+
+                if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
+                    if let Some((_, variant_def)) = enum_def
+                        .variants
+                        .iter()
+                        .find(|(name, _)| *name == variant_name)
+                    {
+                        if let crate::context::EnumVariantDef::Tuple(field_tys) = variant_def {
+                            if args.len() != field_tys.len() {
+                                self.emit_arity_mismatch(field_tys.len(), args.len(), span);
+                                return InferTy::Error;
+                            }
+                            for (arg, expected_ty) in args.iter().zip(field_tys.iter()) {
+                                let arg_ty = self.infer_expr(arg);
+                                self.constrain_eq_with_kind(
+                                    arg_ty,
+                                    expected_ty.clone(),
+                                    arg.span,
+                                    ConstraintKind::FunctionArg,
+                                );
+                            }
+                            return InferTy::Adt(enum_name);
+                        }
+                    }
+                }
             }
         }
 
@@ -411,6 +468,34 @@ impl<'db> TypeContext<'db> {
         fields: &thin_vec::ThinVec<scrap_ast::expr::ExprField<'db>>,
         span: Span<'db>,
     ) -> InferTy<'db> {
+        // Check for enum struct variant: `Message::Move { x: 1, y: 2 }`
+        if path.segments.len() == 2 {
+            let enum_name = path.segments[0].ident.name;
+            let variant_name = path.segments[1].ident.name;
+
+            if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
+                if let Some((_, variant_def)) = enum_def
+                    .variants
+                    .iter()
+                    .find(|(name, _)| *name == variant_name)
+                {
+                    if let crate::context::EnumVariantDef::Struct(field_defs) = variant_def {
+                        // Constrain field types
+                        for field_init in fields.iter() {
+                            let field_ty = self.infer_expr(&field_init.expr);
+                            if let Some((_, expected_ty)) = field_defs
+                                .iter()
+                                .find(|(name, _)| *name == field_init.ident.name)
+                            {
+                                self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
+                            }
+                        }
+                        return InferTy::Adt(enum_name);
+                    }
+                }
+            }
+        }
+
         let struct_name = match path.single_segment() {
             Some(seg) => seg.ident.name,
             None => {
@@ -620,6 +705,99 @@ impl<'db> TypeContext<'db> {
                 InferTy::Ptr(Box::new(self.substitute(inner, subst)))
             }
             _ => ty.clone(),
+        }
+    }
+
+    /// Infer the type of a match expression.
+    fn infer_match(
+        &mut self,
+        scrutinee: &Expr<'db>,
+        arms: &[scrap_ast::expr::Arm<'db>],
+        span: Span<'db>,
+    ) -> InferTy<'db> {
+        // Infer scrutinee type
+        let scrutinee_ty = self.infer_expr(scrutinee);
+
+        // Infer each arm body; all arms must have the same type
+        let result_ty = self.fresh_ty_var();
+        for arm in arms {
+            self.push_scope();
+            self.bind_match_pattern(&arm.pat, &scrutinee_ty);
+            let arm_ty = self.infer_expr(&arm.body);
+            self.constrain_eq_with_kind(
+                result_ty.clone(),
+                arm_ty,
+                span,
+                ConstraintKind::MatchArm,
+            );
+            self.pop_scope();
+        }
+
+        result_ty
+    }
+
+    /// Bind variables from a match pattern into the current scope.
+    fn bind_match_pattern(
+        &mut self,
+        pat: &scrap_ast::pat::Pat<'db>,
+        scrutinee_ty: &InferTy<'db>,
+    ) {
+        use scrap_ast::pat::PatKind;
+        match &pat.kind {
+            PatKind::Wildcard | PatKind::Missing | PatKind::Lit(_) => {}
+            PatKind::Ident(_, ident, _) => {
+                // Simple binding: `val` captures the whole matched value
+                self.define_var(ident.name, scrutinee_ty.clone());
+            }
+            PatKind::Path(_) => {
+                // Unit variant pattern (e.g. Option::None) - no bindings
+            }
+            PatKind::TupleStruct(path, sub_pats) => {
+                // e.g. Option::Some(val) — look up variant field types and bind sub-patterns
+                if path.segments.len() == 2 {
+                    let enum_name = path.segments[0].ident.name;
+                    let variant_name = path.segments[1].ident.name;
+                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
+                        if let Some((_, variant_def)) = enum_def
+                            .variants
+                            .iter()
+                            .find(|(name, _)| *name == variant_name)
+                        {
+                            if let crate::context::EnumVariantDef::Tuple(field_tys) = variant_def {
+                                for (sub_pat, field_ty) in sub_pats.iter().zip(field_tys.iter()) {
+                                    self.bind_match_pattern(sub_pat, field_ty);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            PatKind::Struct(path, field_pats) => {
+                // e.g. Message::Move { x, y } — look up variant field types
+                if path.segments.len() == 2 {
+                    let enum_name = path.segments[0].ident.name;
+                    let variant_name = path.segments[1].ident.name;
+                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
+                        if let Some((_, variant_def)) = enum_def
+                            .variants
+                            .iter()
+                            .find(|(name, _)| *name == variant_name)
+                        {
+                            if let crate::context::EnumVariantDef::Struct(field_defs) = variant_def
+                            {
+                                for fp in field_pats {
+                                    if let Some((_, field_ty)) = field_defs
+                                        .iter()
+                                        .find(|(name, _)| *name == fp.ident.name)
+                                    {
+                                        self.bind_match_pattern(&fp.pat, field_ty);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Atomic (primary) expression parsing.
 
-use scrap_ast::expr::{Expr, ExprField, ExprKind, StructExpr};
+use scrap_ast::expr::{Arm, Expr, ExprField, ExprKind, StructExpr};
 use scrap_ast::operators::UnOp;
 use scrap_lexer::Token;
 use scrap_shared::path::Path;
@@ -57,12 +57,22 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         }
 
         // Check for struct init: `Ident { Ident :` or `Ident { }`
-        if self.check(Token::Ident)
-            && self.check_ahead(1, Token::LBrace)
-            && (self.check_ahead(2, Token::RBrace)
-                || (self.check_ahead(2, Token::Ident) && self.check_ahead(3, Token::Colon)))
-        {
-            return self.parse_struct_init_expr();
+        // Also multi-segment: `Ident :: Ident { Ident :` or `Ident :: Ident { }`
+        if self.check(Token::Ident) {
+            if self.check_ahead(1, Token::LBrace)
+                && (self.check_ahead(2, Token::RBrace)
+                    || (self.check_ahead(2, Token::Ident) && self.check_ahead(3, Token::Colon)))
+            {
+                return self.parse_struct_init_expr();
+            }
+            if self.check_ahead(1, Token::DoubleColon)
+                && self.check_ahead(2, Token::Ident)
+                && self.check_ahead(3, Token::LBrace)
+                && (self.check_ahead(4, Token::RBrace)
+                    || (self.check_ahead(4, Token::Ident) && self.check_ahead(5, Token::Colon)))
+            {
+                return self.parse_struct_init_expr();
+            }
         }
 
         // Check for function call or path
@@ -78,6 +88,11 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                 None
             };
             return Ok(ExprKind::Return(expr));
+        }
+
+        // Check for match expression
+        if self.check(Token::Match) {
+            return self.parse_match_expr();
         }
 
         // Check for if expression
@@ -162,6 +177,34 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         };
 
         Ok(ExprKind::Call(Box::new(path_expr), args))
+    }
+
+    fn parse_match_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        self.expect(Token::Match)?;
+        let scrutinee = Box::new(self.parse_expr()?);
+        self.expect(Token::LBrace)?;
+
+        let mut arms = Vec::new();
+        while !self.check(Token::RBrace) {
+            let arm_start = self.token.span.start(self.db);
+            let pat = self.parse_match_pat()?;
+            self.expect(Token::FatArrow)?;
+            let body = Box::new(self.parse_expr()?);
+            let arm_end = body.span.end(self.db);
+
+            arms.push(Arm {
+                pat,
+                body,
+                span: Span::new(self.db, arm_start, arm_end),
+            });
+
+            if !self.eat(Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(ExprKind::Match(scrutinee, arms))
     }
 
     fn parse_if_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {

@@ -32,6 +32,8 @@ pub enum KeyWord {
     Use,
     #[token("extern")]
     Extern,
+    #[token("match")]
+    Match,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -125,6 +127,8 @@ pub enum AssignOp {
 pub enum Operator {
     #[token("->")]
     Arrow,
+    #[token("=>")]
+    FatArrow,
     #[token("=")]
     Assign,
 }

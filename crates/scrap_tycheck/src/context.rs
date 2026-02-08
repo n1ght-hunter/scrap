@@ -35,13 +35,21 @@ pub struct StructDef<'db> {
     pub fields: Vec<(Symbol<'db>, InferTy<'db>)>,
 }
 
+/// An enum variant's data for type checking.
+#[derive(Debug, Clone)]
+pub enum EnumVariantDef<'db> {
+    Unit,
+    Tuple(Vec<InferTy<'db>>),
+    Struct(Vec<(Symbol<'db>, InferTy<'db>)>),
+}
+
 /// Enum definition for type checking.
 #[derive(Debug, Clone)]
 pub struct EnumDef<'db> {
     /// Generic type parameters
     pub type_params: Vec<Symbol<'db>>,
-    /// Variant names and their field types (if any)
-    pub variants: Vec<(Symbol<'db>, Vec<InferTy<'db>>)>,
+    /// Variant names and their data
+    pub variants: Vec<(Symbol<'db>, EnumVariantDef<'db>)>,
 }
 
 /// The type checking context.

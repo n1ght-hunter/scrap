@@ -41,8 +41,20 @@ impl<'db> CodegenContext<'db> {
                         s.fields(self.db).iter().map(|(_, ty)| ty.clone()).collect();
                     self.struct_layouts.insert(name, field_tys);
                 }
-                ir::Items::Enum(_) => {
-                    // Skip enum definitions for now
+                ir::Items::Enum(e) => {
+                    let name = e.name(self.db).text(self.db).to_string();
+                    let mut variant_layouts = Vec::new();
+                    for variant in e.variants(self.db) {
+                        let field_tys: Vec<ir::Ty<'db>> = match variant {
+                            ir::EnumVariant::Unit(_) => vec![],
+                            ir::EnumVariant::Tuple(_, tys) => tys.clone(),
+                            ir::EnumVariant::Struct(_, fields) => {
+                                fields.iter().map(|(_, ty)| ty.clone()).collect()
+                            }
+                        };
+                        variant_layouts.push(field_tys);
+                    }
+                    self.enum_layouts.insert(name, variant_layouts);
                 }
             }
         }
@@ -98,6 +110,12 @@ impl<'db> CodegenContext<'db> {
             // Declare all local variables
             let mut variables = std::collections::HashMap::new();
             let mut tuple_variables = std::collections::HashMap::new();
+            // Enum-specific: discriminant variable per enum local
+            let mut enum_discriminants: std::collections::HashMap<usize, Variable> =
+                std::collections::HashMap::new();
+            // Enum-specific: (local_id, variant_idx, field_idx) → Variable
+            let mut enum_variant_variables: std::collections::HashMap<(usize, usize, usize), Variable> =
+                std::collections::HashMap::new();
             for (i, decl) in local_decls.iter().enumerate() {
                 let ty = decl.ty(self.db);
                 if let ir::Ty::Tuple(ref fields) = ty {
@@ -108,9 +126,20 @@ impl<'db> CodegenContext<'db> {
                         tuple_variables.insert((i, field_idx), var);
                     }
                 } else if let ir::Ty::Adt(type_id) = &ty {
-                    // Struct locals are decomposed into per-field sub-variables (like tuples)
-                    let struct_name = type_id.name(self.db);
-                    if let Some(field_tys) = self.struct_layouts.get(struct_name.as_str()) {
+                    let adt_name = type_id.name(self.db);
+                    if let Some(variant_layouts) = self.enum_layouts.get(adt_name.as_str()) {
+                        // Enum local: discriminant (i64) + per-variant field variables
+                        let disc_var = builder.declare_var(types::I64);
+                        enum_discriminants.insert(i, disc_var);
+                        for (variant_idx, field_tys) in variant_layouts.iter().enumerate() {
+                            for (field_idx, field_ty) in field_tys.iter().enumerate() {
+                                let cl_ty = ir_ty_to_cl_required(self.db, field_ty)?;
+                                let var = builder.declare_var(cl_ty);
+                                enum_variant_variables.insert((i, variant_idx, field_idx), var);
+                            }
+                        }
+                    } else if let Some(field_tys) = self.struct_layouts.get(adt_name.as_str()) {
+                        // Struct locals are decomposed into per-field sub-variables (like tuples)
                         for (field_idx, field_ty) in field_tys.iter().enumerate() {
                             let cl_ty = ir_ty_to_cl_required(self.db, field_ty)?;
                             let var = builder.declare_var(cl_ty);
@@ -119,7 +148,7 @@ impl<'db> CodegenContext<'db> {
                     } else {
                         emit_codegen_err(
                             self.db,
-                            format!("struct '{}' layout not found", struct_name),
+                            format!("ADT '{}' layout not found", adt_name),
                         );
                         return None;
                     }
@@ -162,6 +191,9 @@ impl<'db> CodegenContext<'db> {
                 next_data_id: &data_counter,
                 gc_shapes: &gc_shapes_cell,
                 struct_layouts: &self.struct_layouts,
+                enum_layouts: &self.enum_layouts,
+                enum_discriminants: &enum_discriminants,
+                enum_variant_variables: &enum_variant_variables,
             };
 
             // Lower each basic block

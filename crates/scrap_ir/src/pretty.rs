@@ -234,13 +234,16 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "switchInt(").unwrap();
                 self.print_operand(discr);
                 write!(self.output, ") -> [").unwrap();
-                for (i, target) in targets.iter().enumerate() {
+                for (i, (val, bb)) in targets.values.iter().enumerate() {
                     if i > 0 {
                         write!(self.output, ", ").unwrap();
                     }
-                    write!(self.output, "bb{}", target.0).unwrap();
+                    write!(self.output, "{}: bb{}", val, bb.0).unwrap();
                 }
-                writeln!(self.output, "];").unwrap();
+                if !targets.values.is_empty() {
+                    write!(self.output, ", ").unwrap();
+                }
+                writeln!(self.output, "otherwise: bb{}];", targets.otherwise.0).unwrap();
             }
             Terminator::Return => {
                 writeln!(self.output, "return;").unwrap();
@@ -373,6 +376,11 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 self.print_type(ty);
                 write!(self.output, ")").unwrap();
             }
+            Rvalue::Discriminant(place) => {
+                write!(self.output, "discriminant(").unwrap();
+                self.print_place(place);
+                write!(self.output, ")").unwrap();
+            }
         }
     }
 
@@ -406,6 +414,15 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "(*").unwrap();
                 self.print_place(inner);
                 write!(self.output, ")").unwrap();
+            }
+            Place::Downcast(base, _variant_idx, variant_name) => {
+                write!(self.output, "(").unwrap();
+                self.print_place(base);
+                if let Some(name) = variant_name {
+                    write!(self.output, " as {})", name.text(self.db)).unwrap();
+                } else {
+                    write!(self.output, " as variant_{})", _variant_idx).unwrap();
+                }
             }
             Place::__Phantom(_) => unreachable!(),
         }

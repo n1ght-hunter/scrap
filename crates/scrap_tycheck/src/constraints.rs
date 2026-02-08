@@ -45,4 +45,6 @@ pub enum ConstraintKind {
     ArrayElement,
     /// Generic instantiation
     GenericInstantiation,
+    /// Match arm bodies must have the same type
+    MatchArm,
 }

@@ -22,11 +22,13 @@ impl<'db> ExprLowerer<'db> {
         let cont_bb = self.cfg_builder.start_block();
 
         // Finish current block with SwitchInt
-        // Note: SwitchInt takes a vector of targets - we use [then_bb, else_bb]
-        // where the first is for true and second for false
+        // value 0 (false) → else_bb, otherwise (true) → then_bb
         let terminator = ir::Terminator::SwitchInt {
             discr: cond_operand,
-            targets: vec![then_bb, else_bb],
+            targets: ir::SwitchTargets {
+                values: vec![(0, else_bb)],
+                otherwise: then_bb,
+            },
         };
         self.cfg_builder.finish_block(terminator);
 

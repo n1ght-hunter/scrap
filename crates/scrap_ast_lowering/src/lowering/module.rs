@@ -43,11 +43,49 @@ pub fn lower_module<'db>(
         }
     }
 
+    // Collect enum variant maps for expression lowering
+    let mut enum_info_maps: HashMap<String, crate::lowerer::EnumInfo<'db>> = HashMap::new();
+    for item in ast_items {
+        if let ItemKind::Enum(enum_def) = &item.kind {
+            let name = enum_def.ident.name.text(db).to_string();
+            let variants: Vec<_> = enum_def
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(idx, variant)| {
+                    let info = match &variant.data {
+                        VariantData::Unit(_) => crate::lowerer::VariantInfo::Unit,
+                        VariantData::Tuple(fields, _) => {
+                            let tys = fields
+                                .iter()
+                                .map(|f| lower_type(db, &f.ty).unwrap_or(ir::Ty::Void))
+                                .collect();
+                            crate::lowerer::VariantInfo::Tuple(tys)
+                        }
+                        VariantData::Struct { fields } => {
+                            let defs = fields
+                                .iter()
+                                .filter_map(|f| {
+                                    let n = f.ident.as_ref()?.name;
+                                    let t = lower_type(db, &f.ty).unwrap_or(ir::Ty::Void);
+                                    Some((n, t))
+                                })
+                                .collect();
+                            crate::lowerer::VariantInfo::Struct(defs)
+                        }
+                    };
+                    (variant.ident.name, idx, info)
+                })
+                .collect();
+            enum_info_maps.insert(name, crate::lowerer::EnumInfo { variants });
+        }
+    }
+
     for item in ast_items {
         match &item.kind {
             ItemKind::Fn(fn_def) => {
                 let mir_function =
-                    lower_function(db, *fn_def, source, type_table, &struct_field_maps)?;
+                    lower_function(db, *fn_def, source, type_table, &struct_field_maps, &enum_info_maps)?;
                 items.push(ir::Items::Function(mir_function));
             }
             ItemKind::ForeignMod(foreign_mod) => {
@@ -72,6 +110,36 @@ pub fn lower_module<'db>(
                     items.push(ir::Items::Struct(ir_struct));
                 }
             }
+            ItemKind::Enum(enum_def) => {
+                let name = enum_def.ident.name;
+                let ir_variants: Vec<ir::EnumVariant<'db>> = enum_def
+                    .variants
+                    .iter()
+                    .map(|variant| match &variant.data {
+                        VariantData::Unit(_) => ir::EnumVariant::Unit(variant.ident.name),
+                        VariantData::Tuple(fields, _) => {
+                            let field_tys: Vec<ir::Ty<'db>> = fields
+                                .iter()
+                                .map(|f| lower_type(db, &f.ty).unwrap_or(ir::Ty::Void))
+                                .collect();
+                            ir::EnumVariant::Tuple(variant.ident.name, field_tys)
+                        }
+                        VariantData::Struct { fields } => {
+                            let field_defs: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+                                .iter()
+                                .filter_map(|f| {
+                                    let n = f.ident.as_ref()?.name;
+                                    let t = lower_type(db, &f.ty).unwrap_or(ir::Ty::Void);
+                                    Some((n, t))
+                                })
+                                .collect();
+                            ir::EnumVariant::Struct(variant.ident.name, field_defs)
+                        }
+                    })
+                    .collect();
+                let ir_enum = ir::Enum::new(db, name, ir_variants);
+                items.push(ir::Items::Enum(ir_enum));
+            }
             _ => {
                 continue;
             }
@@ -88,10 +156,11 @@ pub fn lower_function<'db>(
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
     struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<ir::Function<'db>> {
     let signature = lower_signature(db, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
-    let body = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps)?;
+    let body = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps, enum_info_maps)?;
 
     Ok(ir::Function::new(db, signature, body))
 }
@@ -153,9 +222,11 @@ pub fn lower_body<'db>(
     type_table: scrap_tycheck::TypeTable<'db>,
     return_ty: ir::Ty<'db>,
     struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<ir::Body<'db>> {
     let mut lowerer = ExprLowerer::new(db, source, type_table);
     lowerer.struct_fields = struct_field_maps.clone();
+    lowerer.enum_info = enum_info_maps.clone();
 
     // _0 is always the return place
     let is_void_return = matches!(return_ty, ir::Ty::Void);

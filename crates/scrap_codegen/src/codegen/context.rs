@@ -33,6 +33,8 @@ pub struct CodegenContext<'db> {
     pub(crate) gc_shapes: HashMap<String, DataId>,
     /// Struct layout: struct name → list of field IR types.
     pub(crate) struct_layouts: HashMap<String, Vec<ir::Ty<'db>>>,
+    /// Enum layout: enum name → per-variant field types (Vec of variants, each a Vec of field types).
+    pub(crate) enum_layouts: HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
 }
 
 impl<'db> CodegenContext<'db> {
@@ -71,6 +73,7 @@ impl<'db> CodegenContext<'db> {
             unwind_entries: Vec::new(),
             gc_shapes: HashMap::new(),
             struct_layouts: HashMap::new(),
+            enum_layouts: HashMap::new(),
         })
     }
 

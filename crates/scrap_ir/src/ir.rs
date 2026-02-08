@@ -200,7 +200,7 @@ pub enum Terminator<'db> {
     },
     SwitchInt {
         discr: Operand<'db>,
-        targets: Vec<BasicBlockId>,
+        targets: SwitchTargets,
     },
     Return,
     Call {
@@ -228,6 +228,17 @@ impl<'db> Default for Terminator<'db> {
     fn default() -> Self {
         Self::Unreachable
     }
+}
+
+/// Targets for a `SwitchInt` terminator: labeled value→block pairs + otherwise.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct SwitchTargets {
+    /// (discriminant_value, target_block) pairs.
+    pub values: Vec<(u128, BasicBlockId)>,
+    /// Fallback block when no value matches.
+    pub otherwise: BasicBlockId,
 }
 
 #[salsa::tracked(debug, persist)]
@@ -261,6 +272,8 @@ pub enum Rvalue<'db> {
     /// Heap-allocate a value and return a GC-managed reference.
     /// `Box(inner_ty, value)` — allocates space for `inner_ty`, stores `value`, returns pointer.
     Box(Ty<'db>, Operand<'db>),
+    /// Read the discriminant (tag) of an enum value.
+    Discriminant(Place<'db>),
 }
 
 /// An `Operand` is an input to an `Rvalue`.
@@ -286,6 +299,9 @@ pub enum Place<'db> {
     Field(Box<Place<'db>>, usize, Option<Symbol<'db>>),
     /// Dereference a GC reference: `*place`.
     Deref(Box<Place<'db>>),
+    /// Project an enum place to a specific variant.
+    /// `(_1 as Some)` = `Place::Downcast(Local(1), 1, Some("Some"))`
+    Downcast(Box<Place<'db>>, usize, Option<Symbol<'db>>),
     #[doc(hidden)]
     __Phantom(PhantomData<&'db ()>),
 }

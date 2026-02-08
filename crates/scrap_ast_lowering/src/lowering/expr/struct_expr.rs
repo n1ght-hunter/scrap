@@ -25,6 +25,34 @@ impl<'db> ExprLowerer<'db> {
         struct_expr: &StructExpr<'db>,
         dest: ir::Place<'db>,
     ) -> MResult<()> {
+        // Check for enum struct variant: `Message::Move { x: 1, y: 2 }`
+        if struct_expr.path.segments.len() == 2 {
+            let enum_name = struct_expr.path.segments[0].ident.name.text(self.db).to_string();
+            let variant_name = struct_expr.path.segments[1].ident.name;
+
+            let variant_idx_opt = self.enum_info.get(&enum_name).and_then(|info| {
+                info.variants
+                    .iter()
+                    .find(|(name, _, _)| *name == variant_name)
+                    .map(|(_, idx, _)| *idx)
+            });
+
+            if let Some(variant_idx) = variant_idx_opt {
+                let type_id = ir::TypeId::new(self.db, enum_name);
+                let mut operands = Vec::new();
+                for field_init in struct_expr.fields.iter() {
+                    let op = self.lower_expr(&field_init.expr)?;
+                    operands.push(op);
+                }
+                let rvalue = ir::Rvalue::Aggregate(
+                    ir::AggregateKind::EnumVariant(type_id, variant_idx),
+                    operands,
+                );
+                self.emit_assign(dest, rvalue);
+                return Ok(());
+            }
+        }
+
         let struct_name = struct_expr
             .path
             .single_segment()

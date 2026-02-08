@@ -9,6 +9,7 @@ mod block;
 mod call;
 mod control;
 mod lit;
+mod match_expr;
 mod path;
 mod struct_expr;
 mod unary;
@@ -41,6 +42,7 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Unary(UnOp::Not, inner) => self.lower_unary_not(inner, expr.id),
             ExprKind::Struct(struct_expr) => self.lower_struct_init(struct_expr, expr.id),
             ExprKind::Field(base, field_ident) => self.lower_field_access(base, field_ident, expr.id),
+            ExprKind::Match(scrutinee, arms) => self.lower_match(scrutinee, arms),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
         }
     }
