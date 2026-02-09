@@ -6,7 +6,6 @@ use scrap_ast::{
     enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
-    impl_block::ImplBlock,
     item::{Item, ItemKind},
     local::LocalKind,
     pat::PatKind,

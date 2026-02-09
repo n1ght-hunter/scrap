@@ -234,36 +234,37 @@ impl<'db> ExprLowerer<'db> {
         }
     }
 
-    /// Convert AST binary operator to IR intrinsic operator (unchecked).
-    /// Used by tests and contexts where we always want the unchecked variant.
-    pub(crate) fn convert_bin_op(&self, op: BinOpKind) -> MResult<ir::IntrinsicOp> {
-        match op {
-            BinOpKind::Add => Ok(ir::IntrinsicOp::Add),
-            BinOpKind::Sub => Ok(ir::IntrinsicOp::Sub),
-            BinOpKind::Mul => Ok(ir::IntrinsicOp::Mul),
-            BinOpKind::Div => Ok(ir::IntrinsicOp::Div),
-            BinOpKind::Rem => Ok(ir::IntrinsicOp::Rem),
-            BinOpKind::And => Ok(ir::IntrinsicOp::And),
-            BinOpKind::Or => Ok(ir::IntrinsicOp::Or),
-            BinOpKind::BitXor => Ok(ir::IntrinsicOp::BitXor),
-            BinOpKind::BitAnd => Ok(ir::IntrinsicOp::BitAnd),
-            BinOpKind::BitOr => Ok(ir::IntrinsicOp::BitOr),
-            BinOpKind::Shl => Ok(ir::IntrinsicOp::Shl),
-            BinOpKind::Shr => Ok(ir::IntrinsicOp::Shr),
-            BinOpKind::Eq => Ok(ir::IntrinsicOp::Eq),
-            BinOpKind::Lt => Ok(ir::IntrinsicOp::Lt),
-            BinOpKind::Le => Ok(ir::IntrinsicOp::Le),
-            BinOpKind::Ne => Ok(ir::IntrinsicOp::Ne),
-            BinOpKind::Ge => Ok(ir::IntrinsicOp::Ge),
-            BinOpKind::Gt => Ok(ir::IntrinsicOp::Gt),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_helpers::*;
+
+    /// Convert AST binary operator to IR intrinsic operator (unchecked).
+    /// Only used in tests for validating operator mapping.
+    fn convert_bin_op(op: BinOpKind) -> ir::IntrinsicOp {
+        match op {
+            BinOpKind::Add => ir::IntrinsicOp::Add,
+            BinOpKind::Sub => ir::IntrinsicOp::Sub,
+            BinOpKind::Mul => ir::IntrinsicOp::Mul,
+            BinOpKind::Div => ir::IntrinsicOp::Div,
+            BinOpKind::Rem => ir::IntrinsicOp::Rem,
+            BinOpKind::And => ir::IntrinsicOp::And,
+            BinOpKind::Or => ir::IntrinsicOp::Or,
+            BinOpKind::BitXor => ir::IntrinsicOp::BitXor,
+            BinOpKind::BitAnd => ir::IntrinsicOp::BitAnd,
+            BinOpKind::BitOr => ir::IntrinsicOp::BitOr,
+            BinOpKind::Shl => ir::IntrinsicOp::Shl,
+            BinOpKind::Shr => ir::IntrinsicOp::Shr,
+            BinOpKind::Eq => ir::IntrinsicOp::Eq,
+            BinOpKind::Lt => ir::IntrinsicOp::Lt,
+            BinOpKind::Le => ir::IntrinsicOp::Le,
+            BinOpKind::Ne => ir::IntrinsicOp::Ne,
+            BinOpKind::Ge => ir::IntrinsicOp::Ge,
+            BinOpKind::Gt => ir::IntrinsicOp::Gt,
+        }
+    }
 
     #[scrap_macros::salsa_test]
     fn test_lower_binary_add(db: &dyn scrap_shared::Db) {
@@ -359,20 +360,18 @@ mod tests {
         assert_eq!(lowerer.local_decls.len(), 0);
     }
 
-    #[scrap_macros::salsa_test]
-    fn test_operator_conversion(db: &dyn scrap_shared::Db) {
-        let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
-
+    #[test]
+    fn test_operator_conversion() {
         // Test all arithmetic operators
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Add).unwrap(), ir::IntrinsicOp::Add);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Sub).unwrap(), ir::IntrinsicOp::Sub);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Mul).unwrap(), ir::IntrinsicOp::Mul);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Div).unwrap(), ir::IntrinsicOp::Div);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Rem).unwrap(), ir::IntrinsicOp::Rem);
+        assert_eq!(convert_bin_op(BinOpKind::Add), ir::IntrinsicOp::Add);
+        assert_eq!(convert_bin_op(BinOpKind::Sub), ir::IntrinsicOp::Sub);
+        assert_eq!(convert_bin_op(BinOpKind::Mul), ir::IntrinsicOp::Mul);
+        assert_eq!(convert_bin_op(BinOpKind::Div), ir::IntrinsicOp::Div);
+        assert_eq!(convert_bin_op(BinOpKind::Rem), ir::IntrinsicOp::Rem);
 
         // Test comparison operators
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Eq).unwrap(), ir::IntrinsicOp::Eq);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Lt).unwrap(), ir::IntrinsicOp::Lt);
-        assert_eq!(lowerer.convert_bin_op(BinOpKind::Gt).unwrap(), ir::IntrinsicOp::Gt);
+        assert_eq!(convert_bin_op(BinOpKind::Eq), ir::IntrinsicOp::Eq);
+        assert_eq!(convert_bin_op(BinOpKind::Lt), ir::IntrinsicOp::Lt);
+        assert_eq!(convert_bin_op(BinOpKind::Gt), ir::IntrinsicOp::Gt);
     }
 }

@@ -18,7 +18,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ImplBlock<'db> {
         write!(f, "impl ")?;
         self.type_name.pretty_print_indent(f, 0)?;
         writeln!(f, " {{")?;
-        salsa::with_attached_database(|db| {
+        salsa::with_attached_database(|_db| {
             for method in &self.methods {
                 Self::write_indent(f, indent + 1)?;
                 method.pretty_print_indent(f, indent + 1)?;

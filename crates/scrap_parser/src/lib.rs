@@ -18,7 +18,6 @@ use scrap_shared::path::Path;
 
 mod errors;
 pub mod parser;
-mod utils;
 
 pub type PResult<'a, T> = std::result::Result<T, ErrorGuaranteed>;
 pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;

@@ -98,25 +98,7 @@ pub fn create_string_lit<'db>(db: &'db dyn scrap_shared::Db, _value: &str) -> Ex
     }
 }
 
-/// Create a float literal expression.
-/// Uses `test_literal_span` so that `build_constant` can parse the source text.
-/// The test source (TEST_SOURCE = "0") must be passed to `ExprLowerer::new`.
-pub fn create_float_lit<'db>(db: &'db dyn scrap_shared::Db, _value: f64) -> Expr<'db> {
-    let span = test_literal_span(db);
-    let node_id = test_node_id();
 
-    let lit = Lit {
-        id: node_id,
-        kind: LitKind::Float,
-        span,
-    };
-
-    Expr {
-        id: node_id,
-        kind: ExprKind::Lit(lit),
-        span,
-    }
-}
 
 /// Create an identifier expression (variable reference)
 pub fn create_ident_expr<'db>(db: &'db dyn scrap_shared::Db, name: &str) -> Expr<'db> {

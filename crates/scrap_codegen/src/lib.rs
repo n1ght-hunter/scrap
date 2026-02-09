@@ -5,7 +5,6 @@
 
 pub mod codegen;
 pub mod error;
-pub mod jit;
 pub mod object;
 
 pub use error::{CodegenError, CodegenResult};
@@ -32,15 +31,4 @@ pub fn compile_to_object<'db>(
 
     ctx.generate_start()?;
     ctx.finalize()
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::jit::JitCompiler;
-
-    #[test]
-    fn test_jit_creation() {
-        let jit = JitCompiler::new();
-        assert!(jit.is_ok());
-    }
 }
