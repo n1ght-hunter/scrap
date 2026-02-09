@@ -110,7 +110,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 }
 
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
-                self.assign_to_place(&place, value, builder)?;
+                self.assign_to_place(&place, value, builder, module)?;
             }
         }
         Some(())
@@ -121,6 +121,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         place: &ir::Place<'db>,
         value: Value,
         builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
     ) -> Option<()> {
         match place {
             ir::Place::Local(local_id) => {
@@ -191,6 +192,17 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Place::Deref(inner) => {
                 // Write through a GC reference: store value at the address held by inner
                 let ptr = self.lower_place(inner, builder)?;
+
+                // Emit GC write barrier if the stored value is a *T (GC pointer).
+                // Determined by checking the inner place's type: if inner has type
+                // Ptr(Ptr(_)) or Ref(Ptr(_), _), the stored value is *T.
+                if self.is_deref_storing_gc_pointer(inner) {
+                    if let Some(&barrier_id) = self.functions.get("__scrap_gc_write_barrier") {
+                        let barrier_ref = module.declare_func_in_func(barrier_id, builder.func);
+                        builder.ins().call(barrier_ref, &[value]);
+                    }
+                }
+
                 builder.ins().store(MemFlags::new(), value, ptr, 0);
                 Some(())
             }
@@ -202,6 +214,56 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
+    }
+
+    /// Resolve the IR type of a place expression.
+    fn resolve_place_ty(&self, place: &ir::Place<'db>) -> Option<ir::Ty<'db>> {
+        match place {
+            ir::Place::Local(id) => {
+                self.local_decls.get(id.0).map(|d| d.ty(self.db).clone())
+            }
+            ir::Place::Deref(inner) => {
+                let inner_ty = self.resolve_place_ty(inner)?;
+                match inner_ty {
+                    ir::Ty::Ptr(pointee) => Some(*pointee),
+                    ir::Ty::Ref(pointee, _) => Some(*pointee),
+                    _ => None,
+                }
+            }
+            ir::Place::Field(base, idx, _) => {
+                let base_ty = self.resolve_place_ty(base)?;
+                match base_ty {
+                    ir::Ty::Tuple(fields) => fields.get(*idx).cloned(),
+                    ir::Ty::Adt(type_id) => {
+                        let name = type_id.name(self.db);
+                        if let Some(field_tys) = self.struct_layouts.get(name.as_str()) {
+                            field_tys.get(*idx).cloned()
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            ir::Place::Downcast(inner, _, _) => self.resolve_place_ty(inner),
+            ir::Place::__Phantom(_) => None,
+        }
+    }
+
+    /// Check if a deref-store writes a GC pointer (*T) value.
+    /// `inner` is the place being dereferenced (the pointer being written through).
+    /// If inner has type Ptr(Ptr(_)) or Ref(Ptr(_), _), the stored value is *T.
+    fn is_deref_storing_gc_pointer(&self, inner: &ir::Place<'db>) -> bool {
+        let Some(inner_ty) = self.resolve_place_ty(inner) else {
+            return false;
+        };
+        // inner_ty is the pointer/ref type. The stored value type is what it points to.
+        let stored_ty = match inner_ty {
+            ir::Ty::Ptr(pointee) => *pointee,
+            ir::Ty::Ref(pointee, _) => *pointee,
+            _ => return false,
+        };
+        matches!(stored_ty, ir::Ty::Ptr(_))
     }
 
     fn lower_rvalue(
@@ -1009,7 +1071,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let results = builder.inst_results(call);
                 if !results.is_empty() {
                     let result_val = results[0];
-                    self.assign_to_place(destination, result_val, builder)?;
+                    self.assign_to_place(destination, result_val, builder, module)?;
                 }
 
                 if let Some(target_bb) = target {

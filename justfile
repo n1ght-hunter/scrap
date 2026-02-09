@@ -30,3 +30,6 @@ basic *args:
 test-types *args:
     rm ./target/scrap/types_cache.json || true
     just run E:/programming/rust/scrap/tests/types.sc --crate-name test --crate-type bin --pretty-out sir --cache ./target/scrap/types_cache {{args}}
+
+compile-runtime:
+    cargo build -p scrap_rt --release

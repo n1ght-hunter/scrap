@@ -265,6 +265,19 @@ impl<'db> CodegenContext<'db> {
                 .insert("__scrap_gc_pop_frame".to_string(), fid);
         }
 
+        // __scrap_gc_write_barrier(new_val: i64)
+        if !self.functions.contains_key("__scrap_gc_write_barrier") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty));
+            let fid = self
+                .module
+                .declare_function("__scrap_gc_write_barrier", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_gc_write_barrier".to_string(), fid);
+        }
+
         Some(())
     }
 
