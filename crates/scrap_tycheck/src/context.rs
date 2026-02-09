@@ -79,6 +79,9 @@ pub struct TypeContext<'db> {
     /// Scoped alongside the type scopes
     mutability_scopes: Vec<HashMap<Symbol<'db>, Mutability>>,
 
+    /// Active borrows: variable name -> list of (Mutability, span)
+    borrow_scopes: Vec<HashMap<Symbol<'db>, Vec<(Mutability, Span<'db>)>>>,
+
     /// Function signatures in scope
     functions: HashMap<Symbol<'db>, FnSig<'db>>,
 
@@ -119,6 +122,7 @@ impl<'db> TypeContext<'db> {
             next_ty_vid: 0,
             scopes: vec![HashMap::new()], // Global scope
             mutability_scopes: vec![HashMap::new()],
+            borrow_scopes: vec![HashMap::new()],
             functions: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
@@ -200,12 +204,14 @@ impl<'db> TypeContext<'db> {
     pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
         self.mutability_scopes.push(HashMap::new());
+        self.borrow_scopes.push(HashMap::new());
     }
 
     /// Pop the current scope from the scope stack.
     pub fn pop_scope(&mut self) {
         self.scopes.pop();
         self.mutability_scopes.pop();
+        self.borrow_scopes.pop();
     }
 
     /// Define a variable in the current scope (immutable by default).
@@ -246,6 +252,50 @@ impl<'db> TypeContext<'db> {
             }
         }
         None
+    }
+
+    // === Borrow Tracking ===
+
+    /// Record a borrow of a variable and check borrow rules.
+    pub fn record_borrow(&mut self, name: Symbol<'db>, mutability: Mutability, span: Span<'db>) {
+        // Collect existing borrows across all scopes
+        let existing: Vec<(Mutability, Span<'db>)> = self
+            .borrow_scopes
+            .iter()
+            .filter_map(|scope| scope.get(&name))
+            .flat_map(|borrows| borrows.iter().copied())
+            .collect();
+
+        if mutability.is_mut() {
+            // &mut: no other borrows allowed
+            if !existing.is_empty() {
+                self.emit_borrow_conflict(
+                    &name.text(self.db),
+                    span,
+                );
+            }
+        } else {
+            // &: no &mut borrows allowed
+            if existing.iter().any(|(m, _)| m.is_mut()) {
+                self.emit_borrow_conflict(
+                    &name.text(self.db),
+                    span,
+                );
+            }
+        }
+
+        // Record the borrow in the current scope
+        if let Some(scope) = self.borrow_scopes.last_mut() {
+            scope
+                .entry(name)
+                .or_insert_with(Vec::new)
+                .push((mutability, span));
+        }
+    }
+
+    /// Look up the recorded InferTy for a given expression NodeId.
+    pub fn lookup_expr_type_infer(&self, node_id: NodeId) -> InferTy<'db> {
+        self.expr_types.get(&node_id).cloned().unwrap_or(InferTy::Error)
     }
 
     // === Type Parameters ===
@@ -475,6 +525,77 @@ impl<'db> TypeContext<'db> {
                 .element(Level::NOTE.message(
                     format!("consider making this binding mutable: `let mut {}`", name),
                 )),
+        )
+    }
+
+    /// Emit an error for borrowing an immutable variable as mutable.
+    pub fn emit_cannot_borrow_as_mutable(
+        &self,
+        name: &str,
+        span: Span<'db>,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(format!(
+                    "cannot borrow `{}` as mutable, as it is not declared as mutable",
+                    name
+                ))
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(self.db))
+                                .label("cannot borrow as mutable"),
+                        ),
+                )
+                .element(Level::NOTE.message(
+                    format!("consider making this binding mutable: `let mut {}`", name),
+                )),
+        )
+    }
+
+    /// Emit a borrow conflict error.
+    pub fn emit_borrow_conflict(
+        &self,
+        name: &str,
+        span: Span<'db>,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(format!(
+                    "cannot borrow `{}` because it is already borrowed",
+                    name
+                ))
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(self.db))
+                                .label("conflicting borrow"),
+                        ),
+                ),
+        )
+    }
+
+    /// Emit an error for writing through an immutable reference.
+    pub fn emit_immutable_ref_deref_error(
+        &self,
+        span: Span<'db>,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title("cannot assign to data behind a `&` reference")
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(self.db))
+                                .label("cannot assign through `&` reference"),
+                        ),
+                ),
         )
     }
 

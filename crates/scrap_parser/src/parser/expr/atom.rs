@@ -25,6 +25,24 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
     /// Parse the kind of an atomic expression.
     pub fn parse_atom_kind(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        // Check for address-of: `&expr` or `&mut expr`
+        if self.check(Token::BitAnd) {
+            self.bump();
+            let mutability = if self.check(Token::Ident) {
+                let text = &self.source[self.token.span.to_range(self.db)];
+                if text == "mut" {
+                    self.bump();
+                    scrap_shared::Mutability::Mut
+                } else {
+                    scrap_shared::Mutability::Not
+                }
+            } else {
+                scrap_shared::Mutability::Not
+            };
+            let inner = self.parse_atom()?;
+            return Ok(ExprKind::AddrOf(mutability, Box::new(inner)));
+        }
+
         // Check for unary prefix operators: `*expr`, `-expr`, `!expr`
         if self.check(Token::Mul) || self.check(Token::Sub) || self.check(Token::Bang) {
             let op = match self.token.node {

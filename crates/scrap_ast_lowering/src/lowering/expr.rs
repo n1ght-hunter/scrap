@@ -47,6 +47,9 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::MethodCall(receiver, method, args) => {
                 self.lower_method_call(receiver, method, args, expr.id)
             }
+            ExprKind::AddrOf(mutability, inner) => {
+                self.lower_addr_of(*mutability, inner, expr.id)
+            }
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
         }
     }

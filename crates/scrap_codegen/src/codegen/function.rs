@@ -1,14 +1,32 @@
 //! Function declaration and definition (two-pass compilation).
 
+use cranelift::codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use cranelift_module::{Linkage, Module};
 use scrap_ir as ir;
+use std::collections::HashSet;
 
 use super::context::CodegenContext;
 use super::cranelift_ir::FuncTranslator;
 use super::emit_codegen_err;
 use super::ty::{build_cl_signature, build_cl_signature_with_layouts, ir_ty_to_cl, ir_ty_to_cl_required};
 use super::ResultExt;
+
+/// Scan a function body for locals that are targets of `Rvalue::Ref`.
+/// These locals need to be stack-spilled so we can take their address.
+fn collect_referenced_locals<'db>(db: &'db dyn scrap_shared::Db, body: ir::Body<'db>) -> HashSet<usize> {
+    let mut referenced = HashSet::new();
+    for block in body.blocks(db) {
+        for stmt in block.statements(db) {
+            if let ir::StatementKind::Assign(_, ir::Rvalue::Ref(_, ref place)) = stmt.kind(db) {
+                if let ir::Place::Local(id) = place {
+                    referenced.insert(id.0);
+                }
+            }
+        }
+    }
+    referenced
+}
 
 impl<'db> CodegenContext<'db> {
     /// Pass 1: Declare all functions and extern functions in the module.
@@ -121,9 +139,14 @@ impl<'db> CodegenContext<'db> {
                 block_map.insert(i, block);
             }
 
+            // Scan for locals that need stack spilling (targets of Rvalue::Ref)
+            let referenced_locals = collect_referenced_locals(self.db, body);
+
             // Declare all local variables
             let mut variables = std::collections::HashMap::new();
             let mut tuple_variables = std::collections::HashMap::new();
+            let mut stack_slots: std::collections::HashMap<usize, (StackSlot, types::Type)> =
+                std::collections::HashMap::new();
             // Enum-specific: discriminant variable per enum local
             let mut enum_discriminants: std::collections::HashMap<usize, Variable> =
                 std::collections::HashMap::new();
@@ -166,6 +189,15 @@ impl<'db> CodegenContext<'db> {
                         );
                         return None;
                     }
+                } else if referenced_locals.contains(&i) {
+                    // Stack-spill: this local is referenced via & or &mut
+                    let cl_ty = ir_ty_to_cl_required(self.db, &ty)?;
+                    let slot = builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        cl_ty.bytes(),
+                        0,
+                    ));
+                    stack_slots.insert(i, (slot, cl_ty));
                 } else if let Some(cl_ty) = ir_ty_to_cl(self.db, &ty)? {
                     // Regular scalar local
                     let var = builder.declare_var(cl_ty);
@@ -197,6 +229,10 @@ impl<'db> CodegenContext<'db> {
                             param_idx += 1;
                         }
                     }
+                } else if let Some((slot, _)) = stack_slots.get(&local_idx) {
+                    // Stack-spilled param: store incoming value to stack slot
+                    builder.ins().stack_store(params[param_idx], *slot, 0);
+                    param_idx += 1;
                 } else if let Some(var) = variables.get(&local_idx) {
                     builder.def_var(*var, params[param_idx]);
                     param_idx += 1;
@@ -226,6 +262,7 @@ impl<'db> CodegenContext<'db> {
                 enum_layouts: &self.enum_layouts,
                 enum_discriminants: &enum_discriminants,
                 enum_variant_variables: &enum_variant_variables,
+                stack_slots: &stack_slots,
             };
 
             // Lower each basic block

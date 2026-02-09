@@ -274,6 +274,8 @@ pub enum Rvalue<'db> {
     Box(Ty<'db>, Operand<'db>),
     /// Read the discriminant (tag) of an enum value.
     Discriminant(Place<'db>),
+    /// Take a reference to a place: `&place` or `&mut place`.
+    Ref(Mutability, Place<'db>),
 }
 
 /// An `Operand` is an input to an `Rvalue`.

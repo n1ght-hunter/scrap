@@ -12,7 +12,7 @@ use scrap_ast::{
     stmt::{Stmt, StmtKind},
     typedef::{Ty, TyKind},
 };
-use scrap_shared::types::{FloatTy, IntTy, UintTy};
+use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 use scrap_shared::{ident::Symbol, path::Path};
 use scrap_span::Span;
 
@@ -60,6 +60,10 @@ impl<'db> TypeContext<'db> {
 
             ExprKind::MethodCall(receiver, method, args) => {
                 self.infer_method_call(receiver, method, args, expr.span)
+            }
+
+            ExprKind::AddrOf(mutability, inner) => {
+                self.infer_addr_of(*mutability, inner, expr.span)
             }
 
             ExprKind::Err => InferTy::Error,
@@ -208,6 +212,37 @@ impl<'db> TypeContext<'db> {
             UnOp::Neg => inner_ty, // Negation preserves type
             UnOp::Not => inner_ty, // Logical NOT preserves type
         }
+    }
+
+    /// Infer the type of an address-of expression (`&expr` or `&mut expr`).
+    fn infer_addr_of(
+        &mut self,
+        mutability: Mutability,
+        inner: &Expr<'db>,
+        span: Span<'db>,
+    ) -> InferTy<'db> {
+        let inner_ty = self.infer_expr(inner);
+
+        // Check borrow rules on the inner expression
+        if let ExprKind::Path(path) = &inner.kind {
+            if let Some(segment) = path.single_segment() {
+                let name = segment.ident.name;
+                // For &mut, require the variable to be declared mut
+                if mutability.is_mut() {
+                    if let Some(var_mut) = self.lookup_var_mutability(name) {
+                        if var_mut.is_not() {
+                            self.emit_cannot_borrow_as_mutable(
+                                name.text(self.db()),
+                                inner.span,
+                            );
+                        }
+                    }
+                }
+                self.record_borrow(name, mutability, span);
+            }
+        }
+
+        InferTy::Ref(Box::new(inner_ty), mutability)
     }
 
     /// Infer the type of a function call.
@@ -417,9 +452,8 @@ impl<'db> TypeContext<'db> {
         rhs: &Expr<'db>,
         span: Span<'db>,
     ) -> InferTy<'db> {
-        self.check_assign_mutability(lhs);
-
         let lhs_ty = self.infer_expr(lhs);
+        self.check_assign_mutability(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
         self.constrain_eq_with_kind(lhs_ty, rhs_ty, span, ConstraintKind::Assignment);
@@ -435,9 +469,8 @@ impl<'db> TypeContext<'db> {
         rhs: &Expr<'db>,
         span: Span<'db>,
     ) -> InferTy<'db> {
-        self.check_assign_mutability(lhs);
-
         let lhs_ty = self.infer_expr(lhs);
+        self.check_assign_mutability(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
         // Compound assignment requires operands to have matching types
@@ -467,8 +500,20 @@ impl<'db> TypeContext<'db> {
                 self.check_assign_mutability(base);
             }
             ExprKind::Unary(UnOp::Deref, inner) => {
-                // *x = 5 — check the inner expression's mutability
-                self.check_assign_mutability(inner);
+                let inner_ty = self.resolve(&self.lookup_expr_type_infer(inner.id));
+                match &inner_ty {
+                    InferTy::Ref(_, Mutability::Not) => {
+                        // Can't write through &T
+                        self.emit_immutable_ref_deref_error(lhs.span);
+                    }
+                    InferTy::Ref(_, Mutability::Mut) => {
+                        // &mut T — writing is allowed regardless of binding mutability
+                    }
+                    _ => {
+                        // *T (GC pointer) — check the variable's binding mutability
+                        self.check_assign_mutability(inner);
+                    }
+                }
             }
             _ => {}
         }

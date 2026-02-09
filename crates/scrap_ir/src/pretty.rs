@@ -381,6 +381,10 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 self.print_place(place);
                 write!(self.output, ")").unwrap();
             }
+            Rvalue::Ref(mutability, place) => {
+                write!(self.output, "{}", mutability.ref_prefix_str()).unwrap();
+                self.print_place(place);
+            }
         }
     }
 

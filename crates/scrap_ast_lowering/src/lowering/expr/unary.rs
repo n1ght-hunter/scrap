@@ -1,10 +1,11 @@
-//! Unary expression lowering (deref, neg, not)
+//! Unary expression lowering (deref, neg, not, address-of)
 
 use scrap_ast::expr::Expr;
 use scrap_ir as ir;
+use scrap_shared::types::Mutability;
 use scrap_shared::NodeId;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{lowerer::ExprLowerer, BuilderError, MResult};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a dereference expression `*expr` to an operand.
@@ -71,5 +72,27 @@ impl<'db> ExprLowerer<'db> {
             ir::Rvalue::Intrinsic(ir::IntrinsicOp::Not, vec![inner_operand]),
         );
         Ok(ir::Operand::Place(ir::Place::Local(result_temp)))
+    }
+
+    /// Lower an address-of expression `&expr` or `&mut expr`.
+    pub(crate) fn lower_addr_of(
+        &mut self,
+        mutability: Mutability,
+        inner: &Expr<'db>,
+        expr_id: NodeId,
+    ) -> MResult<ir::Operand<'db>> {
+        let inner_operand = self.lower_expr(inner)?;
+        let inner_place = match inner_operand {
+            ir::Operand::Place(place) => place,
+            _ => return Err(BuilderError::LowerExpressionError),
+        };
+
+        let ref_ty = self.lookup_and_convert_type(expr_id);
+        let dest = self.allocate_temp(ref_ty);
+        self.emit_assign(
+            ir::Place::Local(dest),
+            ir::Rvalue::Ref(mutability, inner_place),
+        );
+        Ok(ir::Operand::Place(ir::Place::Local(dest)))
     }
 }

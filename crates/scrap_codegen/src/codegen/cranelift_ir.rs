@@ -1,5 +1,6 @@
 //! Translation of IR statements, terminators, operands, and rvalues to Cranelift instructions.
 
+use cranelift::codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 use cranelift_object::ObjectModule;
@@ -77,6 +78,8 @@ pub struct FuncTranslator<'a, 'db> {
     pub enum_discriminants: &'a HashMap<usize, Variable>,
     /// (local_id, variant_idx, field_idx) → Cranelift Variable for variant fields
     pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
+    /// IR local index → (StackSlot, Cranelift type) for stack-spilled locals (referenced via &/&mut)
+    pub stack_slots: &'a HashMap<usize, (StackSlot, types::Type)>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -117,6 +120,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<()> {
         match place {
             ir::Place::Local(local_id) => {
+                if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
+                    // Stack-spilled local: store to stack
+                    builder.ins().stack_store(value, *slot, 0);
+                    return Some(());
+                }
                 let var = match self.variables.get(&local_id.0) {
                     Some(v) => v,
                     None => {
@@ -209,6 +217,32 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Rvalue::Box(inner_ty, value_op) => {
                 self.lower_box_alloc(inner_ty, value_op, builder, module)
+            }
+            ir::Rvalue::Ref(_mutability, place) => {
+                // Take the address of a place
+                match place {
+                    ir::Place::Local(local_id) => {
+                        if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
+                            Some(builder.ins().stack_addr(types::I64, *slot, 0))
+                        } else {
+                            emit_codegen_err(
+                                self.db,
+                                format!(
+                                    "cannot take reference of non-stack-spilled local _{}",
+                                    local_id.0
+                                ),
+                            );
+                            None
+                        }
+                    }
+                    _ => {
+                        emit_codegen_err(
+                            self.db,
+                            "Rvalue::Ref on non-local place not yet supported",
+                        );
+                        None
+                    }
+                }
             }
             ir::Rvalue::Discriminant(place) => {
                 // Read the discriminant variable for an enum local
@@ -572,6 +606,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<Value> {
         match place {
             ir::Place::Local(local_id) => {
+                if let Some((slot, cl_ty)) = self.stack_slots.get(&local_id.0) {
+                    // Stack-spilled local: load from stack
+                    return Some(builder.ins().stack_load(*cl_ty, *slot, 0));
+                }
                 let var = match self.variables.get(&local_id.0) {
                     Some(v) => v,
                     None => {
