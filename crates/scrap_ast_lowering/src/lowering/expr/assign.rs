@@ -26,6 +26,16 @@ impl<'db> ExprLowerer<'db> {
 
                 Ok(ir::Place::Local(local_id))
             }
+            ExprKind::Field(base, field_ident) => {
+                // p.x as a place — field access on a struct
+                let base_operand = self.lower_expr(base)?;
+                let base_place = match base_operand {
+                    ir::Operand::Place(place) => place,
+                    _ => return Err(BuilderError::LowerExpressionError),
+                };
+                let field_idx = self.resolve_field_index(base.id, field_ident.name)?;
+                Ok(ir::Place::Field(Box::new(base_place), field_idx, Some(field_ident.name)))
+            }
             ExprKind::Unary(scrap_ast::operators::UnOp::Deref, inner) => {
                 // *x as a place — dereference through a reference
                 let inner_operand = self.lower_expr(inner)?;
@@ -41,7 +51,6 @@ impl<'db> ExprLowerer<'db> {
                 Ok(ir::Place::Deref(Box::new(inner_place)))
             }
             _ => {
-                // Only paths and dereferences can be places for now
                 Err(BuilderError::LowerExpressionError)
             }
         }

@@ -3,7 +3,7 @@ extern "C" {
 }
 
 fn main() {
-    let x: *usize = box(42);
+    let mut x: *usize = box(42);
     *x = 99;
     ExitProcess(*x);
 }

@@ -96,7 +96,7 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Resolve a field name to its index within the struct's field list.
-    fn resolve_field_index(
+    pub(crate) fn resolve_field_index(
         &self,
         base_node_id: scrap_shared::NodeId,
         field_name: scrap_shared::ident::Symbol<'db>,

@@ -13,13 +13,20 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     }
 
     pub fn parse_pat(&mut self) -> PResult<'a, Pat<'db>> {
+        self.parse_pat_with_mutability(scrap_shared::Mutability::Not)
+    }
+
+    pub fn parse_pat_with_mutability(
+        &mut self,
+        mutability: scrap_shared::Mutability,
+    ) -> PResult<'a, Pat<'db>> {
         let ident = self.parse_ident()?;
         Ok(Pat {
             id: self.state.new_node_id(),
             kind: PatKind::Ident(
                 scrap_ast::pat::BindingMode(
                     scrap_ast::pat::ByRef::No,
-                    scrap_shared::Mutability::Not,
+                    mutability,
                 ),
                 ident,
                 None,

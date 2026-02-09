@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_errors::ErrorGuaranteed;
 use scrap_shared::ident::Symbol;
-use scrap_shared::types::IntTy;
+use scrap_shared::types::{IntTy, Mutability};
 use scrap_shared::NodeId;
 use scrap_span::Span;
 
@@ -75,6 +75,10 @@ pub struct TypeContext<'db> {
     /// Scoped via a stack of scopes
     scopes: Vec<HashMap<Symbol<'db>, InferTy<'db>>>,
 
+    /// Variable mutability environment: name -> Mutability
+    /// Scoped alongside the type scopes
+    mutability_scopes: Vec<HashMap<Symbol<'db>, Mutability>>,
+
     /// Function signatures in scope
     functions: HashMap<Symbol<'db>, FnSig<'db>>,
 
@@ -114,6 +118,7 @@ impl<'db> TypeContext<'db> {
             ty_vars: Vec::new(),
             next_ty_vid: 0,
             scopes: vec![HashMap::new()], // Global scope
+            mutability_scopes: vec![HashMap::new()],
             functions: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
@@ -194,17 +199,32 @@ impl<'db> TypeContext<'db> {
     /// Push a new scope onto the scope stack.
     pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
+        self.mutability_scopes.push(HashMap::new());
     }
 
     /// Pop the current scope from the scope stack.
     pub fn pop_scope(&mut self) {
         self.scopes.pop();
+        self.mutability_scopes.pop();
     }
 
-    /// Define a variable in the current scope.
+    /// Define a variable in the current scope (immutable by default).
     pub fn define_var(&mut self, name: Symbol<'db>, ty: InferTy<'db>) {
+        self.define_var_with_mutability(name, ty, Mutability::Not);
+    }
+
+    /// Define a variable in the current scope with explicit mutability.
+    pub fn define_var_with_mutability(
+        &mut self,
+        name: Symbol<'db>,
+        ty: InferTy<'db>,
+        mutability: Mutability,
+    ) {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name, ty);
+        }
+        if let Some(scope) = self.mutability_scopes.last_mut() {
+            scope.insert(name, mutability);
         }
     }
 
@@ -213,6 +233,16 @@ impl<'db> TypeContext<'db> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(&name) {
                 return Some(ty.clone());
+            }
+        }
+        None
+    }
+
+    /// Look up a variable's mutability in all scopes (innermost first).
+    pub fn lookup_var_mutability(&self, name: Symbol<'db>) -> Option<Mutability> {
+        for scope in self.mutability_scopes.iter().rev() {
+            if let Some(m) = scope.get(&name) {
+                return Some(*m);
             }
         }
         None
@@ -421,6 +451,30 @@ impl<'db> TypeContext<'db> {
                                 .label(format!("expected `{}`, found `{}`", expected, found)),
                         ),
                 ),
+        )
+    }
+
+    /// Emit an error for assignment to an immutable variable.
+    pub fn emit_immutable_assign_error(
+        &self,
+        name: &str,
+        span: Span<'db>,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(format!("cannot assign to immutable variable `{}`", name))
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(
+                            AnnotationKind::Primary
+                                .span(span.to_range(self.db))
+                                .label("cannot assign"),
+                        ),
+                )
+                .element(Level::NOTE.message(
+                    format!("consider making this binding mutable: `let mut {}`", name),
+                )),
         )
     }
 

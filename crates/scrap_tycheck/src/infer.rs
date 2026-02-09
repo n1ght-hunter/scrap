@@ -389,9 +389,9 @@ impl<'db> TypeContext<'db> {
         // Record the local variable's type
         self.record_local_type(local.id, var_ty.clone());
 
-        // Bind the variable
-        if let PatKind::Ident(_, ident, _) = &local.pat.kind {
-            self.define_var(ident.name, var_ty);
+        // Bind the variable with its mutability
+        if let PatKind::Ident(binding_mode, ident, _) = &local.pat.kind {
+            self.define_var_with_mutability(ident.name, var_ty, binding_mode.1);
         }
     }
 
@@ -417,6 +417,8 @@ impl<'db> TypeContext<'db> {
         rhs: &Expr<'db>,
         span: Span<'db>,
     ) -> InferTy<'db> {
+        self.check_assign_mutability(lhs);
+
         let lhs_ty = self.infer_expr(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
@@ -433,6 +435,8 @@ impl<'db> TypeContext<'db> {
         rhs: &Expr<'db>,
         span: Span<'db>,
     ) -> InferTy<'db> {
+        self.check_assign_mutability(lhs);
+
         let lhs_ty = self.infer_expr(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
@@ -440,6 +444,34 @@ impl<'db> TypeContext<'db> {
         self.constrain_eq_with_kind(lhs_ty, rhs_ty, span, ConstraintKind::BinaryOp);
 
         InferTy::unit() // Assignment returns unit
+    }
+
+    /// Check that the LHS of an assignment is mutable.
+    /// Emits an error if assigning to an immutable variable.
+    fn check_assign_mutability(&self, lhs: &Expr<'db>) {
+        match &lhs.kind {
+            ExprKind::Path(path) => {
+                if let Some(segment) = path.single_segment() {
+                    if let Some(mutability) = self.lookup_var_mutability(segment.ident.name) {
+                        if mutability.is_not() {
+                            self.emit_immutable_assign_error(
+                                segment.ident.name.text(self.db()),
+                                lhs.span,
+                            );
+                        }
+                    }
+                }
+            }
+            ExprKind::Field(base, _) => {
+                // For `p.x = 5`, check the root variable's mutability
+                self.check_assign_mutability(base);
+            }
+            ExprKind::Unary(UnOp::Deref, inner) => {
+                // *x = 5 — check the inner expression's mutability
+                self.check_assign_mutability(inner);
+            }
+            _ => {}
+        }
     }
 
     /// Infer the type of an array literal.

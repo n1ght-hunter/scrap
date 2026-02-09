@@ -3,11 +3,25 @@ use scrap_lexer::Token;
 use scrap_span::Span;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
-    /// let <pat>:<ty> = <expr>;
+    /// let [mut] <pat>:<ty> = <expr>;
     pub fn parse_local(&mut self) -> crate::PResult<'a, Local<'db>> {
         let start = self.token.span.start(self.db);
         self.expect(Token::Let)?;
-        let pat = self.parse_pat()?;
+
+        // Check for `mut` keyword (contextual — parsed as identifier)
+        let mutability = if self.check(Token::Ident) {
+            let text = &self.source[self.token.span.to_range(self.db)];
+            if text == "mut" {
+                self.bump();
+                scrap_shared::Mutability::Mut
+            } else {
+                scrap_shared::Mutability::Not
+            }
+        } else {
+            scrap_shared::Mutability::Not
+        };
+
+        let pat = self.parse_pat_with_mutability(mutability)?;
 
         let mut ty = None;
         if self.eat(Token::Colon) {
