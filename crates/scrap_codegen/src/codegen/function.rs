@@ -4,7 +4,7 @@ use cranelift::codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use cranelift_module::{Linkage, Module};
 use scrap_ir as ir;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::context::CodegenContext;
 use super::cranelift_ir::FuncTranslator;
@@ -205,6 +205,28 @@ impl<'db> CodegenContext<'db> {
                 }
             }
 
+            // Collect *T locals that need GC shadow stack registration
+            let mut gc_root_locals: HashMap<usize, u32> = HashMap::new();
+            let mut gc_slot_offset: u32 = 0;
+            for (i, decl) in local_decls.iter().enumerate() {
+                if matches!(decl.ty(self.db), ir::Ty::Ptr(_)) {
+                    gc_root_locals.insert(i, gc_slot_offset);
+                    gc_slot_offset += 8;
+                }
+            }
+            let gc_root_count = gc_root_locals.len();
+
+            // Allocate shadow stack slot for GC roots (contiguous array of pointer-sized entries)
+            let gc_shadow_slot = if gc_root_count > 0 {
+                Some(builder.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    gc_root_count as u32 * 8,
+                    0,
+                )))
+            } else {
+                None
+            };
+
             // Set up the entry block
             let entry_block = block_map[&0];
             builder.append_block_params_for_function_params(entry_block);
@@ -241,8 +263,41 @@ impl<'db> CodegenContext<'db> {
                 }
             }
 
+            // Emit GC shadow stack push_frame if this function has *T locals
+            if let Some(shadow_slot) = gc_shadow_slot {
+                // Zero-initialize all shadow slots
+                let zero = builder.ins().iconst(types::I64, 0);
+                for i in 0..gc_root_count {
+                    builder.ins().stack_store(zero, shadow_slot, (i as i32) * 8);
+                }
+
+                // Call __scrap_gc_push_frame(slots_addr, count)
+                if let Some(&push_func_id) = self.functions.get("__scrap_gc_push_frame") {
+                    let push_func_ref =
+                        self.module.declare_func_in_func(push_func_id, builder.func);
+                    let slots_addr = builder.ins().stack_addr(types::I64, shadow_slot, 0);
+                    let count_val = builder.ins().iconst(types::I64, gc_root_count as i64);
+                    builder.ins().call(push_func_ref, &[slots_addr, count_val]);
+                }
+
+                // Also sync any *T params that were written above to their shadow slots
+                for ir_param_idx in 0.._param_count {
+                    let local_idx = ir_param_idx + 1;
+                    if let Some(&offset) = gc_root_locals.get(&local_idx) {
+                        // Read the param value back from the variable and write to shadow slot
+                        if let Some(var) = variables.get(&local_idx) {
+                            let val = builder.use_var(*var);
+                            builder.ins().stack_store(val, shadow_slot, offset as i32);
+                        } else if let Some((slot, cl_ty)) = stack_slots.get(&local_idx) {
+                            let val = builder.ins().stack_load(*cl_ty, *slot, 0);
+                            builder.ins().stack_store(val, shadow_slot, offset as i32);
+                        }
+                    }
+                }
+            }
+
             // Create the translator (holds only shared/immutable references)
-            let data_counter = std::cell::Cell::new(0);
+            let data_counter = std::cell::Cell::new(self.data_id_counter);
             let gc_shapes_cell = std::cell::RefCell::new(std::collections::HashMap::new());
             // Pre-populate from context's gc_shapes
             for (k, v) in &self.gc_shapes {
@@ -263,6 +318,8 @@ impl<'db> CodegenContext<'db> {
                 enum_discriminants: &enum_discriminants,
                 enum_variant_variables: &enum_variant_variables,
                 stack_slots: &stack_slots,
+                gc_shadow_slot,
+                gc_root_locals: &gc_root_locals,
             };
 
             // Lower each basic block
@@ -286,6 +343,9 @@ impl<'db> CodegenContext<'db> {
 
             builder.seal_all_blocks();
             builder.finalize();
+
+            // Persist the data counter back to the context
+            self.data_id_counter = data_counter.get();
 
             // Merge any new gc_shapes back into the context
             for (k, v) in gc_shapes_cell.into_inner() {

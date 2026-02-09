@@ -80,6 +80,10 @@ pub struct FuncTranslator<'a, 'db> {
     pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
     /// IR local index → (StackSlot, Cranelift type) for stack-spilled locals (referenced via &/&mut)
     pub stack_slots: &'a HashMap<usize, (StackSlot, types::Type)>,
+    /// GC shadow stack: contiguous stack slot holding pointer-sized entries for *T locals
+    pub gc_shadow_slot: Option<StackSlot>,
+    /// IR local index → byte offset in the gc_shadow_slot array (only for *T locals)
+    pub gc_root_locals: &'a HashMap<usize, u32>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -123,16 +127,22 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
                     // Stack-spilled local: store to stack
                     builder.ins().stack_store(value, *slot, 0);
-                    return Some(());
+                } else {
+                    let var = match self.variables.get(&local_id.0) {
+                        Some(v) => v,
+                        None => {
+                            emit_codegen_err(self.db, format!("variable '_{}' not found", local_id.0));
+                            return None;
+                        }
+                    };
+                    builder.def_var(*var, value);
                 }
-                let var = match self.variables.get(&local_id.0) {
-                    Some(v) => v,
-                    None => {
-                        emit_codegen_err(self.db, format!("variable '_{}' not found", local_id.0));
-                        return None;
+                // Keep GC shadow stack in sync for *T locals
+                if let Some(&offset) = self.gc_root_locals.get(&local_id.0) {
+                    if let Some(shadow_slot) = self.gc_shadow_slot {
+                        builder.ins().stack_store(value, shadow_slot, offset as i32);
                     }
-                };
-                builder.def_var(*var, value);
+                }
                 Some(())
             }
             ir::Place::Field(base, field_idx, _) => {
@@ -888,6 +898,14 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<()> {
         match term {
             ir::Terminator::Return => {
+                // Pop GC shadow stack frame before returning
+                if self.gc_shadow_slot.is_some() {
+                    if let Some(&pop_func_id) = self.functions.get("__scrap_gc_pop_frame") {
+                        let pop_func_ref = module.declare_func_in_func(pop_func_id, builder.func);
+                        builder.ins().call(pop_func_ref, &[]);
+                    }
+                }
+
                 if self.returns_void {
                     builder.ins().return_(&[]);
                 } else {

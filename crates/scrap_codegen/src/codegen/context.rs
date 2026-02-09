@@ -35,6 +35,8 @@ pub struct CodegenContext<'db> {
     pub(crate) struct_layouts: HashMap<String, Vec<ir::Ty<'db>>>,
     /// Enum layout: enum name → per-variant field types (Vec of variants, each a Vec of field types).
     pub(crate) enum_layouts: HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
+    /// Monotonically increasing counter for data section names (persists across functions).
+    pub(crate) data_id_counter: usize,
 }
 
 impl<'db> CodegenContext<'db> {
@@ -74,6 +76,7 @@ impl<'db> CodegenContext<'db> {
             gc_shapes: HashMap::new(),
             struct_layouts: HashMap::new(),
             enum_layouts: HashMap::new(),
+            data_id_counter: 0,
         })
     }
 
