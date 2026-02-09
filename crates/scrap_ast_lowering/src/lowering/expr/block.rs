@@ -8,30 +8,31 @@ use crate::{lowerer::ExprLowerer, MResult};
 impl<'db> ExprLowerer<'db> {
     /// Lower a block expression
     pub(crate) fn lower_block_expr(&mut self, block: &Block<'db>) -> MResult<ir::Operand<'db>> {
-        self.lower_block(block)?;
-        // Blocks produce void for now
-        // TODO: Handle implicit return from last expression
-        Ok(ir::Operand::Constant(ir::Constant::Void))
+        self.lower_block(block)
     }
 
-    /// Lower a block's statements
-    pub(crate) fn lower_block(&mut self, block: &Block<'db>) -> MResult<()> {
-        for stmt in &block.stmts {
+    /// Lower a block's statements, returning the result of the last expression.
+    pub(crate) fn lower_block(&mut self, block: &Block<'db>) -> MResult<ir::Operand<'db>> {
+        let mut last_operand = ir::Operand::Constant(ir::Constant::Void);
+
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let is_last = i == block.stmts.len() - 1;
             match &stmt.kind {
+                scrap_ast::stmt::StmtKind::Expr(expr) if is_last => {
+                    // Last expression without semicolon — this is the block's result
+                    last_operand = self.lower_expr(expr)?;
+                }
                 scrap_ast::stmt::StmtKind::Semi(expr) | scrap_ast::stmt::StmtKind::Expr(expr) => {
-                    // Lower the expression for side effects
                     self.lower_expr(expr)?;
                 }
                 scrap_ast::stmt::StmtKind::Let(_local) => {
                     // TODO: Handle let statements with initializers
-                    // For now, skip
                 }
-                scrap_ast::stmt::StmtKind::Item(_) | scrap_ast::stmt::StmtKind::Empty => {
-                    // Skip these for now
-                }
+                scrap_ast::stmt::StmtKind::Item(_) | scrap_ast::stmt::StmtKind::Empty => {}
             }
         }
-        Ok(())
+
+        Ok(last_operand)
     }
 }
 

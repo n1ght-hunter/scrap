@@ -12,6 +12,7 @@ impl<'db> ExprLowerer<'db> {
         cond: &Expr<'db>,
         then_block: &Block<'db>,
         else_expr: Option<&Expr<'db>>,
+        node_id: scrap_shared::NodeId,
     ) -> MResult<ir::Operand<'db>> {
         // Evaluate the condition in the current block
         let cond_operand = self.lower_expr(cond)?;
@@ -32,10 +33,26 @@ impl<'db> ExprLowerer<'db> {
         };
         self.cfg_builder.finish_block(terminator);
 
+        // If there's an else branch, this if-else is an expression that produces a value.
+        // Allocate a result temp and write both branches into it.
+        let has_else = else_expr.is_some();
+        let result_temp = if has_else {
+            let result_ty = self.lookup_and_convert_type(node_id);
+            Some(self.allocate_temp(result_ty))
+        } else {
+            None
+        };
+
         // Lower the then block
         self.cfg_builder.set_current_block(then_bb);
-        self.lower_block(then_block)?;
+        let then_operand = self.lower_block(then_block)?;
         if !self.cfg_builder.current_block_is_terminated() {
+            if let Some(result) = result_temp {
+                self.emit_assign(
+                    ir::Place::Local(result),
+                    ir::Rvalue::Use(then_operand),
+                );
+            }
             self.cfg_builder
                 .finish_block(ir::Terminator::Goto { target: cont_bb });
         }
@@ -43,7 +60,15 @@ impl<'db> ExprLowerer<'db> {
         // Lower the else expression/block
         self.cfg_builder.set_current_block(else_bb);
         if let Some(else_expr) = else_expr {
-            self.lower_expr(else_expr)?;
+            let else_operand = self.lower_expr(else_expr)?;
+            if !self.cfg_builder.current_block_is_terminated() {
+                if let Some(result) = result_temp {
+                    self.emit_assign(
+                        ir::Place::Local(result),
+                        ir::Rvalue::Use(else_operand),
+                    );
+                }
+            }
         }
         if !self.cfg_builder.current_block_is_terminated() {
             self.cfg_builder
@@ -53,9 +78,11 @@ impl<'db> ExprLowerer<'db> {
         // Continue at the continuation block
         self.cfg_builder.set_current_block(cont_bb);
 
-        // If-expressions produce void for now
-        // TODO: Proper handling of if-expression results
-        Ok(ir::Operand::Constant(ir::Constant::Void))
+        if let Some(result) = result_temp {
+            Ok(ir::Operand::Place(ir::Place::Local(result)))
+        } else {
+            Ok(ir::Operand::Constant(ir::Constant::Void))
+        }
     }
 
     /// Lower a return statement

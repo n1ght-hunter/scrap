@@ -214,14 +214,24 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
         let else_block = if self.eat(Token::Else) {
             let else_start = self.token.span.start(self.db);
-            let block = self.parse_block()?;
-            let else_end = self.token.span.end(self.db);
-
-            Some(Box::new(Expr {
-                id: self.state.new_node_id(),
-                kind: ExprKind::Block(Box::new(block)),
-                span: Span::new(self.db, else_start, else_end),
-            }))
+            if self.check(Token::If) {
+                // `else if` — parse as a nested if expression
+                let if_kind = self.parse_if_expr()?;
+                let else_end = self.token.span.end(self.db);
+                Some(Box::new(Expr {
+                    id: self.state.new_node_id(),
+                    kind: if_kind,
+                    span: Span::new(self.db, else_start, else_end),
+                }))
+            } else {
+                let block = self.parse_block()?;
+                let else_end = self.token.span.end(self.db);
+                Some(Box::new(Expr {
+                    id: self.state.new_node_id(),
+                    kind: ExprKind::Block(Box::new(block)),
+                    span: Span::new(self.db, else_start, else_end),
+                }))
+            }
         } else {
             None
         };

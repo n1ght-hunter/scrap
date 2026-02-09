@@ -31,7 +31,7 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Assign(lhs, rhs, _span) => self.lower_assign(lhs, rhs),
             ExprKind::AssignOp(op, lhs, rhs) => self.lower_assign_op(op, lhs, rhs),
             ExprKind::If(cond, then_block, else_expr) => {
-                self.lower_if_expr(cond, then_block, else_expr.as_deref())
+                self.lower_if_expr(cond, then_block, else_expr.as_deref(), expr.id)
             }
             ExprKind::Return(value) => self.lower_return(value.as_deref()),
             ExprKind::Block(block) => self.lower_block_expr(block),
