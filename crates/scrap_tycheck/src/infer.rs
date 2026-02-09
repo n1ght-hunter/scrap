@@ -242,7 +242,12 @@ impl<'db> TypeContext<'db> {
             }
         }
 
-        InferTy::Ref(Box::new(inner_ty), mutability)
+        // Auto-deref through *T: `&x` where `x: *T` produces `&T`, not `&(*T)`
+        let resolved = self.resolve(&inner_ty);
+        match resolved {
+            InferTy::Ptr(pointee) => InferTy::Ref(pointee, mutability),
+            _ => InferTy::Ref(Box::new(inner_ty), mutability),
+        }
     }
 
     /// Infer the type of a function call.

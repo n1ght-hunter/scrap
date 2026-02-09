@@ -81,7 +81,24 @@ impl<'db> ExprLowerer<'db> {
         inner: &Expr<'db>,
         expr_id: NodeId,
     ) -> MResult<ir::Operand<'db>> {
+        // Check if inner expression is a *T — if so, just copy the pointer value.
+        // `&x` where `x: *T` produces a `&T` that is the same pointer at runtime.
+        let is_ptr = matches!(
+            self.lookup_expr_type(inner.id),
+            Some(scrap_tycheck::ResolvedTy::Ptr(_))
+        );
+
         let inner_operand = self.lower_expr(inner)?;
+
+        if is_ptr {
+            // *T → &T: just copy the pointer value (no stack address needed)
+            let ref_ty = self.lookup_and_convert_type(expr_id);
+            let dest = self.allocate_temp(ref_ty);
+            self.emit_assign(ir::Place::Local(dest), ir::Rvalue::Use(inner_operand));
+            return Ok(ir::Operand::Place(ir::Place::Local(dest)));
+        }
+
+        // Normal case: take stack address via Rvalue::Ref
         let inner_place = match inner_operand {
             ir::Operand::Place(place) => place,
             _ => return Err(BuilderError::LowerExpressionError),
