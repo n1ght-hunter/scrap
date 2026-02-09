@@ -75,6 +75,7 @@ pub fn ir_ty_to_cl_required(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<ty
 }
 
 /// Build a Cranelift function signature from an IR signature.
+/// ADT (struct) parameters are expanded into their constituent field types.
 pub fn build_cl_signature<M: Module>(
     module: &M,
     ir_sig: ir::Signature<'_>,
@@ -84,8 +85,7 @@ pub fn build_cl_signature<M: Module>(
     sig.call_conv = module.target_config().default_call_conv;
 
     for param_ty in ir_sig.params(db) {
-        let cl_ty = ir_ty_to_cl_required(db, param_ty)?;
-        sig.params.push(AbiParam::new(cl_ty));
+        expand_param_types(db, param_ty, &mut sig.params)?;
     }
 
     let ret_ty = ir_sig.return_ty(db);
@@ -94,4 +94,105 @@ pub fn build_cl_signature<M: Module>(
     }
 
     Some(sig)
+}
+
+/// Expand a single IR parameter type into Cranelift ABI params.
+/// ADT types are recursively expanded into their fields.
+fn expand_param_types(
+    db: &dyn scrap_shared::Db,
+    ty: &ir::Ty,
+    params: &mut Vec<AbiParam>,
+) -> Option<()> {
+    match ty {
+        ir::Ty::Adt(type_id) => {
+            // Struct params are passed as individual field values.
+            // At this point we don't have struct_layouts, so we look up
+            // the struct/enum from the type_id. For now, we treat each
+            // ADT field as I64 since all supported field types are 64-bit.
+            // This is a temporary approach — it works because the codegen
+            // decomposes structs into per-field variables that are all I64.
+            //
+            // We need the struct layout. Since we don't have it here,
+            // we'll emit an error. The caller should use
+            // build_cl_signature_with_layouts instead for functions with
+            // ADT params.
+            emit_codegen_err(
+                db,
+                format!("cannot build signature for ADT param '{}' without layout info", type_id.name(db)),
+            );
+            None
+        }
+        ir::Ty::Tuple(fields) => {
+            for field_ty in fields {
+                expand_param_types(db, field_ty, params)?;
+            }
+            Some(())
+        }
+        _ => {
+            let cl_ty = ir_ty_to_cl_required(db, ty)?;
+            params.push(AbiParam::new(cl_ty));
+            Some(())
+        }
+    }
+}
+
+/// Build a Cranelift function signature from an IR signature,
+/// with access to struct layouts for expanding ADT parameters.
+pub fn build_cl_signature_with_layouts<M: Module>(
+    module: &M,
+    ir_sig: ir::Signature<'_>,
+    db: &dyn scrap_shared::Db,
+    struct_layouts: &std::collections::HashMap<String, Vec<ir::Ty<'_>>>,
+) -> Option<Signature> {
+    let mut sig = module.make_signature();
+    sig.call_conv = module.target_config().default_call_conv;
+
+    for param_ty in ir_sig.params(db) {
+        expand_param_types_with_layouts(db, param_ty, &mut sig.params, struct_layouts)?;
+    }
+
+    let ret_ty = ir_sig.return_ty(db);
+    if let Some(cl_ret) = ir_ty_to_cl(db, &ret_ty)? {
+        sig.returns.push(AbiParam::new(cl_ret));
+    }
+
+    Some(sig)
+}
+
+/// Expand a single IR parameter type into Cranelift ABI params,
+/// using struct layouts to decompose ADT types.
+fn expand_param_types_with_layouts(
+    db: &dyn scrap_shared::Db,
+    ty: &ir::Ty,
+    params: &mut Vec<AbiParam>,
+    struct_layouts: &std::collections::HashMap<String, Vec<ir::Ty<'_>>>,
+) -> Option<()> {
+    match ty {
+        ir::Ty::Adt(type_id) => {
+            let adt_name = type_id.name(db);
+            if let Some(field_tys) = struct_layouts.get(adt_name.as_str()) {
+                for field_ty in field_tys {
+                    expand_param_types_with_layouts(db, field_ty, params, struct_layouts)?;
+                }
+                Some(())
+            } else {
+                emit_codegen_err(
+                    db,
+                    format!("struct layout for '{}' not found", adt_name),
+                );
+                None
+            }
+        }
+        ir::Ty::Tuple(fields) => {
+            for field_ty in fields {
+                expand_param_types_with_layouts(db, field_ty, params, struct_layouts)?;
+            }
+            Some(())
+        }
+        _ => {
+            let cl_ty = ir_ty_to_cl_required(db, ty)?;
+            params.push(AbiParam::new(cl_ty));
+            Some(())
+        }
+    }
 }

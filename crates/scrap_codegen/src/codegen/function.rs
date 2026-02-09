@@ -7,34 +7,16 @@ use scrap_ir as ir;
 use super::context::CodegenContext;
 use super::cranelift_ir::FuncTranslator;
 use super::emit_codegen_err;
-use super::ty::{build_cl_signature, ir_ty_to_cl, ir_ty_to_cl_required};
+use super::ty::{build_cl_signature, build_cl_signature_with_layouts, ir_ty_to_cl, ir_ty_to_cl_required};
 use super::ResultExt;
 
 impl<'db> CodegenContext<'db> {
     /// Pass 1: Declare all functions and extern functions in the module.
+    /// Collects struct/enum layouts first so function signatures can reference ADT types.
     pub fn declare_items(&mut self, module: ir::Module<'db>) -> Option<()> {
+        // First sub-pass: collect struct and enum layouts
         for item in module.items(self.db) {
             match item {
-                ir::Items::Function(func) => {
-                    let sig = func.signature(self.db);
-                    let name = sig.name(self.db).text(self.db);
-                    let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
-                    let func_id = self
-                        .module
-                        .declare_function(name, Linkage::Local, &cl_sig)
-                        .or_emit(self.db)?;
-                    self.functions.insert(name.to_string(), func_id);
-                }
-                ir::Items::ExternFunction(ext) => {
-                    let sig = ext.signature(self.db);
-                    let name = sig.name(self.db).text(self.db);
-                    let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
-                    let func_id = self
-                        .module
-                        .declare_function(name, Linkage::Import, &cl_sig)
-                        .or_emit(self.db)?;
-                    self.functions.insert(name.to_string(), func_id);
-                }
                 ir::Items::Struct(s) => {
                     let name = s.name(self.db).text(self.db).to_string();
                     let field_tys: Vec<ir::Ty<'db>> =
@@ -56,6 +38,36 @@ impl<'db> CodegenContext<'db> {
                     }
                     self.enum_layouts.insert(name, variant_layouts);
                 }
+                _ => {}
+            }
+        }
+
+        // Second sub-pass: declare functions (now struct layouts are available)
+        for item in module.items(self.db) {
+            match item {
+                ir::Items::Function(func) => {
+                    let sig = func.signature(self.db);
+                    let name = sig.name(self.db).text(self.db);
+                    let cl_sig = build_cl_signature_with_layouts(
+                        &self.module, sig, self.db, &self.struct_layouts,
+                    )?;
+                    let func_id = self
+                        .module
+                        .declare_function(name, Linkage::Local, &cl_sig)
+                        .or_emit(self.db)?;
+                    self.functions.insert(name.to_string(), func_id);
+                }
+                ir::Items::ExternFunction(ext) => {
+                    let sig = ext.signature(self.db);
+                    let name = sig.name(self.db).text(self.db);
+                    let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
+                    let func_id = self
+                        .module
+                        .declare_function(name, Linkage::Import, &cl_sig)
+                        .or_emit(self.db)?;
+                    self.functions.insert(name.to_string(), func_id);
+                }
+                _ => {}
             }
         }
         Some(())
@@ -86,7 +98,9 @@ impl<'db> CodegenContext<'db> {
         };
 
         // Set up the function context
-        let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
+        let cl_sig = build_cl_signature_with_layouts(
+            &self.module, sig, self.db, &self.struct_layouts,
+        )?;
         self.ctx.func.signature = cl_sig;
 
         let ret_ty = sig.return_ty(self.db);
@@ -165,11 +179,29 @@ impl<'db> CodegenContext<'db> {
             builder.switch_to_block(entry_block);
 
             // Write function parameters to their variables (_1.._param_count)
+            // Struct params are expanded into multiple Cranelift params (one per field),
+            // so we walk the IR params and consume Cranelift params accordingly.
             let params = builder.block_params(entry_block).to_vec();
-            for (i, param_val) in params.iter().enumerate() {
-                let local_idx = i + 1; // _0 is return place, _1.. are params
-                if let Some(var) = variables.get(&local_idx) {
-                    builder.def_var(*var, *param_val);
+            let mut param_idx = 0;
+            for ir_param_idx in 0.._param_count {
+                let local_idx = ir_param_idx + 1; // _0 is return place, _1.. are params
+                let decl_ty = local_decls[local_idx].ty(self.db);
+                if let ir::Ty::Adt(type_id) = &decl_ty {
+                    let adt_name = type_id.name(self.db);
+                    if let Some(field_tys) = self.struct_layouts.get(adt_name.as_str()) {
+                        // Struct param: each field is a separate Cranelift param
+                        for (field_idx, _) in field_tys.iter().enumerate() {
+                            if let Some(var) = tuple_variables.get(&(local_idx, field_idx)) {
+                                builder.def_var(*var, params[param_idx]);
+                            }
+                            param_idx += 1;
+                        }
+                    }
+                } else if let Some(var) = variables.get(&local_idx) {
+                    builder.def_var(*var, params[param_idx]);
+                    param_idx += 1;
+                } else {
+                    param_idx += 1;
                 }
             }
 

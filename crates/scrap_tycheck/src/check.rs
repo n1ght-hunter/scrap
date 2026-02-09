@@ -4,11 +4,13 @@ use scrap_ast::{
     enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
+    impl_block::ImplBlock,
     item::{Item, ItemKind},
     module::ModuleKind,
     structdef::StructDef,
     Can,
 };
+use scrap_shared::ident::Symbol;
 
 use crate::{
     context::{EnumVariantDef, FnSig, TypeContext},
@@ -61,6 +63,9 @@ impl<'db> TypeContext<'db> {
             }
             ItemKind::Use(_) => {
                 // Use statements don't contribute type signatures
+            }
+            ItemKind::Impl(impl_block) => {
+                self.collect_impl_signatures(impl_block);
             }
         }
     }
@@ -162,6 +167,11 @@ impl<'db> TypeContext<'db> {
             }
             ItemKind::Use(_) => {
                 // Use statements don't need type checking
+            }
+            ItemKind::Impl(impl_block) => {
+                for method in &impl_block.methods {
+                    self.check_method(*method, impl_block.type_name.name);
+                }
             }
         }
     }
@@ -273,6 +283,87 @@ impl<'db> TypeContext<'db> {
         }
 
         // Clean up
+        self.clear_return_ty();
+        self.clear_type_params();
+        self.pop_scope();
+    }
+
+    /// Collect signatures for all methods in an impl block.
+    fn collect_impl_signatures(&mut self, impl_block: &ImplBlock<'db>) {
+        let type_name = impl_block.type_name.name;
+
+        for method in &impl_block.methods {
+            let method_ident = method.ident(self.db());
+            let mangled = Symbol::new(
+                self.db(),
+                format!("{}::{}", type_name.text(self.db()), method_ident.name.text(self.db())),
+            );
+
+            let type_params = vec![];
+            self.set_type_params(type_params.clone());
+
+            let params: Vec<_> = method
+                .args(self.db())
+                .iter()
+                .map(|param| {
+                    let ty = self.lower_ast_ty(&param.ty);
+                    (param.ident.name, ty)
+                })
+                .collect();
+
+            let return_ty = method
+                .ret_type(self.db())
+                .as_ref()
+                .map(|t| self.lower_ast_ty(t))
+                .unwrap_or_else(InferTy::unit);
+
+            self.clear_type_params();
+
+            let sig = FnSig {
+                type_params,
+                params,
+                return_ty,
+            };
+
+            self.register_function(mangled, sig);
+        }
+    }
+
+    /// Type check a method body (same as check_function but uses mangled name).
+    fn check_method(&mut self, fn_def: FnDef<'db>, type_name: Symbol<'db>) {
+        let method_ident = fn_def.ident(self.db());
+        let mangled = Symbol::new(
+            self.db(),
+            format!("{}::{}", type_name.text(self.db()), method_ident.name.text(self.db())),
+        );
+
+        let sig = match self.lookup_function(mangled) {
+            Some(sig) => sig.clone(),
+            None => return,
+        };
+
+        self.push_scope();
+        self.set_type_params(sig.type_params.clone());
+        self.set_return_ty(sig.return_ty.clone());
+
+        for (param_name, param_ty) in &sig.params {
+            self.define_var(*param_name, param_ty.clone());
+        }
+
+        let body = fn_def.body(self.db());
+        let body_ty = self.infer_block(&body);
+
+        if !sig.return_ty.is_unit() && !body_ty.is_never() {
+            self.constrain_eq(body_ty.clone(), sig.return_ty.clone(), fn_def.span(self.db()));
+        }
+
+        if body_ty.is_never() && fn_def.ret_type(self.db()).is_none() {
+            self.record_fn_return_type(mangled, InferTy::Never);
+            let mut updated_sig = sig;
+            updated_sig.return_ty = InferTy::Never;
+            self.register_function(mangled, updated_sig);
+        }
+
         self.clear_return_ty();
         self.clear_type_params();
         self.pop_scope();

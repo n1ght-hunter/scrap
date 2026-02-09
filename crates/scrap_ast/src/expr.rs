@@ -72,6 +72,8 @@ pub enum ExprKind<'db> {
     Field(Box<Expr<'db>>, Ident<'db>),
     /// Match expression: `match expr { pat => expr, ... }`
     Match(Box<Expr<'db>>, Vec<Arm<'db>>),
+    /// Method call: `receiver.method(args)`
+    MethodCall(Box<Expr<'db>>, Ident<'db>, ThinVec<Box<Expr<'db>>>),
     /// Error placeholder
     Err,
 }
@@ -220,6 +222,19 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                     write!(f, "    ")?;
                 }
                 write!(f, "}}")
+            }
+            ExprKind::MethodCall(receiver, method, args) => {
+                receiver.pretty_print_indent(f, indent)?;
+                write!(f, ".")?;
+                method.pretty_print(f)?;
+                write!(f, "(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    arg.pretty_print_indent(f, indent)?;
+                }
+                write!(f, ")")
             }
             ExprKind::Err => write!(f, "<error>"),
         }

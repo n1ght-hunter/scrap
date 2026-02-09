@@ -19,17 +19,38 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         let mut lhs = self.parse_atom()?;
 
         loop {
-            // Postfix field access: highest precedence
+            // Postfix: field access or method call (highest precedence)
             if self.check(Token::Dot) {
                 self.bump();
                 let field_ident = self.parse_ident()?;
                 let start = lhs.span.start(self.db);
-                let end = field_ident.span.end(self.db);
-                lhs = Expr {
-                    id: self.state.new_node_id(),
-                    kind: ExprKind::Field(Box::new(lhs), field_ident),
-                    span: Span::new(self.db, start, end),
-                };
+
+                if self.check(Token::LParen) {
+                    // Method call: receiver.method(args)
+                    self.bump(); // consume (
+                    let mut args = thin_vec::ThinVec::new();
+                    while !self.check(Token::RParen) {
+                        args.push(Box::new(self.parse_expr()?));
+                        if !self.eat(Token::Comma) {
+                            break;
+                        }
+                    }
+                    let end = self.token.span.end(self.db);
+                    self.expect(Token::RParen)?;
+                    lhs = Expr {
+                        id: self.state.new_node_id(),
+                        kind: ExprKind::MethodCall(Box::new(lhs), field_ident, args),
+                        span: Span::new(self.db, start, end),
+                    };
+                } else {
+                    // Field access: receiver.field
+                    let end = field_ident.span.end(self.db);
+                    lhs = Expr {
+                        id: self.state.new_node_id(),
+                        kind: ExprKind::Field(Box::new(lhs), field_ident),
+                        span: Span::new(self.db, start, end),
+                    };
+                }
                 continue;
             }
 

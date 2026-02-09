@@ -50,6 +50,7 @@ pub mod module;
 pub mod pat;
 pub mod stmt;
 pub mod structdef;
+pub mod impl_block;
 pub mod ty;
 
 pub struct Parser<'a, 'db> {

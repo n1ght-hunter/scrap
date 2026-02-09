@@ -26,7 +26,7 @@ impl<'db> ExprLowerer<'db> {
 
     /// Emit a call terminator writing the result to `destination`.
     /// If `never` is true, the callee returns `!` and there is no continuation block.
-    fn emit_call(
+    pub(crate) fn emit_call(
         &mut self,
         func: ir::Operand<'db>,
         args: Vec<ir::Operand<'db>>,

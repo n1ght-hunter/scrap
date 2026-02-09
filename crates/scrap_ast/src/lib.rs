@@ -11,6 +11,7 @@ pub mod expr;
 pub mod field;
 pub mod fndef;
 pub mod foreign;
+pub mod impl_block;
 pub mod item;
 pub mod lit;
 pub mod local;

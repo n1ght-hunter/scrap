@@ -6,6 +6,7 @@ use scrap_ast::{
     enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
+    impl_block::ImplBlock,
     item::{Item, ItemKind},
     local::LocalKind,
     pat::PatKind,
@@ -140,6 +141,20 @@ pub fn lower_module<'db>(
                 let ir_enum = ir::Enum::new(db, name, ir_variants);
                 items.push(ir::Items::Enum(ir_enum));
             }
+            ItemKind::Impl(impl_block) => {
+                for method in &impl_block.methods {
+                    let mir_fn = lower_method(
+                        db,
+                        impl_block.type_name.name,
+                        *method,
+                        source,
+                        type_table,
+                        &struct_field_maps,
+                        &enum_info_maps,
+                    )?;
+                    items.push(ir::Items::Function(mir_fn));
+                }
+            }
             _ => {
                 continue;
             }
@@ -209,6 +224,54 @@ pub fn lower_foreign_signature<'db>(
     let return_ty = match item.ret_type.as_ref() {
         Some(ty) => lower_type(db, ty)?,
         None => ir::Ty::Void,
+    };
+
+    Ok(ir::Signature::new(db, name, params, return_ty))
+}
+
+/// Lower a method definition (same as a function but with a mangled name).
+pub fn lower_method<'db>(
+    db: &'db dyn scrap_shared::Db,
+    type_name: scrap_shared::ident::Symbol<'db>,
+    ast_function: FnDef<'db>,
+    source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
+) -> MResult<ir::Function<'db>> {
+    let method_name = ast_function.ident(db).name;
+    let mangled = Symbol::new(
+        db,
+        format!("{}::{}", type_name.text(db), method_name.text(db)),
+    );
+    let signature = lower_signature_with_name(db, mangled, ast_function, type_table)?;
+    let return_ty = signature.return_ty(db);
+    let body = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps, enum_info_maps)?;
+
+    Ok(ir::Function::new(db, signature, body))
+}
+
+/// Lower a function signature using an explicit name (for methods with mangled names).
+pub fn lower_signature_with_name<'db>(
+    db: &'db dyn scrap_shared::Db,
+    name: Symbol<'db>,
+    ast_function: FnDef<'db>,
+    type_table: scrap_tycheck::TypeTable<'db>,
+) -> MResult<ir::Signature<'db>> {
+    let mut params = Vec::new();
+    for arg in ast_function.args(db).iter() {
+        let param_ty = lower_type(db, &*arg.ty)?;
+        params.push(param_ty);
+    }
+
+    let return_ty = match ast_function.ret_type(db).as_ref() {
+        Some(ty) => lower_type(db, ty)?,
+        None => {
+            type_table
+                .fn_return_type(db, name)
+                .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
+                .unwrap_or(ir::Ty::Void)
+        }
     };
 
     Ok(ir::Signature::new(db, name, params, return_ty))

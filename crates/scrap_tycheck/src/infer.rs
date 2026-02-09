@@ -58,6 +58,10 @@ impl<'db> TypeContext<'db> {
 
             ExprKind::Match(scrutinee, arms) => self.infer_match(scrutinee, arms, expr.span),
 
+            ExprKind::MethodCall(receiver, method, args) => {
+                self.infer_method_call(receiver, method, args, expr.span)
+            }
+
             ExprKind::Err => InferTy::Error,
         };
 
@@ -734,6 +738,68 @@ impl<'db> TypeContext<'db> {
         }
 
         result_ty
+    }
+
+    /// Infer the type of a method call expression.
+    fn infer_method_call(
+        &mut self,
+        receiver: &Expr<'db>,
+        method: &scrap_shared::ident::Ident<'db>,
+        args: &thin_vec::ThinVec<Box<Expr<'db>>>,
+        span: Span<'db>,
+    ) -> InferTy<'db> {
+        let recv_ty = self.infer_expr(receiver);
+        let resolved = self.resolve(&recv_ty);
+
+        let type_name = match &resolved {
+            InferTy::Adt(name) => *name,
+            _ => {
+                self.emit_type_mismatch("struct or enum", &self.ty_to_string(&resolved), span);
+                return InferTy::Error;
+            }
+        };
+
+        // Construct mangled name: TypeName::method_name
+        let mangled = Symbol::new(
+            self.db(),
+            format!("{}::{}", type_name.text(self.db()), method.name.text(self.db())),
+        );
+
+        let sig = match self.lookup_function(mangled) {
+            Some(sig) => sig.clone(),
+            None => {
+                let msg = format!(
+                    "{}::{}",
+                    type_name.text(self.db()),
+                    method.name.text(self.db())
+                );
+                self.emit_undefined_function(&msg, span);
+                return InferTy::Error;
+            }
+        };
+
+        // Check arg count (exclude self parameter)
+        let method_params = &sig.params[1..];
+        if args.len() != method_params.len() {
+            self.emit_arity_mismatch(method_params.len(), args.len(), span);
+            return InferTy::Error;
+        }
+
+        // Constrain receiver type
+        self.constrain_eq(recv_ty, sig.params[0].1.clone(), span);
+
+        // Constrain argument types
+        for (arg, (_, param_ty)) in args.iter().zip(method_params) {
+            let arg_ty = self.infer_expr(arg);
+            self.constrain_eq_with_kind(
+                arg_ty,
+                param_ty.clone(),
+                span,
+                ConstraintKind::FunctionArg,
+            );
+        }
+
+        sig.return_ty.clone()
     }
 
     /// Bind variables from a match pattern into the current scope.

@@ -34,6 +34,8 @@ pub enum KeyWord {
     Extern,
     #[token("match")]
     Match,
+    #[token("impl")]
+    Impl,
 }
 
 #[derive(Debug, PartialEq, Clone)]

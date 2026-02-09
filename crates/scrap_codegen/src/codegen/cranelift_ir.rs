@@ -528,6 +528,43 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         }
     }
 
+    /// Lower an operand for use as a function call argument.
+    /// If the operand is a struct (ADT), expand it into individual field values.
+    fn lower_operand_expanding_structs(
+        &self,
+        operand: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+        out: &mut Vec<Value>,
+    ) -> Option<()> {
+        // Check if the operand is a Place referencing a struct local
+        if let ir::Operand::Place(ir::Place::Local(local_id)) = operand {
+            let decl_ty = self.local_decls[local_id.0].ty(self.db);
+            if let ir::Ty::Adt(type_id) = &decl_ty {
+                let adt_name = type_id.name(self.db);
+                if let Some(field_tys) = self.struct_layouts.get(adt_name.as_str()) {
+                    // Expand struct into per-field values
+                    for (field_idx, _) in field_tys.iter().enumerate() {
+                        if let Some(var) = self.tuple_variables.get(&(local_id.0, field_idx)) {
+                            out.push(builder.use_var(*var));
+                        } else {
+                            emit_codegen_err(
+                                self.db,
+                                format!("struct field variable not found for _{}.{}", local_id.0, field_idx),
+                            );
+                            return None;
+                        }
+                    }
+                    return Some(());
+                }
+            }
+        }
+        // Not a struct — lower as a single value
+        let val = self.lower_operand(operand, builder, module)?;
+        out.push(val);
+        Some(())
+    }
+
     fn lower_place(
         &self,
         place: &ir::Place<'db>,
@@ -908,7 +945,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let mut arg_vals = Vec::new();
                 for a in args.iter() {
-                    arg_vals.push(self.lower_operand(a, builder, module)?);
+                    self.lower_operand_expanding_structs(a, builder, module, &mut arg_vals)?;
                 }
 
                 let call = builder.ins().call(func_ref, &arg_vals);

@@ -14,7 +14,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             || self.check_struct_def()
             || self.check_enum_def()
             || self.check(Token::Use)
-            || self.check_extern_block();
+            || self.check_extern_block()
+            || self.check_impl_block();
         self.set_position(current_idx);
         res
     }
@@ -58,6 +59,9 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.check_extern_block() {
             let foreign_mod = self.parse_extern_block()?;
             return Ok(ItemKind::ForeignMod(foreign_mod));
+        }
+        if self.check_impl_block() {
+            return Ok(ItemKind::Impl(self.parse_impl_block()?));
         }
 
         Err(self.db.dcx().emit_err(

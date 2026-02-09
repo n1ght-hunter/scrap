@@ -10,7 +10,8 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(./target/scrap/*)"
+      "Bash(./target/scrap/*)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "ask": []
