@@ -36,6 +36,8 @@ pub enum KeyWord {
     Match,
     #[token("impl")]
     Impl,
+    #[token("spawn")]
+    Spawn,
 }
 
 #[derive(Debug, PartialEq, Clone)]

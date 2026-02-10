@@ -98,6 +98,12 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
             return self.parse_function_call_expr();
         }
 
+        // Check for spawn expression: `spawn f(args)` or `spawn { ... }`
+        if self.eat(Token::Spawn) {
+            let expr = Box::new(self.parse_expr()?);
+            return Ok(ExprKind::Spawn(expr));
+        }
+
         // Check for return expression
         if self.eat(Token::Return) {
             let expr = if !self.check(Token::Semicolon) && !self.check(Token::RBrace) {

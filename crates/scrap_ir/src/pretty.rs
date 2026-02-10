@@ -385,6 +385,18 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "{}", mutability.ref_prefix_str()).unwrap();
                 self.print_place(place);
             }
+            Rvalue::Spawn(func, args) => {
+                write!(self.output, "spawn ").unwrap();
+                self.print_operand(func);
+                write!(self.output, "(").unwrap();
+                for (i, op) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.output, ", ").unwrap();
+                    }
+                    self.print_operand(op);
+                }
+                write!(self.output, ")").unwrap();
+            }
         }
     }
 

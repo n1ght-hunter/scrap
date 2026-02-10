@@ -66,6 +66,12 @@ impl<'db> TypeContext<'db> {
                 self.infer_addr_of(*mutability, inner, expr.span)
             }
 
+            ExprKind::Spawn(inner) => {
+                // Type-check the inner expression (must be a call or block)
+                self.infer_expr(inner);
+                InferTy::Void
+            }
+
             ExprKind::Err => InferTy::Error,
         };
 

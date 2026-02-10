@@ -620,6 +620,36 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Shadow stack save/restore — used by coroutine scheduler for context switch.
+// ---------------------------------------------------------------------------
+
+/// Save the current thread's shadow stack top pointer.
+pub(crate) fn save_shadow_stack_top() -> crate::coroutine::ShadowStackTop {
+    use crate::coroutine::ShadowStackTop;
+    THREAD_STATE.with(|cell| {
+        let state = cell.get();
+        if state.is_null() {
+            return ShadowStackTop::NULL;
+        }
+        ShadowStackTop(unsafe { (*state).shadow_stack_top.load(Ordering::Relaxed) as *mut u8 })
+    })
+}
+
+/// Restore the current thread's shadow stack top pointer.
+pub(crate) fn restore_shadow_stack_top(top: crate::coroutine::ShadowStackTop) {
+    THREAD_STATE.with(|cell| {
+        let state = cell.get();
+        if !state.is_null() {
+            unsafe {
+                (*state)
+                    .shadow_stack_top
+                    .store(top.0 as *mut ShadowFrame, Ordering::Release);
+            }
+        }
+    })
+}
+
 unsafe fn data_ptr_to_header(data: *mut u8) -> Option<*mut ObjHeader> {
     unsafe {
         if data.is_null() {

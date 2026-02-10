@@ -76,6 +76,8 @@ pub enum ExprKind<'db> {
     MethodCall(Box<Expr<'db>>, Ident<'db>, ThinVec<Box<Expr<'db>>>),
     /// Address-of expression: `&expr` or `&mut expr`
     AddrOf(scrap_shared::types::Mutability, Box<Expr<'db>>),
+    /// Spawn expression: `spawn func(args)` or `spawn { block }`
+    Spawn(Box<Expr<'db>>),
     /// Error placeholder
     Err,
 }
@@ -241,6 +243,10 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
             ExprKind::AddrOf(m, inner) => {
                 write!(f, "{}", m.ref_prefix_str())?;
                 inner.pretty_print_indent(f, indent)
+            }
+            ExprKind::Spawn(expr) => {
+                write!(f, "spawn ")?;
+                expr.pretty_print_indent(f, indent)
             }
             ExprKind::Err => write!(f, "<error>"),
         }

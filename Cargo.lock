@@ -203,6 +203,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "corosensei"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b2b4c7e3e97730e6b0b8c5ff5ca82c663d1a645e4f630f4fa4c24e80626787e"
+dependencies = [
+ "autocfg",
+ "cfg-if",
+ "libc",
+ "scopeguard",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "countme"
 version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1332,6 +1345,7 @@ dependencies = [
 name = "scrap_rt"
 version = "0.1.0"
 dependencies = [
+ "corosensei",
  "parking_lot",
 ]
 

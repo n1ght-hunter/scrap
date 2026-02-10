@@ -5,4 +5,5 @@
 
 #![allow(unsafe_code)]
 
+mod coroutine;
 mod gc;

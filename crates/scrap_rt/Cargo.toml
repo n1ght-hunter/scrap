@@ -11,6 +11,7 @@ gc-debug = []
 parking-lot = ["dep:parking_lot"]
 
 [dependencies]
+corosensei = { workspace = true }
 parking_lot = { workspace = true, optional = true }
 
 [lints]
