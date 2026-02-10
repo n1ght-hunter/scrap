@@ -8,6 +8,10 @@ crate-type = ["staticlib"]
 
 [features]
 gc-debug = []
+parking-lot = ["dep:parking_lot"]
+
+[dependencies]
+parking_lot = { workspace = true, optional = true }
 
 [lints]
 workspace = true

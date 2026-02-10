@@ -11,8 +11,32 @@
 #![cfg_attr(not(feature = "gc-debug"), allow(unused_variables, unused_assignments))]
 
 use std::ptr::null_mut;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
+
+#[cfg(not(feature = "parking-lot"))]
+use std::sync::Mutex;
+#[cfg(feature = "parking-lot")]
+use parking_lot::Mutex;
+
+/// Lock a mutex, abstracting over std (`lock().unwrap()`) vs parking_lot (`lock()`).
+macro_rules! mutex_lock {
+    ($mutex:expr) => {{
+        #[cfg(not(feature = "parking-lot"))]
+        { $mutex.lock().unwrap() }
+        #[cfg(feature = "parking-lot")]
+        { $mutex.lock() }
+    }};
+}
+
+/// Try to lock a mutex, abstracting over std vs parking_lot.
+macro_rules! mutex_try_lock {
+    ($mutex:expr) => {{
+        #[cfg(not(feature = "parking-lot"))]
+        { $mutex.try_lock().ok() }
+        #[cfg(feature = "parking-lot")]
+        { $mutex.try_lock() }
+    }};
+}
 
 // ---------------------------------------------------------------------------
 // Debug logging — only compiled when the `gc-debug` feature is enabled.
@@ -108,7 +132,7 @@ fn ensure_thread_registered() -> *mut ThreadState {
             shadow_stack_top: AtomicPtr::new(null_mut()),
         }));
         cell.set(state);
-        let mut registry = THREAD_REGISTRY.lock().unwrap();
+        let mut registry = mutex_lock!(THREAD_REGISTRY);
         registry.push(SendPtr(state));
         gc_log!(
             "thread registered: state={:?}, total_threads={}",
@@ -187,7 +211,7 @@ pub extern "C" fn __scrap_gc_init() {
     gc_log!("init: resetting global state");
     // Reset global state
     {
-        let mut heap = HEAP.lock().unwrap();
+        let mut heap = mutex_lock!(HEAP);
         heap.all_objects = null_mut();
         heap.bytes_allocated = 0;
         heap.threshold = 1024 * 1024;
@@ -208,7 +232,7 @@ pub extern "C" fn __scrap_gc_alloc(shape: *const GcShape) -> *mut u8 {
 
         gc_log!("alloc: size={}, total={} (header+data)", size, total);
 
-        let mut heap = HEAP.lock().unwrap();
+        let mut heap = mutex_lock!(HEAP);
 
         // Check if we should collect
         if heap.bytes_allocated + total > heap.threshold {
@@ -283,7 +307,7 @@ unsafe fn init_obj_header(
 #[unsafe(no_mangle)]
 pub extern "C" fn __scrap_gc_collect() {
     gc_log!("collect: forced collection requested");
-    let mut heap = HEAP.lock().unwrap();
+    let mut heap = mutex_lock!(HEAP);
     collect(&mut heap);
 }
 
@@ -349,7 +373,7 @@ pub extern "C" fn __scrap_gc_write_barrier(new_val: *mut u8) {
                 .is_ok()
             {
                 gc_log!("write_barrier: shaded {:?} white->gray", header);
-                BARRIER_WORKLIST.lock().unwrap().push(SendPtr(header));
+                mutex_lock!(BARRIER_WORKLIST).push(SendPtr(header));
             }
         }
     }
@@ -403,7 +427,7 @@ unsafe fn mark_phase() {
         let mut ti: usize = 0;
 
         // Snapshot thread registry (brief lock)
-        let threads: Vec<SendPtr<ThreadState>> = THREAD_REGISTRY.lock().unwrap().clone();
+        let threads: Vec<SendPtr<ThreadState>> = mutex_lock!(THREAD_REGISTRY).clone();
         gc_log!("mark: scanning {} threads for roots", threads.len());
 
         // Scan all thread shadow stacks for roots
@@ -472,7 +496,7 @@ unsafe fn mark_phase() {
             }
 
             // Drain barrier worklist (objects shaded gray by concurrent mutators)
-            if let Ok(mut barrier) = BARRIER_WORKLIST.try_lock() {
+            if let Some(mut barrier) = mutex_try_lock!(BARRIER_WORKLIST) {
                 #[cfg(feature = "gc-debug")]
                 {
                     let n = barrier.len();
@@ -493,7 +517,7 @@ unsafe fn mark_phase() {
         );
 
         // Final drain — ensure no barrier entries were missed
-        let mut barrier = BARRIER_WORKLIST.lock().unwrap();
+        let mut barrier = mutex_lock!(BARRIER_WORKLIST);
         let mut remaining: Vec<*mut ObjHeader> = barrier.drain(..).map(|SendPtr(p)| p).collect();
         drop(barrier);
 
