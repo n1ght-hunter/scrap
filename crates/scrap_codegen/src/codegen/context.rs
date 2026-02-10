@@ -85,6 +85,7 @@ impl<'db> CodegenContext<'db> {
         self.declare_items(module)?;
         self.declare_panic_runtime()?;
         self.declare_gc_runtime()?;
+        self.declare_spawn_runtime()?;
         self.define_functions(module)?;
         self.define_panic_function()?;
         Some(())
@@ -123,12 +124,35 @@ impl<'db> CodegenContext<'db> {
                 builder.ins().call(gc_init_ref, &[]);
             }
 
+            // Call __scrap_sched_init after gc_init
+            if let Some(&sched_init_id) = self.functions.get("__scrap_sched_init") {
+                let sched_init_ref =
+                    self.module.declare_func_in_func(sched_init_id, builder.func);
+                builder.ins().call(sched_init_ref, &[]);
+            }
+
             // Call main
             let main_ref =
                 self.module.declare_func_in_func(main_func_id, builder.func);
             builder.ins().call(main_ref, &[]);
 
-            // If main returns (it shouldn't if it returns !), trap
+            // Call __scrap_sched_shutdown after main (runs remaining coroutines)
+            if let Some(&sched_shutdown_id) = self.functions.get("__scrap_sched_shutdown") {
+                let sched_shutdown_ref =
+                    self.module.declare_func_in_func(sched_shutdown_id, builder.func);
+                builder.ins().call(sched_shutdown_ref, &[]);
+            }
+
+            // Call ExitProcess(0) for a clean exit after main + scheduler finish.
+            // Programs that need a specific exit code call ExitProcess explicitly.
+            if let Some(&exit_id) = self.functions.get("ExitProcess") {
+                let exit_ref =
+                    self.module.declare_func_in_func(exit_id, builder.func);
+                let zero = builder.ins().iconst(types::I64, 0);
+                builder.ins().call(exit_ref, &[zero]);
+            }
+
+            // Fallback trap (unreachable — ExitProcess diverges)
             builder.ins().trap(TrapCode::user(1).unwrap());
 
             builder.seal_all_blocks();
@@ -276,6 +300,63 @@ impl<'db> CodegenContext<'db> {
                 .or_emit(self.db)?;
             self.functions
                 .insert("__scrap_gc_write_barrier".to_string(), fid);
+        }
+
+        Some(())
+    }
+
+    /// Declare the spawn/coroutine runtime functions (imported from scrap_rt.lib).
+    pub fn declare_spawn_runtime(&mut self) -> Option<()> {
+        let ptr_ty = types::I64;
+        let call_conv = self.module.target_config().default_call_conv;
+
+        // __scrap_sched_init()
+        if !self.functions.contains_key("__scrap_sched_init") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            let fid = self
+                .module
+                .declare_function("__scrap_sched_init", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_sched_init".to_string(), fid);
+        }
+
+        // __scrap_sched_shutdown()
+        if !self.functions.contains_key("__scrap_sched_shutdown") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            let fid = self
+                .module
+                .declare_function("__scrap_sched_shutdown", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions
+                .insert("__scrap_sched_shutdown".to_string(), fid);
+        }
+
+        // __scrap_spawn(trampoline: i64, args_ptr: i64, nargs: i64)
+        if !self.functions.contains_key("__scrap_spawn") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            sig.params.push(AbiParam::new(ptr_ty)); // trampoline fn pointer
+            sig.params.push(AbiParam::new(ptr_ty)); // args_ptr
+            sig.params.push(AbiParam::new(ptr_ty)); // nargs
+            let fid = self
+                .module
+                .declare_function("__scrap_spawn", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("__scrap_spawn".to_string(), fid);
+        }
+
+        // __scrap_yield()
+        if !self.functions.contains_key("__scrap_yield") {
+            let mut sig = self.module.make_signature();
+            sig.call_conv = call_conv;
+            let fid = self
+                .module
+                .declare_function("__scrap_yield", Linkage::Import, &sig)
+                .or_emit(self.db)?;
+            self.functions.insert("__scrap_yield".to_string(), fid);
         }
 
         Some(())

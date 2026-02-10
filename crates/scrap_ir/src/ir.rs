@@ -276,6 +276,9 @@ pub enum Rvalue<'db> {
     Discriminant(Place<'db>),
     /// Take a reference to a place: `&place` or `&mut place`.
     Ref(Mutability, Place<'db>),
+    /// Spawn a coroutine: `spawn func(args)`.
+    /// First operand is the function reference, rest are arguments.
+    Spawn(Operand<'db>, Vec<Operand<'db>>),
 }
 
 /// An `Operand` is an input to an `Rvalue`.

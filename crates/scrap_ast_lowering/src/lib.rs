@@ -123,7 +123,7 @@ mod tests {
             return false;
         }
 
-        let function = result.unwrap();
+        let (function, _extras) = result.unwrap();
         function.signature(db).name(db).text(db) == "test_fn"
             && function.signature(db).params(db).len() == 0
             && function.signature(db).return_ty(db) == ir::Ty::Void
@@ -218,7 +218,7 @@ mod tests {
             return false;
         }
 
-        let function = result.unwrap();
+        let (function, _extras) = result.unwrap();
         let signature = function.signature(db);
         signature.name(db).text(db) == "add"
             && signature.params(db).len() == 2

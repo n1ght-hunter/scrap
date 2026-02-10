@@ -109,6 +109,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     return self.lower_aggregate_assign_with_kind(&place, kind, fields, builder, module);
                 }
 
+                // Special handling for spawn (no return value, generates trampoline)
+                if let ir::Rvalue::Spawn(ref func_op, ref args) = rvalue {
+                    return self.lower_spawn(func_op, args, builder, module);
+                }
+
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
                 self.assign_to_place(&place, value, builder, module)?;
             }
@@ -337,7 +342,145 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 };
                 Some(builder.use_var(*disc_var))
             }
+            ir::Rvalue::Spawn(_, _) => {
+                // Spawn is handled in lower_statement, not here
+                emit_codegen_err(self.db, "Rvalue::Spawn should be handled in lower_statement");
+                None
+            }
         }
+    }
+
+    /// Lower a spawn expression: generate a trampoline and call __scrap_spawn.
+    fn lower_spawn(
+        &self,
+        func_op: &ir::Operand<'db>,
+        args: &[ir::Operand<'db>],
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<()> {
+        // 1. Get the target function ID
+        let target_func_id = match func_op {
+            ir::Operand::FunctionRef(fid) => {
+                let name = fid.text(self.db);
+                match self.functions.get(name).copied() {
+                    Some(id) => id,
+                    None => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("spawn target '{}' not found", name),
+                        );
+                        return None;
+                    }
+                }
+            }
+            _ => {
+                emit_codegen_err(self.db, "spawn requires a function reference");
+                return None;
+            }
+        };
+
+        // 2. Lower arg operands and collect their Cranelift types
+        let mut arg_vals = Vec::new();
+        let mut arg_types = Vec::new();
+        for arg in args.iter() {
+            let val = self.lower_operand(arg, builder, module)?;
+            arg_types.push(builder.func.dfg.value_type(val));
+            arg_vals.push(val);
+        }
+
+        // 3. Generate trampoline function: fn(args_ptr: i64) that unpacks args and calls target
+        let tramp_id_num = self.next_data_id.get();
+        self.next_data_id.set(tramp_id_num + 1);
+        let tramp_name = format!("__spawn_tramp_{}", tramp_id_num);
+
+        let call_conv = module.target_config().default_call_conv;
+        let mut tramp_sig = module.make_signature();
+        tramp_sig.call_conv = call_conv;
+        tramp_sig.params.push(AbiParam::new(types::I64)); // args_ptr
+
+        let tramp_func_id = module
+            .declare_function(&tramp_name, Linkage::Local, &tramp_sig)
+            .or_emit(self.db)?;
+
+        // Define trampoline body using fresh Context/FunctionBuilderContext
+        {
+            let mut tramp_ctx = cranelift::codegen::Context::new();
+            tramp_ctx.func.signature = tramp_sig;
+            let mut tramp_func_ctx = FunctionBuilderContext::new();
+            let mut tramp_builder =
+                FunctionBuilder::new(&mut tramp_ctx.func, &mut tramp_func_ctx);
+
+            let entry = tramp_builder.create_block();
+            tramp_builder.append_block_params_for_function_params(entry);
+            tramp_builder.switch_to_block(entry);
+
+            let args_ptr_val = tramp_builder.block_params(entry)[0];
+
+            // Prepare call to target function
+            let target_ref =
+                module.declare_func_in_func(target_func_id, tramp_builder.func);
+            let mut call_args = Vec::new();
+
+            // Load each arg from the args buffer (stored at 8-byte offsets)
+            for (i, cl_ty) in arg_types.iter().enumerate() {
+                let offset = (i * 8) as i32;
+                let val = tramp_builder
+                    .ins()
+                    .load(*cl_ty, MemFlags::new(), args_ptr_val, offset);
+                call_args.push(val);
+            }
+
+            tramp_builder.ins().call(target_ref, &call_args);
+            tramp_builder.ins().return_(&[]);
+
+            tramp_builder.seal_all_blocks();
+            tramp_builder.finalize();
+
+            module
+                .define_function(tramp_func_id, &mut tramp_ctx)
+                .or_emit(self.db)?;
+        }
+
+        // 4. At spawn site: store args and call __scrap_spawn
+        let spawn_func_id = match self.functions.get("__scrap_spawn") {
+            Some(&id) => id,
+            None => {
+                emit_codegen_err(self.db, "__scrap_spawn not declared");
+                return None;
+            }
+        };
+        let spawn_ref = module.declare_func_in_func(spawn_func_id, builder.func);
+
+        // Get trampoline address as a function pointer
+        let tramp_ref = module.declare_func_in_func(tramp_func_id, builder.func);
+        let tramp_addr = builder.ins().func_addr(types::I64, tramp_ref);
+
+        let nargs = args.len();
+        if nargs > 0 {
+            // Store args to a stack slot (each arg at 8-byte offset)
+            let slot = builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                (nargs * 8) as u32,
+                0,
+            ));
+
+            for (i, val) in arg_vals.iter().enumerate() {
+                builder.ins().stack_store(*val, slot, (i * 8) as i32);
+            }
+
+            let args_ptr = builder.ins().stack_addr(types::I64, slot, 0);
+            let nargs_val = builder.ins().iconst(types::I64, nargs as i64);
+            builder
+                .ins()
+                .call(spawn_ref, &[tramp_addr, args_ptr, nargs_val]);
+        } else {
+            // Zero-arg spawn: null args pointer, 0 count
+            let null_ptr = builder.ins().iconst(types::I64, 0);
+            let zero = builder.ins().iconst(types::I64, 0);
+            builder.ins().call(spawn_ref, &[tramp_addr, null_ptr, zero]);
+        }
+
+        Some(())
     }
 
     /// Lower an unchecked intrinsic (binary op, unary op, comparison, etc.)

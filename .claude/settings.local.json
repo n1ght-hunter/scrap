@@ -11,7 +11,8 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(./target/scrap/*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

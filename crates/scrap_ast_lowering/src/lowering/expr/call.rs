@@ -162,6 +162,84 @@ impl<'db> ExprLowerer<'db> {
         Ok(ir::Operand::Place(destination))
     }
 
+    /// Lower a `spawn` expression: dispatches on Call, MethodCall, or Block.
+    pub(crate) fn lower_spawn(
+        &mut self,
+        expr: &Expr<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        match &expr.kind {
+            scrap_ast::expr::ExprKind::Call(callee, args) => {
+                self.lower_spawn_call(callee, args)
+            }
+            scrap_ast::expr::ExprKind::Block(block) => self.lower_spawn_block(block),
+            // For other expressions (like MethodCall), fall through to a generic
+            // lowering that treats the inner as a call.
+            _ => Err(crate::BuilderError::LowerExpressionError),
+        }
+    }
+
+    /// Lower `spawn f(args)` — emit Rvalue::Spawn with function ref and args.
+    fn lower_spawn_call(
+        &mut self,
+        callee: &Expr<'db>,
+        args: &[Box<Expr<'db>>],
+    ) -> MResult<ir::Operand<'db>> {
+        let fn_operand = self.lower_expr(callee)?;
+        let mut arg_operands = Vec::new();
+        for arg in args {
+            arg_operands.push(self.lower_expr(arg)?);
+        }
+
+        let result_temp = self.allocate_temp(ir::Ty::Void);
+        let dest = ir::Place::Local(result_temp);
+        self.emit_assign(dest.clone(), ir::Rvalue::Spawn(fn_operand, arg_operands));
+        Ok(ir::Operand::Place(dest))
+    }
+
+    /// Lower `spawn { ... }` — generate an anonymous function and emit a zero-arg spawn.
+    fn lower_spawn_block(
+        &mut self,
+        block: &scrap_ast::block::Block<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        let name = format!("__spawn_block_{}", self.spawn_block_counter);
+        self.spawn_block_counter += 1;
+        let name_sym = scrap_shared::ident::Symbol::new(self.db, name.clone());
+
+        // Create a fresh lowerer for the anonymous function body.
+        let mut block_lowerer = ExprLowerer::new(self.db, self.source, self.type_table);
+        block_lowerer.struct_fields = self.struct_fields.clone();
+        block_lowerer.enum_info = self.enum_info.clone();
+
+        // _0 = void return place
+        block_lowerer.allocate_temp(ir::Ty::Void);
+
+        // Lower the block's statements into the anonymous function.
+        block_lowerer.lower_block(block)?;
+
+        // Ensure the function body is terminated.
+        if !block_lowerer.cfg_builder.current_block_is_terminated() {
+            block_lowerer.cfg_builder.finish_block(ir::Terminator::Return);
+        }
+
+        // Build the anonymous IR function.
+        let blocks = block_lowerer.cfg_builder.build();
+        let body = ir::Body::new(self.db, blocks, block_lowerer.local_decls, 0);
+        let sig = ir::Signature::new(self.db, name_sym, vec![], ir::Ty::Void);
+        let func = ir::Function::new(self.db, sig, body);
+
+        // Collect the anonymous function (and any nested spawn blocks).
+        self.extra_functions.push(ir::Items::Function(func));
+        self.extra_functions.extend(block_lowerer.extra_functions);
+
+        // Emit a zero-arg spawn of the anonymous function.
+        let func_id = ir::FunctionId::new(self.db, name);
+        let fn_op = ir::Operand::FunctionRef(func_id);
+        let result_temp = self.allocate_temp(ir::Ty::Void);
+        let dest = ir::Place::Local(result_temp);
+        self.emit_assign(dest.clone(), ir::Rvalue::Spawn(fn_op, vec![]));
+        Ok(ir::Operand::Place(dest))
+    }
+
     /// Lower a function call directly into a destination place.
     pub(crate) fn lower_call_into(
         &mut self,

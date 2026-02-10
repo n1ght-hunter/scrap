@@ -5,5 +5,7 @@
 
 #![allow(unsafe_code)]
 
+#[macro_use]
+mod sync;
 mod coroutine;
 mod gc;

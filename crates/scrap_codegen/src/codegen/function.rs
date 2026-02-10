@@ -296,6 +296,13 @@ impl<'db> CodegenContext<'db> {
                 }
             }
 
+            // Emit yield point for cooperative scheduling (no-op if not in a coroutine)
+            if let Some(&yield_id) = self.functions.get("__scrap_yield") {
+                let yield_ref =
+                    self.module.declare_func_in_func(yield_id, builder.func);
+                builder.ins().call(yield_ref, &[]);
+            }
+
             // Create the translator (holds only shared/immutable references)
             let data_counter = std::cell::Cell::new(self.data_id_counter);
             let gc_shapes_cell = std::cell::RefCell::new(std::collections::HashMap::new());

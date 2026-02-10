@@ -13,30 +13,7 @@
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
 
-#[cfg(not(feature = "parking-lot"))]
-use std::sync::Mutex;
-#[cfg(feature = "parking-lot")]
-use parking_lot::Mutex;
-
-/// Lock a mutex, abstracting over std (`lock().unwrap()`) vs parking_lot (`lock()`).
-macro_rules! mutex_lock {
-    ($mutex:expr) => {{
-        #[cfg(not(feature = "parking-lot"))]
-        { $mutex.lock().unwrap() }
-        #[cfg(feature = "parking-lot")]
-        { $mutex.lock() }
-    }};
-}
-
-/// Try to lock a mutex, abstracting over std vs parking_lot.
-macro_rules! mutex_try_lock {
-    ($mutex:expr) => {{
-        #[cfg(not(feature = "parking-lot"))]
-        { $mutex.try_lock().ok() }
-        #[cfg(feature = "parking-lot")]
-        { $mutex.try_lock() }
-    }};
-}
+use crate::sync::Mutex;
 
 // ---------------------------------------------------------------------------
 // Debug logging — only compiled when the `gc-debug` feature is enabled.
