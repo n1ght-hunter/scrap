@@ -21,6 +21,7 @@ edition = "2024"
 # Local crates
 scrap_rt = { path = "crates/scrap_rt" }
 scrap_allocator = { path = "runtime/allocator" }
+scrap_coroutine = { path = "runtime/coroutine" }
 scrap_parser = { path = "crates/scrap_parser" }
 scrap_parser_rowan = { path = "crates/scrap_parser_rowan" }
 scrap_formatter = { path = "crates/scrap_formatter" }
@@ -67,7 +68,6 @@ thin-vec = "0.2"
 parking_lot = "0.12.5"
 crossbeam = "0.8"
 rustc-hash = "2.1.1"
-corosensei = "0.3"
 crossbeam-channel = "0.5.15"
 hashbrown = "0.16"
 indexmap = "2"

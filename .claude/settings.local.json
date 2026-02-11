@@ -12,7 +12,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(./target/scrap/*)",
       "Bash(echo:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:docs.wasmtime.dev)",
+      "Bash(cargo doc:*)"
     ],
     "deny": [],
     "ask": []

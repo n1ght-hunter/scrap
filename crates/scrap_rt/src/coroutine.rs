@@ -1,13 +1,14 @@
 //! M:N coroutine scheduler for `spawn` support.
 //!
-//! Uses corosensei for context switching and a pool of OS worker threads.
-//! Spawned coroutines run concurrently with `main` on real OS threads.
+//! Uses scrap_coroutine for context switching and a pool of OS worker threads.
+//! Coroutines can migrate between workers (work-stealing) since
+//! `CoroutineStack` is `Send`.
 
-use corosensei::{Coroutine, CoroutineResult, Yielder};
+use scrap_coroutine::{CoroutineStack, CoroutineStatus};
 use std::cell::Cell;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
 use crate::sync::{Condvar, Mutex};
@@ -15,31 +16,6 @@ use crate::sync::{Condvar, Mutex};
 // ---------------------------------------------------------------------------
 // Typed wrappers for raw pointers
 // ---------------------------------------------------------------------------
-
-/// Opaque handle to a `corosensei::Yielder<(), ()>`.
-///
-/// Stored in thread-local storage so `__scrap_yield` can suspend the current
-/// coroutine without holding a borrow on the `Yielder`.
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-struct YielderPtr(*const Yielder<(), ()>);
-
-impl YielderPtr {
-    const NULL: Self = Self(std::ptr::null());
-
-    fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Suspend the coroutine through the stored yielder.
-    ///
-    /// # Safety
-    /// The pointer must be valid and point to a live `Yielder` whose
-    /// coroutine is currently executing.
-    unsafe fn suspend(self) {
-        unsafe { (*self.0).suspend(()) }
-    }
-}
 
 /// Opaque handle to the GC shadow-stack top pointer.
 ///
@@ -52,6 +28,10 @@ pub(crate) struct ShadowStackTop(pub(crate) *mut u8);
 impl ShadowStackTop {
     pub(crate) const NULL: Self = Self(std::ptr::null_mut());
 }
+
+// SAFETY: The pointer refers to the coroutine's own shadow-stack data
+// (heap-allocated), not thread-specific state.
+unsafe impl Send for ShadowStackTop {}
 
 /// Type-safe wrapper around a compiler-generated spawn trampoline.
 ///
@@ -79,26 +59,45 @@ impl Trampoline {
 }
 
 // ---------------------------------------------------------------------------
+// Stack overflow detection
+// ---------------------------------------------------------------------------
+
+// Stack limit for the currently running coroutine on this worker thread.
+// Set to the stack's committed_bottom when a coroutine is resumed.
+// Cleared to 0 when the coroutine yields or completes.
+// 0 means "no limit" (main thread or no coroutine running).
+thread_local! {
+    static STACK_LIMIT: Cell<u64> = const { Cell::new(0) };
+    static NEEDS_GROWTH: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Headroom below the stack limit before we trigger growth / abort.
+const RED_ZONE: u64 = 2048;
+
+/// Abort with a stack overflow message. Does not return.
+fn stack_overflow_abort() -> ! {
+    let msg = b"stack overflow in coroutine (max stack size reached)\n";
+
+    use std::io::Write;
+    let _ = std::io::stderr().write_all(msg);
+    std::process::exit(101);
+}
+
+// ---------------------------------------------------------------------------
 // Scheduler internals
 // ---------------------------------------------------------------------------
 
-/// What gets sent through the global queue: just the spawn arguments.
-/// The `Coroutine` is created on the worker thread that picks this up,
-/// so `Coroutine` (which is `!Send`) never crosses a thread boundary.
-struct SpawnRequest {
-    tramp: Trampoline,
-    args: Vec<u8>,
-}
-
-/// A live coroutine, only ever lives on one worker's local queue.
-/// Never sent between threads — no `Send` impl needed.
+/// A live coroutine with its GC shadow-stack state.
+/// `Send` because both `CoroutineStack` and `ShadowStackTop` are `Send`.
 struct Task {
-    coro: Coroutine<(), (), ()>,
+    coro: CoroutineStack,
     shadow_top: ShadowStackTop,
+    /// Stack limit address for overflow checks (committed_bottom of the stack).
+    stack_limit: u64,
 }
 
 struct SchedulerState {
-    queue: Mutex<VecDeque<SpawnRequest>>,
+    queue: Mutex<VecDeque<Task>>,
     condvar: Condvar,
     shutdown: AtomicBool,
     workers: Mutex<Vec<JoinHandle<()>>>,
@@ -106,74 +105,75 @@ struct SchedulerState {
 
 static STATE: OnceLock<SchedulerState> = OnceLock::new();
 
-thread_local! {
-    /// Pointer to the current coroutine's Yielder (null when on main/idle stack).
-    static CURRENT_YIELDER: Cell<YielderPtr> = const { Cell::new(YielderPtr::NULL) };
-}
-
 // ---------------------------------------------------------------------------
 // Worker thread logic
 // ---------------------------------------------------------------------------
 
 fn worker_loop() {
     let state = STATE.get().expect("scheduler not initialized");
-    // Per-worker local run queue. Coroutines that yield stay pinned to this
-    // thread (no cross-thread migration — corosensei TEB issue on Windows).
-    // Yield round-robins among all coroutines assigned to this worker.
-    let mut local: VecDeque<Task> = VecDeque::new();
 
     loop {
-        // Pick next task: prefer local queue, then create from global spawn request.
-        let task = if let Some(task) = local.pop_front() {
-            task
-        } else {
-            // Block on global queue for a new SpawnRequest.
-            let req = {
-                let mut queue = mutex_lock!(state.queue);
-                loop {
-                    if let Some(req) = queue.pop_front() {
-                        break req;
-                    }
-                    if state.shutdown.load(Ordering::Acquire) {
-                        return;
-                    }
-                    condvar_wait!(state.condvar, queue);
+        // Block on global queue for the next task.
+        let task = {
+            let mut queue = mutex_lock!(state.queue);
+            loop {
+                if let Some(task) = queue.pop_front() {
+                    break task;
                 }
-            };
-            // Create the Coroutine here on the worker thread — never crosses threads.
-            make_task(req)
+                if state.shutdown.load(Ordering::Acquire) {
+                    return;
+                }
+                condvar_wait!(state.condvar, queue);
+            }
         };
 
-        resume_task(task, &mut local);
+        resume_task(task, state);
     }
 }
 
-/// Turn a `SpawnRequest` into a live `Task` (coroutine).
-/// Must be called on the worker thread that will own this coroutine.
-fn make_task(req: SpawnRequest) -> Task {
-    let coro = Coroutine::new(move |yielder, ()| {
-        CURRENT_YIELDER.with(|c| c.set(YielderPtr(yielder as *const Yielder<(), ()>)));
-        req.tramp.call(req.args.as_ptr());
-    });
-    Task {
-        coro,
-        shadow_top: ShadowStackTop::NULL,
-    }
-}
-
-/// Resume a single task once. If it yields, push it to the back of `local`.
-/// If it returns, drop it.
-fn resume_task(mut task: Task, local: &mut VecDeque<Task>) {
+/// Resume a single task once. If it yields, push it back to the global queue
+/// so any worker can pick it up. If it completes, return its stack to the pool.
+fn resume_task(mut task: Task, state: &SchedulerState) {
     crate::gc::restore_shadow_stack_top(task.shadow_top);
 
-    match task.coro.resume(()) {
-        CoroutineResult::Yield(()) => {
+    // Set the stack limit so __scrap_yield can detect overflow.
+    STACK_LIMIT.with(|c| c.set(task.stack_limit));
+
+    match task.coro.resume() {
+        CoroutineStatus::Yielded => {
             task.shadow_top = crate::gc::save_shadow_stack_top();
-            local.push_back(task);
-        }
-        CoroutineResult::Return(()) => {
+            // Clear this worker's shadow stack pointer before the task migrates.
             crate::gc::restore_shadow_stack_top(ShadowStackTop::NULL);
-            CURRENT_YIELDER.with(|c| c.set(YielderPtr::NULL));
+            STACK_LIMIT.with(|c| c.set(0));
+
+            // Check if the coroutine requested a stack growth.
+            let needs_growth = NEEDS_GROWTH.with(|c| {
+                let v = c.get();
+                c.set(false);
+                v
+            });
+            if needs_growth {
+                let old_size = task.coro.stack_size();
+                let new_size = old_size * 2;
+                if new_size > scrap_coroutine::MAX_STACK_SIZE {
+                    stack_overflow_abort();
+                }
+                let new_stack = scrap_coroutine::acquire_stack(new_size);
+                let old_stack = task.coro.grow_stack(new_stack);
+                task.stack_limit = task.coro.stack_limit();
+                scrap_coroutine::release_stack(old_stack);
+            }
+
+            // Push back to global queue — any worker can resume this coroutine.
+            mutex_lock!(state.queue).push_back(task);
+            state.condvar.notify_one();
+        }
+        CoroutineStatus::Completed => {
+            crate::gc::restore_shadow_stack_top(ShadowStackTop::NULL);
+            STACK_LIMIT.with(|c| c.set(0));
+            if let Some(stack) = task.coro.take_stack() {
+                scrap_coroutine::release_stack(stack);
+            }
         }
     }
 }
@@ -226,28 +226,45 @@ pub extern "C" fn __scrap_spawn(trampoline: usize, args_ptr: *const u8, nargs: u
 
     let tramp = unsafe { Trampoline::from_raw(trampoline) };
 
+    let stack = scrap_coroutine::acquire_stack(scrap_coroutine::DEFAULT_STACK_SIZE);
+    let stack_limit = stack.committed_bottom() as u64;
+
+    let coro = CoroutineStack::with_stack(stack, move || {
+        tramp.call(args_copy.as_ptr());
+    });
+
+    let task = Task {
+        coro,
+        shadow_top: ShadowStackTop::NULL,
+        stack_limit,
+    };
+
     let state = STATE.get().expect("scheduler not initialized");
-    mutex_lock!(state.queue).push_back(SpawnRequest { tramp, args: args_copy });
+    mutex_lock!(state.queue).push_back(task);
     state.condvar.notify_one();
 }
 
-/// Yield the current coroutine. No-op if called from the main stack.
+/// Combined yield point + stack overflow check.
 ///
-/// After suspend, the coroutine may resume on a different OS thread.
-/// We must not hold a TLS borrow across the suspend point.
+/// Called at every function prologue. On the main thread (STACK_LIMIT == 0),
+/// this is a fast no-op. Inside a coroutine, checks the stack and yields.
 #[unsafe(no_mangle)]
 pub extern "C" fn __scrap_yield() {
-    // Copy the yielder pointer out of TLS (drops the TLS borrow).
-    let ptr = CURRENT_YIELDER.with(|cell| cell.get());
-    if ptr.is_null() {
-        return; // Not in a coroutine — no-op.
+    let limit = STACK_LIMIT.with(|c| c.get());
+    if limit == 0 {
+        return; // Main thread — no coroutine, no check.
     }
 
-    // Suspend. When this returns, we may be on a different OS thread.
-    unsafe { ptr.suspend() }
+    // Stack overflow check: read RSP and compare against the limit.
+    let sp: u64;
+    unsafe { std::arch::asm!("mov {}, rsp", out(reg) sp) };
+    if sp <= limit + RED_ZONE {
+        // Signal the scheduler to grow the stack, then yield so it can.
+        NEEDS_GROWTH.with(|c| c.set(true));
+    }
 
-    // Re-set CURRENT_YIELDER on whatever thread we resumed on.
-    CURRENT_YIELDER.with(|cell| cell.set(ptr));
+    // Cooperative yield.
+    scrap_coroutine::yield_current();
 }
 
 /// Drain remaining coroutines and shut down worker threads.

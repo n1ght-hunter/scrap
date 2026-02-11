@@ -1,0 +1,7 @@
+[package]
+name = "scrap_coroutine"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
