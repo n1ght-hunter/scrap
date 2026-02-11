@@ -1,19 +1,20 @@
-//! Concurrent mark-and-sweep garbage collector with per-thread shadow stacks.
+//! Stop-the-world mark-and-sweep garbage collector with stack-map-based root scanning.
 //!
 //! Design:
-//! - Each thread has its own `ThreadState` with a shadow stack (lock-free push/pop)
-//! - Global heap state protected by a `Mutex`
-//! - Tri-color marking with concurrent write barrier (Dijkstra insertion barrier)
-//! - GC phase flag: Idle → Mark → Sweep → Idle
-//! - Write barrier fast path: one atomic load + one branch (near-zero cost when idle)
+//! - GC roots are discovered by walking the stack via frame pointers (RBP chain)
+//!   and consulting a compile-time stack map table emitted by Cranelift.
+//! - Cooperative stop-the-world: all threads pause at `__scrap_yield` safepoints
+//!   before the GC scans stacks.
+//! - No shadow stack, no write barrier — roots are found precisely at safepoints.
 
 // When gc-debug is off, counters used only in gc_log! appear unused.
 #![cfg_attr(not(feature = "gc-debug"), allow(unused_variables, unused_assignments))]
 
+use std::cell::Cell;
 use std::ptr::null_mut;
-use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
-use crate::sync::Mutex;
+use crate::sync::{Condvar, Mutex};
 
 // ---------------------------------------------------------------------------
 // Debug logging — only compiled when the `gc-debug` feature is enabled.
@@ -50,7 +51,6 @@ impl GcShape {
 
 // ---------------------------------------------------------------------------
 // ObjHeader — prepended to every GC-allocated object.
-// mark field is AtomicU8 for concurrent access during marking.
 // ---------------------------------------------------------------------------
 
 const MARK_WHITE: u8 = 0;
@@ -73,62 +73,197 @@ impl ObjHeader {
 }
 
 // ---------------------------------------------------------------------------
-// Shadow stack frame — same structure, per-thread linked list.
+// Stack map table — extern symbols emitted by codegen into the COFF object.
 // ---------------------------------------------------------------------------
 
+unsafe extern "C" {
+    static __scrap_stackmap_count: u64;
+    static __scrap_stackmap_index: u8; // start of IndexEntry array
+    static __scrap_stackmap_roots: u8; // start of packed u32 array
+}
+
+/// Matches the binary layout emitted by `emit_stack_map_table` in codegen.
 #[repr(C)]
-struct ShadowFrame {
-    prev: *mut ShadowFrame,
-    slots: *mut *mut u8,
-    count: u64,
+#[derive(Clone, Copy)]
+struct IndexEntry {
+    return_addr: u64,
+    roots_start: u32,
+    roots_count: u32,
+}
+
+/// Sorted (by return_addr) copy of the stack map index, built at init time.
+struct StackMapState {
+    entries: Vec<IndexEntry>,
+    roots: *const u32,
+}
+
+unsafe impl Send for StackMapState {}
+unsafe impl Sync for StackMapState {}
+
+static STACK_MAPS: std::sync::OnceLock<StackMapState> = std::sync::OnceLock::new();
+
+fn init_stack_maps() {
+    STACK_MAPS.get_or_init(|| unsafe {
+        let count = __scrap_stackmap_count as usize;
+        let index_ptr = &__scrap_stackmap_index as *const u8 as *const IndexEntry;
+        let roots_ptr = &__scrap_stackmap_roots as *const u8 as *const u32;
+
+        let mut entries: Vec<IndexEntry> = Vec::with_capacity(count);
+        for i in 0..count {
+            entries.push(index_ptr.add(i).read());
+        }
+        entries.sort_by_key(|e| e.return_addr);
+
+        gc_log!("stack maps: {} entries loaded and sorted", count);
+
+        StackMapState {
+            entries,
+            roots: roots_ptr,
+        }
+    });
+}
+
+/// Binary search for a stack map entry matching `return_addr`.
+/// Returns (roots_start_index, roots_count) if found.
+fn find_stack_map(return_addr: u64) -> Option<(usize, usize)> {
+    let state = STACK_MAPS.get()?;
+    let idx = state
+        .entries
+        .binary_search_by_key(&return_addr, |e| e.return_addr)
+        .ok()?;
+    let entry = &state.entries[idx];
+    Some((entry.roots_start as usize, entry.roots_count as usize))
 }
 
 // ---------------------------------------------------------------------------
-// Per-thread state
+// Frame-pointer stack walking
 // ---------------------------------------------------------------------------
 
-struct ThreadState {
-    shadow_stack_top: AtomicPtr<ShadowFrame>,
+/// Walk the RBP chain starting from `initial_rbp`, discovering GC roots
+/// via the stack map table. Each discovered non-null root pointer is passed
+/// to `mark_root`.
+unsafe fn walk_stack_roots(initial_rbp: u64, mark_root: &mut impl FnMut(*mut u8)) {
+    let state = match STACK_MAPS.get() {
+        Some(s) => s,
+        None => return,
+    };
+    if state.entries.is_empty() {
+        return;
+    }
+
+    let mut rbp = initial_rbp;
+    #[cfg(feature = "gc-debug")]
+    let mut frames_walked: usize = 0;
+    #[cfg(feature = "gc-debug")]
+    let mut roots_found: usize = 0;
+
+    unsafe {
+        loop {
+            if rbp == 0 {
+                break;
+            }
+            // Validate pointer alignment and basic readability
+            if rbp % 8 != 0 {
+                break;
+            }
+
+            let return_addr = *((rbp + 8) as *const u64);
+            if return_addr == 0 {
+                break;
+            }
+
+            #[cfg(feature = "gc-debug")]
+            {
+                frames_walked += 1;
+            }
+
+            if let Some((roots_start, roots_count)) = find_stack_map(return_addr) {
+                // caller_sp = RBP_callee + 16 (pushed return addr + pushed RBP)
+                let caller_sp = rbp + 16;
+                for i in 0..roots_count {
+                    let sp_offset = *state.roots.add(roots_start + i);
+                    let root_addr = (caller_sp + sp_offset as u64) as *const u64;
+                    let root_val = *root_addr;
+                    if root_val != 0 {
+                        #[cfg(feature = "gc-debug")]
+                        {
+                            roots_found += 1;
+                        }
+                        mark_root(root_val as *mut u8);
+                    }
+                }
+            }
+
+            // Follow frame chain
+            rbp = *(rbp as *const u64);
+        }
+    }
+
+    gc_log!(
+        "walk_stack: {} frames walked, {} roots found",
+        frames_walked,
+        roots_found
+    );
 }
 
-// SAFETY: ThreadState is heap-allocated per thread, shadow_stack_top is atomic.
-unsafe impl Send for ThreadState {}
-unsafe impl Sync for ThreadState {}
+// ---------------------------------------------------------------------------
+// STW coordination
+// ---------------------------------------------------------------------------
+
+/// Set by the GC thread to request all other threads to pause at safepoints.
+pub(crate) static GC_SCAN_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Number of coroutines currently being executed by worker threads.
+/// Incremented before resume, decremented after yield/complete.
+pub(crate) static ACTIVE_COROS: AtomicU32 = AtomicU32::new(0);
+
+pub(crate) struct GcPauseState {
+    /// RBPs of threads/coroutines that have reached safepoints.
+    pub(crate) parked_rbps: Vec<u64>,
+    /// True when GC scanning + sweep is done, parked threads can resume.
+    pub(crate) gc_done: bool,
+}
+
+pub(crate) static GC_PAUSE: Mutex<GcPauseState> = Mutex::new(GcPauseState {
+    parked_rbps: Vec::new(),
+    gc_done: false,
+});
+
+pub(crate) static GC_PAUSE_CONDVAR: Condvar = Condvar::new();
 
 thread_local! {
-    static THREAD_STATE: std::cell::Cell<*mut ThreadState> = const { std::cell::Cell::new(null_mut()) };
+    /// True on the thread currently running GC (should not park itself).
+    static IS_GC_THREAD: Cell<bool> = const { Cell::new(false) };
+    /// True on the main thread.
+    static IS_MAIN_THREAD: Cell<bool> = const { Cell::new(false) };
 }
 
-fn ensure_thread_registered() -> *mut ThreadState {
-    THREAD_STATE.with(|cell| {
-        let ptr = cell.get();
-        if !ptr.is_null() {
-            return ptr;
-        }
-        let state = Box::into_raw(Box::new(ThreadState {
-            shadow_stack_top: AtomicPtr::new(null_mut()),
-        }));
-        cell.set(state);
-        let mut registry = mutex_lock!(THREAD_REGISTRY);
-        registry.push(SendPtr(state));
-        gc_log!(
-            "thread registered: state={:?}, total_threads={}",
-            state,
-            registry.len()
-        );
-        state
-    })
+/// Check if the current thread is the GC thread (called from coroutine.rs).
+pub(crate) fn is_gc_thread() -> bool {
+    IS_GC_THREAD.with(|c| c.get())
 }
 
-// ---------------------------------------------------------------------------
-// GC phase flag — checked by write barrier fast path.
-// ---------------------------------------------------------------------------
+/// Called from `__scrap_yield` when `GC_SCAN_REQUESTED` is true.
+/// The calling thread registers its current RBP and blocks until GC is done.
+/// Must NOT be called on the GC thread itself.
+pub(crate) fn gc_safepoint() {
+    if IS_GC_THREAD.with(|c| c.get()) {
+        return;
+    }
 
-const PHASE_IDLE: u8 = 0;
-const PHASE_MARK: u8 = 1;
-const PHASE_SWEEP: u8 = 2;
+    // Read current RBP
+    let rbp: u64;
+    unsafe { std::arch::asm!("mov {}, rbp", out(reg) rbp) };
 
-static GC_PHASE: AtomicU8 = AtomicU8::new(PHASE_IDLE);
+    let mut state = mutex_lock!(GC_PAUSE);
+    state.parked_rbps.push(rbp);
+    GC_PAUSE_CONDVAR.notify_all(); // wake GC thread if waiting
+
+    // Wait for GC to finish
+    while !state.gc_done {
+        condvar_wait!(GC_PAUSE_CONDVAR, state);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Global heap state (protected by mutex).
@@ -141,7 +276,7 @@ struct HeapState {
 }
 
 // SAFETY: ObjHeader pointers are only accessed under the HEAP mutex or during
-// single-threaded mark/sweep with proper atomic coordination.
+// STW (all other threads paused).
 unsafe impl Send for HeapState {}
 
 const INITIAL_HEAP_THRESHOLD: usize = 1024 * 1024; // 1MB
@@ -151,32 +286,6 @@ static HEAP: Mutex<HeapState> = Mutex::new(HeapState {
     bytes_allocated: 0,
     threshold: INITIAL_HEAP_THRESHOLD,
 });
-
-// ---------------------------------------------------------------------------
-// Thread registry — tracks all thread states for root scanning.
-// ---------------------------------------------------------------------------
-
-static THREAD_REGISTRY: Mutex<Vec<SendPtr<ThreadState>>> = Mutex::new(Vec::new());
-
-// SAFETY: ShadowFrame pointers are only accessed by their owning thread or during GC.
-unsafe impl Send for ShadowFrame {}
-
-// Wrapper types to make raw pointers Send for use in Mutex<Vec<...>>.
-struct SendPtr<T>(*mut T);
-impl<T> Clone for SendPtr<T> {
-    fn clone(&self) -> Self {
-        SendPtr(self.0)
-    }
-}
-impl<T> Copy for SendPtr<T> {}
-unsafe impl<T> Send for SendPtr<T> {}
-unsafe impl<T> Sync for SendPtr<T> {}
-
-// ---------------------------------------------------------------------------
-// Barrier worklist — objects shaded gray by write barriers during marking.
-// ---------------------------------------------------------------------------
-
-static BARRIER_WORKLIST: Mutex<Vec<SendPtr<ObjHeader>>> = Mutex::new(Vec::new());
 
 // ---------------------------------------------------------------------------
 // Exported C ABI functions
@@ -193,10 +302,13 @@ pub extern "C" fn __scrap_gc_init() {
         heap.bytes_allocated = 0;
         heap.threshold = 1024 * 1024;
     }
-    GC_PHASE.store(PHASE_IDLE, Ordering::Relaxed);
 
-    // Register the main thread
-    ensure_thread_registered();
+    // Initialize stack map table (sort by return_addr for binary search)
+    init_stack_maps();
+
+    // Mark this as the main thread
+    IS_MAIN_THREAD.with(|c| c.set(true));
+
     gc_log!("init: complete, threshold={} bytes", INITIAL_HEAP_THRESHOLD);
 }
 
@@ -269,8 +381,6 @@ unsafe fn init_obj_header(
     heap: &mut HeapState,
 ) {
     unsafe {
-        // Initialize mark as white. We can't use simple assignment for AtomicU8 in
-        // a zeroed allocation, so use store.
         (*ptr).mark.store(MARK_WHITE, Ordering::Relaxed);
         (*ptr).size = size as u64;
         (*ptr).shape = shape;
@@ -288,76 +398,8 @@ pub extern "C" fn __scrap_gc_collect() {
     collect(&mut heap);
 }
 
-/// Push a shadow stack frame. Lock-free — writes only to this thread's state.
-#[unsafe(no_mangle)]
-pub extern "C" fn __scrap_gc_push_frame(slots: *mut *mut u8, count: u64) {
-    let state = ensure_thread_registered();
-    unsafe {
-        let prev = (*state).shadow_stack_top.load(Ordering::Relaxed);
-        let frame = Box::into_raw(Box::new(ShadowFrame { prev, slots, count }));
-        (*state).shadow_stack_top.store(frame, Ordering::Release);
-        gc_log!(
-            "push_frame: slots={:?}, count={}, frame={:?}",
-            slots,
-            count,
-            frame
-        );
-    }
-}
-
-/// Pop the top shadow stack frame. Lock-free.
-#[unsafe(no_mangle)]
-pub extern "C" fn __scrap_gc_pop_frame() {
-    THREAD_STATE.with(|cell| {
-        let state = cell.get();
-        if !state.is_null() {
-            unsafe {
-                let frame = (*state).shadow_stack_top.load(Ordering::Relaxed);
-                if !frame.is_null() {
-                    gc_log!("pop_frame: frame={:?}, count={}", frame, (*frame).count);
-                    let prev = (*frame).prev;
-                    (*state).shadow_stack_top.store(prev, Ordering::Release);
-                    drop(Box::from_raw(frame));
-                }
-            }
-        }
-    });
-}
-
-/// Write barrier — called from generated code when storing a `*T` to a heap location.
-///
-/// Fast path (GC not marking): one relaxed atomic load + one branch.
-/// Slow path: shade the target gray via CAS, add to barrier worklist.
-#[unsafe(no_mangle)]
-pub extern "C" fn __scrap_gc_write_barrier(new_val: *mut u8) {
-    // Fast path — Acquire pairs with the Release store in collect() that sets PHASE_MARK,
-    // ensuring the mutator sees the phase transition and doesn't skip the barrier.
-    if GC_PHASE.load(Ordering::Acquire) != PHASE_MARK {
-        return;
-    }
-
-    // Slow path
-    if new_val.is_null() {
-        gc_log!("write_barrier: slow path, new_val is null — skip");
-        return;
-    }
-    unsafe {
-        if let Some(header) = data_ptr_to_header(new_val) {
-            // CAS white → gray (idempotent if already gray or black)
-            if (*header)
-                .mark
-                .compare_exchange(MARK_WHITE, MARK_GRAY, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok()
-            {
-                gc_log!("write_barrier: shaded {:?} white->gray", header);
-                mutex_lock!(BARRIER_WORKLIST).push(SendPtr(header));
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
-// Collection: mark + sweep
+// Collection: STW pause + mark + sweep
 // ---------------------------------------------------------------------------
 
 /// Run a full GC cycle. Caller must hold the HEAP mutex.
@@ -368,87 +410,92 @@ fn collect(heap: &mut HeapState) {
         heap.threshold
     );
 
-    GC_PHASE.store(PHASE_MARK, Ordering::Release);
-    gc_log!("phase -> MARK");
+    IS_GC_THREAD.with(|c| c.set(true));
 
-    unsafe {
-        mark_phase();
+    // Get our own RBP for stack scanning
+    let gc_rbp: u64;
+    unsafe { std::arch::asm!("mov {}, rbp", out(reg) gc_rbp) };
+
+    // Request all threads to pause at safepoints
+    {
+        let mut ps = mutex_lock!(GC_PAUSE);
+        ps.gc_done = false;
+        ps.parked_rbps.clear();
+    }
+    GC_SCAN_REQUESTED.store(true, Ordering::Release);
+
+    // Wait for all active coroutines to yield and park.
+    // Workers decrement ACTIVE_COROS after yield, then check GC_SCAN_REQUESTED
+    // and register their coroutine's RBP in GC_PAUSE.
+    {
+        let mut ps = mutex_lock!(GC_PAUSE);
+        loop {
+            let active = ACTIVE_COROS.load(Ordering::Acquire);
+            if active == 0 {
+                break;
+            }
+            gc_log!("collect: waiting for {} active coroutines to yield", active);
+            condvar_wait!(GC_PAUSE_CONDVAR, ps);
+        }
     }
 
-    GC_PHASE.store(PHASE_SWEEP, Ordering::Release);
-    gc_log!("phase -> SWEEP");
+    gc_log!("collect: all threads paused, scanning stacks");
 
-    let bytes_before = heap.bytes_allocated;
-    unsafe {
-        sweep_phase(heap);
-    }
+    // Collect parked RBPs (from workers and possibly main thread safepoints)
+    let parked_rbps: Vec<u64> = {
+        let ps = mutex_lock!(GC_PAUSE);
+        ps.parked_rbps.clone()
+    };
 
-    GC_PHASE.store(PHASE_IDLE, Ordering::Release);
-    gc_log!(
-        "=== collection end: reclaimed {} bytes, {} bytes remain ===",
-        bytes_before.saturating_sub(heap.bytes_allocated),
-        heap.bytes_allocated
-    );
-}
+    // Also get RBPs from all coroutines sitting in the scheduler queue
+    let queued_rbps = crate::coroutine::get_queued_coro_rbps();
 
-// ---------------------------------------------------------------------------
-// Mark phase — scans all thread shadow stacks, traces heap.
-// ---------------------------------------------------------------------------
-
-unsafe fn mark_phase() {
+    // Mark phase: walk all stacks to discover roots
     unsafe {
         let mut worklist: Vec<*mut ObjHeader> = Vec::new();
-        #[cfg(feature = "gc-debug")]
-        let mut roots_found: usize = 0;
-        #[cfg(feature = "gc-debug")]
-        let mut ti: usize = 0;
 
-        // Snapshot thread registry (brief lock)
-        let threads: Vec<SendPtr<ThreadState>> = mutex_lock!(THREAD_REGISTRY).clone();
-        gc_log!("mark: scanning {} threads for roots", threads.len());
+        // 1. Walk the GC thread's own stack
+        gc_log!("collect: walking GC thread stack (rbp={:#x})", gc_rbp);
+        walk_stack_roots(gc_rbp, &mut |root| {
+            if let Some(header) = data_ptr_to_header(root) {
+                if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
+                    (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                    worklist.push(header);
+                }
+            }
+        });
 
-        // Scan all thread shadow stacks for roots
-        for &SendPtr(thread_state) in &threads {
-            #[cfg(feature = "gc-debug")]
-            let mut frame_count: usize = 0;
-            let mut frame = (*thread_state).shadow_stack_top.load(Ordering::Acquire);
-            while !frame.is_null() {
-                let slots = (*frame).slots;
-                let count = (*frame).count as usize;
-                for i in 0..count {
-                    let slot_val = *slots.add(i);
-                    if !slot_val.is_null() {
-                        if let Some(header) = data_ptr_to_header(slot_val) {
-                            if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                                (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                                worklist.push(header);
-                                #[cfg(feature = "gc-debug")]
-                                {
-                                    roots_found += 1;
-                                }
-                            }
-                        }
+        // 2. Walk parked coroutine stacks (workers that yielded for GC)
+        for &rbp in &parked_rbps {
+            gc_log!("collect: walking parked coroutine stack (rbp={:#x})", rbp);
+            walk_stack_roots(rbp, &mut |root| {
+                if let Some(header) = data_ptr_to_header(root) {
+                    if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
+                        (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                        worklist.push(header);
                     }
                 }
-                #[cfg(feature = "gc-debug")]
-                {
-                    frame_count += 1;
-                }
-                frame = (*frame).prev;
-            }
-            gc_log!("mark: thread[{}] scanned {} frames", ti, frame_count);
-            #[cfg(feature = "gc-debug")]
-            {
-                ti += 1;
-            }
+            });
         }
-        gc_log!("mark: found {} roots", roots_found);
 
-        // Process gray objects (trace from roots)
+        // 3. Walk queued coroutine stacks (already yielded, sitting in queue)
+        for rbp in &queued_rbps {
+            gc_log!("collect: walking queued coroutine stack (rbp={:#x})", rbp);
+            walk_stack_roots(*rbp, &mut |root| {
+                if let Some(header) = data_ptr_to_header(root) {
+                    if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
+                        (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                        worklist.push(header);
+                    }
+                }
+            });
+        }
+
+        gc_log!("collect: found {} root objects", worklist.len());
+
+        // Trace from roots (transitive marking)
         #[cfg(feature = "gc-debug")]
         let mut traced: usize = 0;
-        #[cfg(feature = "gc-debug")]
-        let mut barrier_drained: usize = 0;
         while let Some(obj) = worklist.pop() {
             (*obj).mark.store(MARK_BLACK, Ordering::Relaxed);
             #[cfg(feature = "gc-debug")]
@@ -471,74 +518,32 @@ unsafe fn mark_phase() {
                     }
                 }
             }
-
-            // Drain barrier worklist (objects shaded gray by concurrent mutators)
-            if let Some(mut barrier) = mutex_try_lock!(BARRIER_WORKLIST) {
-                #[cfg(feature = "gc-debug")]
-                {
-                    let n = barrier.len();
-                    if n > 0 {
-                        gc_log!("mark: draining {} barrier entries", n);
-                        barrier_drained += n;
-                    }
-                }
-                for SendPtr(obj) in barrier.drain(..) {
-                    worklist.push(obj);
-                }
-            }
         }
-        gc_log!(
-            "mark: traced {} objects, {} barrier entries drained",
-            traced,
-            barrier_drained
-        );
-
-        // Final drain — ensure no barrier entries were missed
-        let mut barrier = mutex_lock!(BARRIER_WORKLIST);
-        let mut remaining: Vec<*mut ObjHeader> = barrier.drain(..).map(|SendPtr(p)| p).collect();
-        drop(barrier);
-
-        #[cfg(feature = "gc-debug")]
-        if !remaining.is_empty() {
-            gc_log!("mark: final drain has {} entries", remaining.len());
-        }
-
-        // Process any final barrier entries (and their transitive children)
-        #[cfg(feature = "gc-debug")]
-        let mut final_traced: usize = 0;
-        while let Some(obj) = remaining.pop() {
-            if (*obj).mark.load(Ordering::Relaxed) != MARK_BLACK {
-                (*obj).mark.store(MARK_BLACK, Ordering::Relaxed);
-                #[cfg(feature = "gc-debug")]
-                {
-                    final_traced += 1;
-                }
-
-                let shape = (*obj).shape;
-                if !shape.is_null() && (*shape).num_pointers > 0 {
-                    let data = (*obj).data_ptr();
-                    for &offset in (*shape).pointer_offsets() {
-                        let field_ptr = *(data.add(offset as usize) as *const *mut u8);
-                        if !field_ptr.is_null() {
-                            if let Some(child_header) = data_ptr_to_header(field_ptr) {
-                                if (*child_header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                                    (*child_header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                                    remaining.push(child_header);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        #[cfg(feature = "gc-debug")]
-        if final_traced > 0 {
-            gc_log!(
-                "mark: final drain traced {} additional objects",
-                final_traced
-            );
-        }
+        gc_log!("collect: traced {} objects", traced);
     }
+
+    // Sweep phase
+    let bytes_before = heap.bytes_allocated;
+    unsafe {
+        sweep_phase(heap);
+    }
+
+    // Resume: signal all parked threads
+    GC_SCAN_REQUESTED.store(false, Ordering::Release);
+    {
+        let mut ps = mutex_lock!(GC_PAUSE);
+        ps.gc_done = true;
+        ps.parked_rbps.clear();
+    }
+    GC_PAUSE_CONDVAR.notify_all();
+
+    IS_GC_THREAD.with(|c| c.set(false));
+
+    gc_log!(
+        "=== collection end: reclaimed {} bytes, {} bytes remain ===",
+        bytes_before.saturating_sub(heap.bytes_allocated),
+        heap.bytes_allocated
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -596,36 +601,6 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Shadow stack save/restore — used by coroutine scheduler for context switch.
-// ---------------------------------------------------------------------------
-
-/// Save the current thread's shadow stack top pointer.
-pub(crate) fn save_shadow_stack_top() -> crate::coroutine::ShadowStackTop {
-    use crate::coroutine::ShadowStackTop;
-    THREAD_STATE.with(|cell| {
-        let state = cell.get();
-        if state.is_null() {
-            return ShadowStackTop::NULL;
-        }
-        ShadowStackTop(unsafe { (*state).shadow_stack_top.load(Ordering::Relaxed) as *mut u8 })
-    })
-}
-
-/// Restore the current thread's shadow stack top pointer.
-pub(crate) fn restore_shadow_stack_top(top: crate::coroutine::ShadowStackTop) {
-    THREAD_STATE.with(|cell| {
-        let state = cell.get();
-        if !state.is_null() {
-            unsafe {
-                (*state)
-                    .shadow_stack_top
-                    .store(top.0 as *mut ShadowFrame, Ordering::Release);
-            }
-        }
-    })
-}
 
 unsafe fn data_ptr_to_header(data: *mut u8) -> Option<*mut ObjHeader> {
     unsafe {

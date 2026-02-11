@@ -110,6 +110,8 @@ bitflags = "2"
 # salsa = { git = "https://github.com/n1ght-hunter/salsa.git", rev = "a885bb4" }
 salsa = { path = "../salsa" }
 
+[profile.release]
+
 [workspace.lints.rust]
 missing_docs = "allow"
 unsafe_code = "warn"

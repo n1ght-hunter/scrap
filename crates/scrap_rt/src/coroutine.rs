@@ -17,22 +17,6 @@ use crate::sync::{Condvar, Mutex};
 // Typed wrappers for raw pointers
 // ---------------------------------------------------------------------------
 
-/// Opaque handle to the GC shadow-stack top pointer.
-///
-/// Saved/restored on every coroutine context switch so the collector can
-/// walk the shadow stacks of parked coroutines.
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub(crate) struct ShadowStackTop(pub(crate) *mut u8);
-
-impl ShadowStackTop {
-    pub(crate) const NULL: Self = Self(std::ptr::null_mut());
-}
-
-// SAFETY: The pointer refers to the coroutine's own shadow-stack data
-// (heap-allocated), not thread-specific state.
-unsafe impl Send for ShadowStackTop {}
-
 /// Type-safe wrapper around a compiler-generated spawn trampoline.
 ///
 /// The codegen emits one trampoline per spawn-site with the C signature
@@ -87,11 +71,10 @@ fn stack_overflow_abort() -> ! {
 // Scheduler internals
 // ---------------------------------------------------------------------------
 
-/// A live coroutine with its GC shadow-stack state.
-/// `Send` because both `CoroutineStack` and `ShadowStackTop` are `Send`.
+/// A live coroutine.
+/// `Send` because `CoroutineStack` is `Send`.
 struct Task {
     coro: CoroutineStack,
-    shadow_top: ShadowStackTop,
     /// Stack limit address for overflow checks (committed_bottom of the stack).
     stack_limit: u64,
 }
@@ -117,6 +100,14 @@ fn worker_loop() {
         let task = {
             let mut queue = mutex_lock!(state.queue);
             loop {
+                // Don't pick up new tasks while GC is scanning
+                if crate::gc::GC_SCAN_REQUESTED.load(Ordering::Acquire) {
+                    if state.shutdown.load(Ordering::Acquire) {
+                        return;
+                    }
+                    condvar_wait!(state.condvar, queue);
+                    continue;
+                }
                 if let Some(task) = queue.pop_front() {
                     break task;
                 }
@@ -134,16 +125,14 @@ fn worker_loop() {
 /// Resume a single task once. If it yields, push it back to the global queue
 /// so any worker can pick it up. If it completes, return its stack to the pool.
 fn resume_task(mut task: Task, state: &SchedulerState) {
-    crate::gc::restore_shadow_stack_top(task.shadow_top);
+    // Track active coroutines for GC coordination.
+    crate::gc::ACTIVE_COROS.fetch_add(1, Ordering::Release);
 
     // Set the stack limit so __scrap_yield can detect overflow.
     STACK_LIMIT.with(|c| c.set(task.stack_limit));
 
     match task.coro.resume() {
         CoroutineStatus::Yielded => {
-            task.shadow_top = crate::gc::save_shadow_stack_top();
-            // Clear this worker's shadow stack pointer before the task migrates.
-            crate::gc::restore_shadow_stack_top(ShadowStackTop::NULL);
             STACK_LIMIT.with(|c| c.set(0));
 
             // Check if the coroutine requested a stack growth.
@@ -164,18 +153,54 @@ fn resume_task(mut task: Task, state: &SchedulerState) {
                 scrap_coroutine::release_stack(old_stack);
             }
 
-            // Push back to global queue — any worker can resume this coroutine.
-            mutex_lock!(state.queue).push_back(task);
-            state.condvar.notify_one();
+            // Check if GC wants us to park this coroutine
+            if crate::gc::GC_SCAN_REQUESTED.load(Ordering::Acquire) {
+                let rbp = task.coro.saved_rbp();
+                // Register coroutine RBP and decrement active count under the lock
+                // to avoid race with GC thread checking ACTIVE_COROS.
+                {
+                    let mut ps = mutex_lock!(crate::gc::GC_PAUSE);
+                    ps.parked_rbps.push(rbp);
+                    crate::gc::ACTIVE_COROS.fetch_sub(1, Ordering::Release);
+                    crate::gc::GC_PAUSE_CONDVAR.notify_all();
+
+                    // Wait for GC to finish
+                    while !ps.gc_done {
+                        condvar_wait!(crate::gc::GC_PAUSE_CONDVAR, ps);
+                    }
+                }
+                // GC is done, push task back to queue
+                mutex_lock!(state.queue).push_back(task);
+                state.condvar.notify_one();
+            } else {
+                crate::gc::ACTIVE_COROS.fetch_sub(1, Ordering::Release);
+                // Push back to global queue — any worker can resume this coroutine.
+                mutex_lock!(state.queue).push_back(task);
+                state.condvar.notify_one();
+            }
         }
         CoroutineStatus::Completed => {
-            crate::gc::restore_shadow_stack_top(ShadowStackTop::NULL);
             STACK_LIMIT.with(|c| c.set(0));
+            crate::gc::ACTIVE_COROS.fetch_sub(1, Ordering::Release);
             if let Some(stack) = task.coro.take_stack() {
                 scrap_coroutine::release_stack(stack);
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// GC support: expose queued coroutine RBPs for stack scanning
+// ---------------------------------------------------------------------------
+
+/// Return the saved RBPs of all coroutines currently sitting in the
+/// scheduler queue. Called by the GC during STW to scan queued coroutine stacks.
+pub(crate) fn get_queued_coro_rbps() -> Vec<u64> {
+    let Some(state) = STATE.get() else {
+        return Vec::new();
+    };
+    let queue = mutex_lock!(state.queue);
+    queue.iter().map(|task| task.coro.saved_rbp()).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +260,6 @@ pub extern "C" fn __scrap_spawn(trampoline: usize, args_ptr: *const u8, nargs: u
 
     let task = Task {
         coro,
-        shadow_top: ShadowStackTop::NULL,
         stack_limit,
     };
 
@@ -247,9 +271,17 @@ pub extern "C" fn __scrap_spawn(trampoline: usize, args_ptr: *const u8, nargs: u
 /// Combined yield point + stack overflow check.
 ///
 /// Called at every function prologue. On the main thread (STACK_LIMIT == 0),
-/// this is a fast no-op. Inside a coroutine, checks the stack and yields.
+/// this is a fast no-op (unless GC is requested). Inside a coroutine, checks
+/// the stack and yields.
 #[unsafe(no_mangle)]
 pub extern "C" fn __scrap_yield() {
+    // GC safepoint check — all threads (main + coroutine workers).
+    // Must come BEFORE the STACK_LIMIT early-return so the main thread
+    // also cooperates with STW.
+    if crate::gc::GC_SCAN_REQUESTED.load(Ordering::Acquire) {
+        crate::gc::gc_safepoint();
+    }
+
     let limit = STACK_LIMIT.with(|c| c.get());
     if limit == 0 {
         return; // Main thread — no coroutine, no check.

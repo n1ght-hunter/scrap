@@ -80,10 +80,6 @@ pub struct FuncTranslator<'a, 'db> {
     pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
     /// IR local index → (StackSlot, Cranelift type) for stack-spilled locals (referenced via &/&mut)
     pub stack_slots: &'a HashMap<usize, (StackSlot, types::Type)>,
-    /// GC shadow stack: contiguous stack slot holding pointer-sized entries for *T locals
-    pub gc_shadow_slot: Option<StackSlot>,
-    /// IR local index → byte offset in the gc_shadow_slot array (only for *T locals)
-    pub gc_root_locals: &'a HashMap<usize, u32>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -126,7 +122,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         place: &ir::Place<'db>,
         value: Value,
         builder: &mut FunctionBuilder,
-        module: &mut ObjectModule,
+        _module: &mut ObjectModule,
     ) -> Option<()> {
         match place {
             ir::Place::Local(local_id) => {
@@ -142,12 +138,6 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         }
                     };
                     builder.def_var(*var, value);
-                }
-                // Keep GC shadow stack in sync for *T locals
-                if let Some(&offset) = self.gc_root_locals.get(&local_id.0) {
-                    if let Some(shadow_slot) = self.gc_shadow_slot {
-                        builder.ins().stack_store(value, shadow_slot, offset as i32);
-                    }
                 }
                 Some(())
             }
@@ -195,19 +185,8 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 }
             }
             ir::Place::Deref(inner) => {
-                // Write through a GC reference: store value at the address held by inner
+                // Write through a pointer/reference: store value at the address held by inner
                 let ptr = self.lower_place(inner, builder)?;
-
-                // Emit GC write barrier if the stored value is a *T (GC pointer).
-                // Determined by checking the inner place's type: if inner has type
-                // Ptr(Ptr(_)) or Ref(Ptr(_), _), the stored value is *T.
-                if self.is_deref_storing_gc_pointer(inner) {
-                    if let Some(&barrier_id) = self.functions.get("__scrap_gc_write_barrier") {
-                        let barrier_ref = module.declare_func_in_func(barrier_id, builder.func);
-                        builder.ins().call(barrier_ref, &[value]);
-                    }
-                }
-
                 builder.ins().store(MemFlags::new(), value, ptr, 0);
                 Some(())
             }
@@ -219,56 +198,6 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
-    }
-
-    /// Resolve the IR type of a place expression.
-    fn resolve_place_ty(&self, place: &ir::Place<'db>) -> Option<ir::Ty<'db>> {
-        match place {
-            ir::Place::Local(id) => {
-                self.local_decls.get(id.0).map(|d| d.ty(self.db).clone())
-            }
-            ir::Place::Deref(inner) => {
-                let inner_ty = self.resolve_place_ty(inner)?;
-                match inner_ty {
-                    ir::Ty::Ptr(pointee) => Some(*pointee),
-                    ir::Ty::Ref(pointee, _) => Some(*pointee),
-                    _ => None,
-                }
-            }
-            ir::Place::Field(base, idx, _) => {
-                let base_ty = self.resolve_place_ty(base)?;
-                match base_ty {
-                    ir::Ty::Tuple(fields) => fields.get(*idx).cloned(),
-                    ir::Ty::Adt(type_id) => {
-                        let name = type_id.name(self.db);
-                        if let Some(field_tys) = self.struct_layouts.get(name.as_str()) {
-                            field_tys.get(*idx).cloned()
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                }
-            }
-            ir::Place::Downcast(inner, _, _) => self.resolve_place_ty(inner),
-            ir::Place::__Phantom(_) => None,
-        }
-    }
-
-    /// Check if a deref-store writes a GC pointer (*T) value.
-    /// `inner` is the place being dereferenced (the pointer being written through).
-    /// If inner has type Ptr(Ptr(_)) or Ref(Ptr(_), _), the stored value is *T.
-    fn is_deref_storing_gc_pointer(&self, inner: &ir::Place<'db>) -> bool {
-        let Some(inner_ty) = self.resolve_place_ty(inner) else {
-            return false;
-        };
-        // inner_ty is the pointer/ref type. The stored value type is what it points to.
-        let stored_ty = match inner_ty {
-            ir::Ty::Ptr(pointee) => *pointee,
-            ir::Ty::Ref(pointee, _) => *pointee,
-            _ => return false,
-        };
-        matches!(stored_ty, ir::Ty::Ptr(_))
     }
 
     fn lower_rvalue(
@@ -1103,14 +1032,6 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<()> {
         match term {
             ir::Terminator::Return => {
-                // Pop GC shadow stack frame before returning
-                if self.gc_shadow_slot.is_some() {
-                    if let Some(&pop_func_id) = self.functions.get("__scrap_gc_pop_frame") {
-                        let pop_func_ref = module.declare_func_in_func(pop_func_id, builder.func);
-                        builder.ins().call(pop_func_ref, &[]);
-                    }
-                }
-
                 if self.returns_void {
                     builder.ins().return_(&[]);
                 } else {

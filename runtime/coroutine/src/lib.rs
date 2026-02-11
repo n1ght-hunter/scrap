@@ -145,6 +145,12 @@ impl CoroutineStack {
         self.stack.committed_bottom() as u64
     }
 
+    /// The saved RBP from the coroutine's last yield.
+    /// Used by the GC to walk the coroutine's stack via frame pointers.
+    pub fn saved_rbp(&self) -> u64 {
+        self.coro_ctx.rbp
+    }
+
     /// Copy the coroutine's stack to `new_stack` (which must be larger),
     /// conservatively relocate pointers, and return the old stack.
     ///

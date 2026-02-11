@@ -2,6 +2,7 @@
 
 use cranelift::prelude::*;
 use cranelift::codegen::isa::unwind::UnwindInfo;
+use cranelift::codegen::binemit::CodeOffset;
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use scrap_ir as ir;
@@ -37,6 +38,9 @@ pub struct CodegenContext<'db> {
     pub(crate) enum_layouts: HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
+    /// Collected stack map entries across all compiled functions.
+    /// Each entry: (func_id, code_offset, vec of SP-relative offsets for GC roots).
+    pub(crate) stack_map_entries: Vec<(FuncId, CodeOffset, Vec<u32>)>,
 }
 
 impl<'db> CodegenContext<'db> {
@@ -47,7 +51,8 @@ impl<'db> CodegenContext<'db> {
                 format!("failed to parse target triple: {e}")
             }).or_emit(db)?;
 
-        let shared_builder = settings::builder();
+        let mut shared_builder = settings::builder();
+        shared_builder.set("preserve_frame_pointers", "true").unwrap();
         let shared_flags = settings::Flags::new(shared_builder);
         let isa = cranelift::codegen::isa::lookup(target_triple)
             .map_err(|e| format!("ISA lookup failed: {e}"))
@@ -77,6 +82,7 @@ impl<'db> CodegenContext<'db> {
             struct_layouts: HashMap::new(),
             enum_layouts: HashMap::new(),
             data_id_counter: 0,
+            stack_map_entries: Vec::new(),
         })
     }
 
@@ -261,45 +267,6 @@ impl<'db> CodegenContext<'db> {
                 .declare_function("__scrap_gc_alloc", Linkage::Import, &sig)
                 .or_emit(self.db)?;
             self.functions.insert("__scrap_gc_alloc".to_string(), fid);
-        }
-
-        // __scrap_gc_push_frame(slots: *mut *mut u8, count: u64)
-        if !self.functions.contains_key("__scrap_gc_push_frame") {
-            let mut sig = self.module.make_signature();
-            sig.call_conv = call_conv;
-            sig.params.push(AbiParam::new(ptr_ty)); // slots
-            sig.params.push(AbiParam::new(ptr_ty)); // count
-            let fid = self
-                .module
-                .declare_function("__scrap_gc_push_frame", Linkage::Import, &sig)
-                .or_emit(self.db)?;
-            self.functions
-                .insert("__scrap_gc_push_frame".to_string(), fid);
-        }
-
-        // __scrap_gc_pop_frame()
-        if !self.functions.contains_key("__scrap_gc_pop_frame") {
-            let mut sig = self.module.make_signature();
-            sig.call_conv = call_conv;
-            let fid = self
-                .module
-                .declare_function("__scrap_gc_pop_frame", Linkage::Import, &sig)
-                .or_emit(self.db)?;
-            self.functions
-                .insert("__scrap_gc_pop_frame".to_string(), fid);
-        }
-
-        // __scrap_gc_write_barrier(new_val: i64)
-        if !self.functions.contains_key("__scrap_gc_write_barrier") {
-            let mut sig = self.module.make_signature();
-            sig.call_conv = call_conv;
-            sig.params.push(AbiParam::new(ptr_ty));
-            let fid = self
-                .module
-                .declare_function("__scrap_gc_write_barrier", Linkage::Import, &sig)
-                .or_emit(self.db)?;
-            self.functions
-                .insert("__scrap_gc_write_barrier".to_string(), fid);
         }
 
         Some(())
@@ -521,6 +488,24 @@ impl<'db> CodegenContext<'db> {
         Some(())
     }
 
+    /// Extract user stack maps from the just-compiled function.
+    /// Must be called after `define_function()` but before `clear_context()`.
+    pub(crate) fn collect_stack_maps(&mut self, func_id: FuncId) {
+        let compiled = match self.ctx.compiled_code() {
+            Some(c) => c,
+            None => return,
+        };
+        for (code_offset, _frame_span, stack_map) in compiled.buffer.user_stack_maps() {
+            let roots: Vec<u32> = stack_map
+                .entries()
+                .map(|(_ty, sp_offset)| sp_offset)
+                .collect();
+            if !roots.is_empty() {
+                self.stack_map_entries.push((func_id, *code_offset, roots));
+            }
+        }
+    }
+
     /// Extract Windows x64 unwind info from the just-compiled function.
     /// Must be called after `define_function()` but before `clear_context()`.
     pub(crate) fn collect_unwind_info(&mut self, func_id: FuncId) {
@@ -553,6 +538,9 @@ impl<'db> CodegenContext<'db> {
         if !self.unwind_entries.is_empty() {
             Self::emit_unwind_tables(&mut object_product, &self.unwind_entries);
         }
+
+        // Always emit stack map table (even if empty) so runtime symbols resolve.
+        Self::emit_stack_map_table(&mut object_product, &self.stack_map_entries);
 
         object_product
             .emit()
@@ -615,6 +603,135 @@ impl<'db> CodegenContext<'db> {
                     typ: pe::IMAGE_REL_AMD64_ADDR32NB,
                 },
             })
+            .unwrap();
+        }
+    }
+
+    /// Write stack map data sections into the COFF object.
+    ///
+    /// Emits three global symbols:
+    ///   - `__scrap_stackmap_count`: u64 number of index entries
+    ///   - `__scrap_stackmap_index`: sorted array of (return_addr: u64, roots_start: u32, roots_count: u32)
+    ///   - `__scrap_stackmap_roots`: packed array of u32 SP-relative offsets
+    ///
+    /// The `return_addr` fields carry IMAGE_REL_AMD64_ADDR64 relocations so the
+    /// linker fills in absolute code addresses.
+    fn emit_stack_map_table(
+        product: &mut ObjectProduct,
+        entries: &[(FuncId, CodeOffset, Vec<u32>)],
+    ) {
+        use cranelift_object::object::write::{Relocation, Symbol};
+        use cranelift_object::object::{pe, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+
+        // Collect function symbols before borrowing product.object mutably.
+        let func_syms: Vec<_> = entries
+            .iter()
+            .map(|(func_id, _, _)| product.function_symbol(*func_id))
+            .collect();
+
+        let obj = &mut product.object;
+
+        // --- __scrap_stackmap_count ---
+        let count_section = obj.add_section(
+            vec![],
+            b".scrap_smcount".to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let count_val = entries.len() as u64;
+        obj.append_section_data(count_section, &count_val.to_le_bytes(), 8);
+        // Add global symbol for the count
+        obj.add_symbol(Symbol {
+            name: b"__scrap_stackmap_count".to_vec(),
+            value: 0,
+            size: 8,
+            kind: SymbolKind::Data,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: cranelift_object::object::write::SymbolSection::Section(count_section),
+            flags: SymbolFlags::None,
+        });
+
+        // --- __scrap_stackmap_roots (packed u32 array) ---
+        let roots_section = obj.add_section(
+            vec![],
+            b".scrap_smroots".to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let mut roots_data: Vec<u8> = Vec::new();
+        let mut roots_offsets: Vec<(u32, u32)> = Vec::new(); // (start_index, count) per entry
+        let mut root_idx: u32 = 0;
+        for (_func_id, _offset, roots) in entries {
+            let count = roots.len() as u32;
+            roots_offsets.push((root_idx, count));
+            for &sp_off in roots {
+                roots_data.extend_from_slice(&sp_off.to_le_bytes());
+            }
+            root_idx += count;
+        }
+        if roots_data.is_empty() {
+            // Emit at least one byte so the section/symbol is valid
+            roots_data.push(0);
+        }
+        obj.append_section_data(roots_section, &roots_data, 4);
+        obj.add_symbol(Symbol {
+            name: b"__scrap_stackmap_roots".to_vec(),
+            value: 0,
+            size: roots_data.len() as u64,
+            kind: SymbolKind::Data,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: cranelift_object::object::write::SymbolSection::Section(roots_section),
+            flags: SymbolFlags::None,
+        });
+
+        // --- __scrap_stackmap_index (sorted array of IndexEntry) ---
+        // Each IndexEntry: return_addr(u64) + roots_start(u32) + roots_count(u32) = 16 bytes
+        let index_section = obj.add_section(
+            vec![],
+            b".scrap_smindex".to_vec(),
+            SectionKind::Data, // writable so runtime can sort in-place
+        );
+        let mut index_data: Vec<u8> = Vec::new();
+        for (roots_start, roots_count) in &roots_offsets {
+            // return_addr placeholder (8 bytes, will be relocated)
+            index_data.extend_from_slice(&0u64.to_le_bytes());
+            index_data.extend_from_slice(&roots_start.to_le_bytes());
+            index_data.extend_from_slice(&roots_count.to_le_bytes());
+        }
+        if index_data.is_empty() {
+            // Emit a dummy entry so the section isn't discarded by the linker.
+            // Count is 0 so the runtime won't read past this.
+            index_data.extend_from_slice(&[0u8; 16]);
+        }
+        let index_base = obj.append_section_data(index_section, &index_data, 8);
+        let index_sym_id = obj.add_symbol(Symbol {
+            name: b"__scrap_stackmap_index".to_vec(),
+            value: 0,
+            size: index_data.len() as u64,
+            kind: SymbolKind::Data,
+            scope: SymbolScope::Linkage,
+            weak: false,
+            section: cranelift_object::object::write::SymbolSection::Section(index_section),
+            flags: SymbolFlags::None,
+        });
+        let _ = index_sym_id;
+
+        // Add relocations for each return_addr field
+        for (i, ((_func_id, code_offset, _), &func_sym)) in
+            entries.iter().zip(func_syms.iter()).enumerate()
+        {
+            let entry_offset = index_base + (i * 16) as u64;
+            obj.add_relocation(
+                index_section,
+                Relocation {
+                    offset: entry_offset,
+                    symbol: func_sym,
+                    addend: *code_offset as i64,
+                    flags: cranelift_object::object::RelocationFlags::Coff {
+                        typ: pe::IMAGE_REL_AMD64_ADDR64,
+                    },
+                },
+            )
             .unwrap();
         }
     }
