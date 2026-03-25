@@ -14,25 +14,25 @@ build:
     cargo build -r
 
 clean:
-    rm -r ./target/scrap || true0
+    rm -r ./target/scrap || true
 
 hello_world *args:
-    just build E:/programming/rust/scrap/example/hello_world.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/hello_world_db_snapshot.bin {{args}}
+    just build ./example/hello_world.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/hello_world_db_snapshot.bin {{args}}
 
 complex *args:
-    just build E:/programming/rust/scrap/example/complex.sc \
-    -i E:/programming/rust/scrap/example/external_module.sc \
+    just build ./example/complex.sc \
+    -i ./example/external_module.sc \
     --crate-name complex --crate-type bin --cache ./target/scrap/complex/cache {{args}}
 
 complex_quick *args:
-    ./target/release/scrap.exe E:/programming/rust/scrap/example/complex.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/complex/quick_cache {{args}}
+    ./target/release/scrap.exe ./example/complex.sc --crate-name test --crate-type bin --unpretty-out ast --cache ./target/scrap/complex/quick_cache {{args}}
 
 basic *args:
-    just build E:/programming/rust/scrap/tests/basic.sc --crate-name test --crate-type bin --unpretty-out sir --cache ./target/scrap/basic_cache {{args}}
+    just build ./tests/basic.sc --crate-name test --crate-type bin --unpretty-out sir --cache ./target/scrap/basic_cache {{args}}
 
 test-types *args:
     rm ./target/scrap/types_cache.json || true
-    just build E:/programming/rust/scrap/tests/types.sc --crate-name test --crate-type bin --pretty-out sir --cache ./target/scrap/types_cache {{args}}
+    just build ./tests/types.sc --crate-name test --crate-type bin --pretty-out sir --cache ./target/scrap/types_cache {{args}}
 
 compile-runtime:
     cargo build -p scrap_rt --release
