@@ -1,6 +1,7 @@
 //! Top-level type checking for modules and items.
 
 use scrap_ast::{
+    Can,
     enumdef::VariantData,
     fndef::FnDef,
     foreign::ForeignItem,
@@ -8,7 +9,6 @@ use scrap_ast::{
     item::{Item, ItemKind},
     module::ModuleKind,
     structdef::StructDef,
-    Can,
 };
 use scrap_shared::ident::Symbol;
 
@@ -263,26 +263,23 @@ impl<'db> TypeContext<'db> {
 
         // Type check body
         let body = fn_def.body(self.db());
-        let body_ty = self.infer_block(&body);
+        let body_ty = self.infer_block(body);
 
-        // If the function has a non-unit return type and the body doesn't end
-        // with a return statement, the body's type should match the return type
         if !sig.return_ty.is_unit() && !body_ty.is_never() {
-            self.constrain_eq(body_ty.clone(), sig.return_ty.clone(), fn_def.span(self.db()));
+            self.constrain_eq(
+                body_ty.clone(),
+                sig.return_ty.clone(),
+                fn_def.span(self.db()),
+            );
         }
 
-        // If the body diverges (type is !) and there's no explicit return type,
-        // update the registered signature and record for IR lowering.
         if body_ty.is_never() && fn_def.ret_type(self.db()).is_none() {
             self.record_fn_return_type(name, InferTy::Never);
-            // Update the registered signature so that functions checked later
-            // see the correct return type when calling this function.
             let mut updated_sig = sig;
             updated_sig.return_ty = InferTy::Never;
             self.register_function(name, updated_sig);
         }
 
-        // Clean up
         self.clear_return_ty();
         self.clear_type_params();
         self.pop_scope();
@@ -296,7 +293,11 @@ impl<'db> TypeContext<'db> {
             let method_ident = method.ident(self.db());
             let mangled = Symbol::new(
                 self.db(),
-                format!("{}::{}", type_name.text(self.db()), method_ident.name.text(self.db())),
+                format!(
+                    "{}::{}",
+                    type_name.text(self.db()),
+                    method_ident.name.text(self.db())
+                ),
             );
 
             let type_params = vec![];
@@ -334,7 +335,11 @@ impl<'db> TypeContext<'db> {
         let method_ident = fn_def.ident(self.db());
         let mangled = Symbol::new(
             self.db(),
-            format!("{}::{}", type_name.text(self.db()), method_ident.name.text(self.db())),
+            format!(
+                "{}::{}",
+                type_name.text(self.db()),
+                method_ident.name.text(self.db())
+            ),
         );
 
         let sig = match self.lookup_function(mangled) {
@@ -351,10 +356,14 @@ impl<'db> TypeContext<'db> {
         }
 
         let body = fn_def.body(self.db());
-        let body_ty = self.infer_block(&body);
+        let body_ty = self.infer_block(body);
 
         if !sig.return_ty.is_unit() && !body_ty.is_never() {
-            self.constrain_eq(body_ty.clone(), sig.return_ty.clone(), fn_def.span(self.db()));
+            self.constrain_eq(
+                body_ty.clone(),
+                sig.return_ty.clone(),
+                fn_def.span(self.db()),
+            );
         }
 
         if body_ty.is_never() && fn_def.ret_type(self.db()).is_none() {

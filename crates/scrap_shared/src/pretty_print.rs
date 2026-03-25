@@ -1,5 +1,5 @@
 /// A trait for pretty-printing objects.
-/// This is used for outputing human-readable representations of AST nodes and other structures.
+/// This is used for outputting human-readable representations of AST nodes and other structures.
 pub trait PrettyPrint {
     fn pretty_print(&self, f: &mut dyn std::fmt::Write) -> std::fmt::Result {
         self.pretty_print_indent(f, 0)

@@ -59,6 +59,8 @@ pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MRe
         TyKind::Never => Ok(ir::Ty::Never),
         TyKind::Tup(_) => panic!("Tuple types not yet supported in IR lowering"),
         TyKind::Dummy => panic!("Dummy type should not appear in IR lowering"),
-        TyKind::Err(_) => panic!("Error type should not appear in IR lowering - type checking should have failed"),
+        TyKind::Err(_) => {
+            panic!("Error type should not appear in IR lowering - type checking should have failed")
+        }
     }
 }

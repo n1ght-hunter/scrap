@@ -4,8 +4,8 @@
 //! allowing downstream passes (like IR lowering) to look up
 //! the type of any expression or local variable.
 
-use scrap_shared::ident::Symbol;
 use scrap_shared::NodeId;
+use scrap_shared::ident::Symbol;
 
 use crate::resolved::ResolvedTy;
 
@@ -33,7 +33,11 @@ pub struct TypeTable<'db> {
 
 impl<'db> TypeTable<'db> {
     /// Get the type of an expression by its NodeId.
-    pub fn expr_type(self, db: &'db dyn scrap_shared::Db, id: NodeId) -> Option<&'db ResolvedTy<'db>> {
+    pub fn expr_type(
+        self,
+        db: &'db dyn scrap_shared::Db,
+        id: NodeId,
+    ) -> Option<&'db ResolvedTy<'db>> {
         self.expr_types(db)
             .iter()
             .find(|(node_id, _)| *node_id == id)
@@ -41,7 +45,11 @@ impl<'db> TypeTable<'db> {
     }
 
     /// Get the type of a local variable by its NodeId.
-    pub fn local_type(self, db: &'db dyn scrap_shared::Db, id: NodeId) -> Option<&'db ResolvedTy<'db>> {
+    pub fn local_type(
+        self,
+        db: &'db dyn scrap_shared::Db,
+        id: NodeId,
+    ) -> Option<&'db ResolvedTy<'db>> {
         self.local_types(db)
             .iter()
             .find(|(node_id, _)| *node_id == id)
@@ -49,7 +57,11 @@ impl<'db> TypeTable<'db> {
     }
 
     /// Get the inferred return type of a function by its name.
-    pub fn fn_return_type(self, db: &'db dyn scrap_shared::Db, name: Symbol<'db>) -> Option<&'db ResolvedTy<'db>> {
+    pub fn fn_return_type(
+        self,
+        db: &'db dyn scrap_shared::Db,
+        name: Symbol<'db>,
+    ) -> Option<&'db ResolvedTy<'db>> {
         self.fn_return_types(db)
             .iter()
             .find(|(sym, _)| *sym == name)

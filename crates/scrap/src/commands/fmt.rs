@@ -32,7 +32,10 @@ fn cmd_fmt(path: Option<PathBuf>, check: bool) -> Result<()> {
     } else if target_path.is_dir() {
         format_directory(&target_path, &config, check)?;
     } else {
-        anyhow::bail!("Path '{}' is neither a file nor directory", target_path.display());
+        anyhow::bail!(
+            "Path '{}' is neither a file nor directory",
+            target_path.display()
+        );
     }
 
     if check {
@@ -42,13 +45,16 @@ fn cmd_fmt(path: Option<PathBuf>, check: bool) -> Result<()> {
     Ok(())
 }
 
-fn format_file_path(path: &PathBuf, config: &scrap_formatter::FormatterConfig, check: bool) -> Result<()> {
+fn format_file_path(
+    path: &PathBuf,
+    config: &scrap_formatter::FormatterConfig,
+    check: bool,
+) -> Result<()> {
     if path.extension().and_then(|s| s.to_str()) != Some("sc") {
         return Ok(()); // Skip non-.sc files
     }
 
-    let source = fs::read_to_string(path)
-        .context(format!("Failed to read {}", path.display()))?;
+    let source = fs::read_to_string(path).context(format!("Failed to read {}", path.display()))?;
 
     let formatted = scrap_formatter::format_file(&source, config);
 
@@ -58,15 +64,18 @@ fn format_file_path(path: &PathBuf, config: &scrap_formatter::FormatterConfig, c
         }
         println!("✓ {}", path.display());
     } else {
-        fs::write(path, &formatted)
-            .context(format!("Failed to write {}", path.display()))?;
+        fs::write(path, &formatted).context(format!("Failed to write {}", path.display()))?;
         println!("Formatted {}", path.display());
     }
 
     Ok(())
 }
 
-fn format_directory(dir: &PathBuf, config: &scrap_formatter::FormatterConfig, check: bool) -> Result<()> {
+fn format_directory(
+    dir: &PathBuf,
+    config: &scrap_formatter::FormatterConfig,
+    check: bool,
+) -> Result<()> {
     for entry in fs::read_dir(dir).context("Failed to read directory")? {
         let entry = entry.context("Failed to read directory entry")?;
         let path = entry.path();

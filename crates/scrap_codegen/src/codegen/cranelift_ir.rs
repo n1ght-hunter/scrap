@@ -8,8 +8,8 @@ use scrap_ir as ir;
 use scrap_shared::types::{FloatVal, IntVal, UintVal};
 use std::collections::HashMap;
 
-use super::emit_codegen_err;
 use super::ResultExt;
+use super::emit_codegen_err;
 
 /// Compute the (size, align, pointer_offsets) for a GC-allocated type.
 fn compute_type_layout(_db: &dyn scrap_shared::Db, ty: &ir::Ty) -> (u64, u64, Vec<u64>) {
@@ -92,17 +92,17 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         match stmt.kind(self.db) {
             ir::StatementKind::Assign(place, rvalue) => {
                 // Special handling for checked intrinsics that produce tuple values
-                if let ir::Rvalue::Intrinsic(op, ref operands) = rvalue {
-                    if Self::is_checked_intrinsic(op) {
-                        return self.lower_checked_intrinsic_assign(
-                            &place, op, operands, builder, module,
-                        );
-                    }
+                if let ir::Rvalue::Intrinsic(op, ref operands) = rvalue
+                    && Self::is_checked_intrinsic(op)
+                {
+                    return self
+                        .lower_checked_intrinsic_assign(&place, op, operands, builder, module);
                 }
 
                 // Special handling for aggregate (struct/tuple/enum) construction
                 if let ir::Rvalue::Aggregate(ref kind, ref fields) = rvalue {
-                    return self.lower_aggregate_assign_with_kind(&place, kind, fields, builder, module);
+                    return self
+                        .lower_aggregate_assign_with_kind(&place, kind, fields, builder, module);
                 }
 
                 // Special handling for spawn (no return value, generates trampoline)
@@ -133,7 +133,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     let var = match self.variables.get(&local_id.0) {
                         Some(v) => v,
                         None => {
-                            emit_codegen_err(self.db, format!("variable '_{}' not found", local_id.0));
+                            emit_codegen_err(
+                                self.db,
+                                format!("variable '_{}' not found", local_id.0),
+                            );
                             return None;
                         }
                     };
@@ -143,24 +146,28 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::Field(base, field_idx, _) => {
                 // Check for enum variant field: Field(Downcast(Local(x), variant_idx), field_idx)
-                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref() {
-                    if let ir::Place::Local(local_id) = inner.as_ref() {
-                        let var = match self.enum_variant_variables.get(&(local_id.0, *variant_idx, *field_idx)) {
-                            Some(v) => v,
-                            None => {
-                                emit_codegen_err(
-                                    self.db,
-                                    format!(
-                                        "enum variant variable '_{}.variant{}.{}' not found",
-                                        local_id.0, variant_idx, field_idx
-                                    ),
-                                );
-                                return None;
-                            }
-                        };
-                        builder.def_var(*var, value);
-                        return Some(());
-                    }
+                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref()
+                    && let ir::Place::Local(local_id) = inner.as_ref()
+                {
+                    let var = match self.enum_variant_variables.get(&(
+                        local_id.0,
+                        *variant_idx,
+                        *field_idx,
+                    )) {
+                        Some(v) => v,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!(
+                                    "enum variant variable '_{}.variant{}.{}' not found",
+                                    local_id.0, variant_idx, field_idx
+                                ),
+                            );
+                            return None;
+                        }
+                    };
+                    builder.def_var(*var, value);
+                    return Some(());
                 }
                 // Struct/tuple field: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
@@ -169,10 +176,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         None => {
                             emit_codegen_err(
                                 self.db,
-                                format!(
-                                    "tuple variable '_{}.{}' not found",
-                                    local_id.0, field_idx
-                                ),
+                                format!("tuple variable '_{}.{}' not found", local_id.0, field_idx),
                             );
                             return None;
                         }
@@ -273,7 +277,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Rvalue::Spawn(_, _) => {
                 // Spawn is handled in lower_statement, not here
-                emit_codegen_err(self.db, "Rvalue::Spawn should be handled in lower_statement");
+                emit_codegen_err(
+                    self.db,
+                    "Rvalue::Spawn should be handled in lower_statement",
+                );
                 None
             }
         }
@@ -294,10 +301,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 match self.functions.get(name).copied() {
                     Some(id) => id,
                     None => {
-                        emit_codegen_err(
-                            self.db,
-                            format!("spawn target '{}' not found", name),
-                        );
+                        emit_codegen_err(self.db, format!("spawn target '{}' not found", name));
                         return None;
                     }
                 }
@@ -336,8 +340,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             let mut tramp_ctx = cranelift::codegen::Context::new();
             tramp_ctx.func.signature = tramp_sig;
             let mut tramp_func_ctx = FunctionBuilderContext::new();
-            let mut tramp_builder =
-                FunctionBuilder::new(&mut tramp_ctx.func, &mut tramp_func_ctx);
+            let mut tramp_builder = FunctionBuilder::new(&mut tramp_ctx.func, &mut tramp_func_ctx);
 
             let entry = tramp_builder.create_block();
             tramp_builder.append_block_params_for_function_params(entry);
@@ -346,8 +349,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             let args_ptr_val = tramp_builder.block_params(entry)[0];
 
             // Prepare call to target function
-            let target_ref =
-                module.declare_func_in_func(target_func_id, tramp_builder.func);
+            let target_ref = module.declare_func_in_func(target_func_id, tramp_builder.func);
             let mut call_args = Vec::new();
 
             // Load each arg from the args buffer (stored at 8-byte offsets)
@@ -454,7 +456,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             _ => {
                 emit_codegen_err(
                     self.db,
-                    format!("unexpected checked intrinsic in unchecked context: {:?}", op),
+                    format!(
+                        "unexpected checked intrinsic in unchecked context: {:?}",
+                        op
+                    ),
                 );
                 None
             }
@@ -546,19 +551,23 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 // Set variant field variables
                 for (field_idx, operand) in fields.iter().enumerate() {
                     let value = self.lower_operand(operand, builder, module)?;
-                    let var = match self.enum_variant_variables.get(&(local_id, *variant_idx, field_idx)) {
-                        Some(v) => v,
-                        None => {
-                            emit_codegen_err(
-                                self.db,
-                                format!(
-                                    "enum variant variable '_{}.variant{}.{}' not found",
-                                    local_id, variant_idx, field_idx
-                                ),
-                            );
-                            return None;
-                        }
-                    };
+                    let var =
+                        match self
+                            .enum_variant_variables
+                            .get(&(local_id, *variant_idx, field_idx))
+                        {
+                            Some(v) => v,
+                            None => {
+                                emit_codegen_err(
+                                    self.db,
+                                    format!(
+                                        "enum variant variable '_{}.variant{}.{}' not found",
+                                        local_id, variant_idx, field_idx
+                                    ),
+                                );
+                                return None;
+                            }
+                        };
                     builder.def_var(*var, value);
                 }
                 Some(())
@@ -652,7 +661,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let bit_width = cl_ty.bits() as i64;
                 let max_shift = builder.ins().iconst(cl_ty, bit_width);
                 // Overflow if rhs >= bit_width (unsigned comparison)
-                let overflow = builder.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, rhs, max_shift);
+                let overflow =
+                    builder
+                        .ins()
+                        .icmp(IntCC::UnsignedGreaterThanOrEqual, rhs, max_shift);
 
                 let result = if op == ir::IntrinsicOp::ShlChecked {
                     builder.ins().ishl(lhs, rhs)
@@ -728,7 +740,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         } else {
                             emit_codegen_err(
                                 self.db,
-                                format!("struct field variable not found for _{}.{}", local_id.0, field_idx),
+                                format!(
+                                    "struct field variable not found for _{}.{}",
+                                    local_id.0, field_idx
+                                ),
                             );
                             return None;
                         }
@@ -743,11 +758,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         Some(())
     }
 
-    fn lower_place(
-        &self,
-        place: &ir::Place<'db>,
-        builder: &mut FunctionBuilder,
-    ) -> Option<Value> {
+    fn lower_place(&self, place: &ir::Place<'db>, builder: &mut FunctionBuilder) -> Option<Value> {
         match place {
             ir::Place::Local(local_id) => {
                 if let Some((slot, cl_ty)) = self.stack_slots.get(&local_id.0) {
@@ -765,23 +776,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::Field(base, field_idx, _) => {
                 // Check for enum variant field read: Field(Downcast(Local(x), variant_idx), field_idx)
-                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref() {
-                    if let ir::Place::Local(local_id) = inner.as_ref() {
-                        let var = match self.enum_variant_variables.get(&(local_id.0, *variant_idx, *field_idx)) {
-                            Some(v) => v,
-                            None => {
-                                emit_codegen_err(
-                                    self.db,
-                                    format!(
-                                        "enum variant variable '_{}.variant{}.{}' not found",
-                                        local_id.0, variant_idx, field_idx
-                                    ),
-                                );
-                                return None;
-                            }
-                        };
-                        return Some(builder.use_var(*var));
-                    }
+                if let ir::Place::Downcast(inner, variant_idx, _) = base.as_ref()
+                    && let ir::Place::Local(local_id) = inner.as_ref()
+                {
+                    let var = match self.enum_variant_variables.get(&(
+                        local_id.0,
+                        *variant_idx,
+                        *field_idx,
+                    )) {
+                        Some(v) => v,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!(
+                                    "enum variant variable '_{}.variant{}.{}' not found",
+                                    local_id.0, variant_idx, field_idx
+                                ),
+                            );
+                            return None;
+                        }
+                    };
+                    return Some(builder.use_var(*var));
                 }
                 // Struct/tuple field read: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
@@ -790,10 +805,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         None => {
                             emit_codegen_err(
                                 self.db,
-                                format!(
-                                    "tuple variable '_{}.{}' not found",
-                                    local_id.0, field_idx
-                                ),
+                                format!("tuple variable '_{}.{}' not found", local_id.0, field_idx),
                             );
                             return None;
                         }
@@ -860,9 +872,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 FloatVal::F32(v) => Some(builder.ins().f32const(*v)),
                 FloatVal::F64(v) => Some(builder.ins().f64const(*v)),
             },
-            ir::Constant::Bool(b) => {
-                Some(builder.ins().iconst(types::I8, *b as i64))
-            }
+            ir::Constant::Bool(b) => Some(builder.ins().iconst(types::I8, *b as i64)),
             ir::Constant::String(sym) => {
                 let s = sym.text(self.db);
                 let bytes = s.as_bytes();
@@ -943,12 +953,8 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     Some(builder.ins().urem(lhs, rhs))
                 }
             }
-            ir::IntrinsicOp::BitAnd | ir::IntrinsicOp::And => {
-                Some(builder.ins().band(lhs, rhs))
-            }
-            ir::IntrinsicOp::BitOr | ir::IntrinsicOp::Or => {
-                Some(builder.ins().bor(lhs, rhs))
-            }
+            ir::IntrinsicOp::BitAnd | ir::IntrinsicOp::And => Some(builder.ins().band(lhs, rhs)),
+            ir::IntrinsicOp::BitOr | ir::IntrinsicOp::Or => Some(builder.ins().bor(lhs, rhs)),
             ir::IntrinsicOp::BitXor => Some(builder.ins().bxor(lhs, rhs)),
             ir::IntrinsicOp::Shl => Some(builder.ins().ishl(lhs, rhs)),
             ir::IntrinsicOp::Shr => {
@@ -983,9 +989,17 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::IntrinsicOp::Ge => {
                 if signed {
-                    Some(builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs))
+                    Some(
+                        builder
+                            .ins()
+                            .icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs),
+                    )
                 } else {
-                    Some(builder.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, lhs, rhs))
+                    Some(
+                        builder
+                            .ins()
+                            .icmp(IntCC::UnsignedGreaterThanOrEqual, lhs, rhs),
+                    )
                 }
             }
             _ => {
@@ -1067,7 +1081,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     builder.ins().jump(otherwise_block, &[]);
                 } else if targets.values.len() == 1 && targets.values[0].0 == 0 {
                     // Special case: boolean switch (0 → false_block, otherwise → true_block)
-                    let false_block = self.block_map[&targets.values[0].1 .0];
+                    let false_block = self.block_map[&targets.values[0].1.0];
                     builder
                         .ins()
                         .brif(discr_val, otherwise_block, &[], false_block, &[]);
@@ -1109,10 +1123,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         match self.functions.get(name).copied() {
                             Some(id) => id,
                             None => {
-                                emit_codegen_err(
-                                    self.db,
-                                    format!("function '{name}' not found"),
-                                );
+                                emit_codegen_err(self.db, format!("function '{name}' not found"));
                                 return None;
                             }
                         }
@@ -1246,10 +1257,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
     /// Check if an operand refers to a float type.
     fn is_float_operand(&self, operand: &ir::Operand<'db>) -> bool {
-        if let ir::Operand::Place(ir::Place::Local(id)) = operand {
-            if let Some(decl) = self.local_decls.get(id.0) {
-                return matches!(decl.ty(self.db), ir::Ty::Float(_));
-            }
+        if let ir::Operand::Place(ir::Place::Local(id)) = operand
+            && let Some(decl) = self.local_decls.get(id.0)
+        {
+            return matches!(decl.ty(self.db), ir::Ty::Float(_));
         }
         if let ir::Operand::Constant(c) = operand {
             return matches!(c, ir::Constant::Float(_));
@@ -1347,10 +1358,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
     /// Check if an operand refers to a signed integer type.
     fn is_signed_operand(&self, operand: &ir::Operand<'db>) -> bool {
-        if let ir::Operand::Place(ir::Place::Local(id)) = operand {
-            if let Some(decl) = self.local_decls.get(id.0) {
-                return matches!(decl.ty(self.db), ir::Ty::Int(_));
-            }
+        if let ir::Operand::Place(ir::Place::Local(id)) = operand
+            && let Some(decl) = self.local_decls.get(id.0)
+        {
+            return matches!(decl.ty(self.db), ir::Ty::Int(_));
         }
         if let ir::Operand::Constant(c) = operand {
             return matches!(c, ir::Constant::Int(_));

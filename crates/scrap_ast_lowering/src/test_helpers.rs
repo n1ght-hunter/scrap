@@ -11,10 +11,10 @@ use scrap_ast::{
     stmt::{Stmt, StmtKind},
 };
 use scrap_shared::{
+    NodeId,
     ident::{Ident, Symbol},
     path::{Path, PathSegment},
     types::IntTy,
-    NodeId,
 };
 use scrap_span::Span;
 use scrap_tycheck::ResolvedTy;
@@ -98,8 +98,6 @@ pub fn create_string_lit<'db>(db: &'db dyn scrap_shared::Db, _value: &str) -> Ex
     }
 }
 
-
-
 /// Create an identifier expression (variable reference)
 pub fn create_ident_expr<'db>(db: &'db dyn scrap_shared::Db, name: &str) -> Expr<'db> {
     let span = test_span(db);
@@ -114,10 +112,7 @@ pub fn create_ident_expr<'db>(db: &'db dyn scrap_shared::Db, name: &str) -> Expr
 
     let path = Path {
         span,
-        segments: ThinVec::from([PathSegment {
-            ident,
-            id: node_id,
-        }]),
+        segments: ThinVec::from([PathSegment { ident, id: node_id }]),
     };
 
     Expr {
@@ -212,7 +207,10 @@ pub fn create_assign_op_expr<'db>(
 }
 
 /// Create a return expression
-pub fn create_return_expr<'db>(db: &'db dyn scrap_shared::Db, value: Option<Expr<'db>>) -> Expr<'db> {
+pub fn create_return_expr<'db>(
+    db: &'db dyn scrap_shared::Db,
+    value: Option<Expr<'db>>,
+) -> Expr<'db> {
     let span = test_span(db);
     let node_id = test_node_id();
 
@@ -251,7 +249,11 @@ pub fn create_if_else_expr<'db>(
 
     Expr {
         id: node_id,
-        kind: ExprKind::If(Box::new(cond), Box::new(then_block), Some(Box::new(else_expr))),
+        kind: ExprKind::If(
+            Box::new(cond),
+            Box::new(then_block),
+            Some(Box::new(else_expr)),
+        ),
         span,
     }
 }
@@ -293,13 +295,18 @@ pub fn create_expr_stmt<'db>(db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> 
 }
 
 /// Create an array literal expression
-pub fn create_array_expr<'db>(db: &'db dyn scrap_shared::Db, elements: Vec<Expr<'db>>) -> Expr<'db> {
+pub fn create_array_expr<'db>(
+    db: &'db dyn scrap_shared::Db,
+    elements: Vec<Expr<'db>>,
+) -> Expr<'db> {
     let span = test_span(db);
     let node_id = test_node_id();
 
     Expr {
         id: node_id,
-        kind: ExprKind::Array(ThinVec::from(elements.into_iter().map(Box::new).collect::<Vec<_>>())),
+        kind: ExprKind::Array(ThinVec::from(
+            elements.into_iter().map(Box::new).collect::<Vec<_>>(),
+        )),
         span,
     }
 }
@@ -325,7 +332,9 @@ pub fn create_call_expr<'db>(
 
 /// Create an empty TypeTable for tests.
 /// Suitable for tests that only use bool/string literals or non-literal expressions.
-pub fn create_empty_type_table<'db>(db: &'db dyn scrap_shared::Db) -> scrap_tycheck::TypeTable<'db> {
+pub fn create_empty_type_table<'db>(
+    db: &'db dyn scrap_shared::Db,
+) -> scrap_tycheck::TypeTable<'db> {
     scrap_tycheck::TypeTable::new(db, vec![], vec![], vec![])
 }
 

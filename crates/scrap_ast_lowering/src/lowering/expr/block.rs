@@ -3,7 +3,7 @@
 use scrap_ast::block::Block;
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a block expression

@@ -202,7 +202,10 @@ mod tests {
 
         let blocks = builder.build();
         assert_eq!(blocks.len(), 2);
-        assert!(matches!(blocks[0].terminator(db), ir::Terminator::Goto { .. }));
+        assert!(matches!(
+            blocks[0].terminator(db),
+            ir::Terminator::Goto { .. }
+        ));
         assert_eq!(blocks[1].terminator(db), ir::Terminator::Return);
     }
 

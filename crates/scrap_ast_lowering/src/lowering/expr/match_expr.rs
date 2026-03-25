@@ -5,7 +5,7 @@ use scrap_ast::pat::PatKind;
 use scrap_ir as ir;
 use scrap_shared::ident::Symbol;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a match expression.
@@ -29,10 +29,7 @@ impl<'db> ExprLowerer<'db> {
                 // Store in a temp if it's not already a place
                 let scrutinee_ty = self.lookup_and_convert_type(scrutinee.id);
                 let temp = self.allocate_temp(scrutinee_ty);
-                self.emit_assign(
-                    ir::Place::Local(temp),
-                    ir::Rvalue::Use(scrutinee_operand),
-                );
+                self.emit_assign(ir::Place::Local(temp), ir::Rvalue::Use(scrutinee_operand));
                 ir::Place::Local(temp)
             }
         };
@@ -73,9 +70,7 @@ impl<'db> ExprLowerer<'db> {
         let otherwise_bb = arms
             .iter()
             .enumerate()
-            .find(|(_, arm)| {
-                matches!(arm.pat.kind, PatKind::Wildcard | PatKind::Ident(_, _, _))
-            })
+            .find(|(_, arm)| matches!(arm.pat.kind, PatKind::Wildcard | PatKind::Ident(_, _, _)))
             .map(|(i, _)| arm_blocks[i])
             .unwrap_or(unreachable_bb);
 
@@ -106,10 +101,7 @@ impl<'db> ExprLowerer<'db> {
 
             // Assign body result to result temp
             if !self.cfg_builder.current_block_is_terminated() {
-                self.emit_assign(
-                    ir::Place::Local(result_temp),
-                    ir::Rvalue::Use(body_operand),
-                );
+                self.emit_assign(ir::Place::Local(result_temp), ir::Rvalue::Use(body_operand));
                 self.cfg_builder
                     .finish_block(ir::Terminator::Goto { target: cont_bb });
             }
@@ -187,7 +179,8 @@ impl<'db> ExprLowerer<'db> {
                 for (field_idx, sub_pat) in sub_pats.iter().enumerate() {
                     if let PatKind::Ident(_, ident, _) = &sub_pat.kind {
                         // Look up the field type from enum info
-                        let field_ty = self.lookup_variant_field_ty(enum_name, variant_idx, field_idx)
+                        let field_ty = self
+                            .lookup_variant_field_ty(enum_name, variant_idx, field_idx)
                             .unwrap_or(ir::Ty::Void);
 
                         let local_id = self.allocate_named_local(ident.name, field_ty);
@@ -227,7 +220,8 @@ impl<'db> ExprLowerer<'db> {
                         let field_idx = self
                             .lookup_variant_field_idx(enum_name, variant_idx, fp.ident.name)
                             .ok_or(BuilderError::LowerExpressionError)?;
-                        let field_ty = self.lookup_variant_field_ty(enum_name, variant_idx, field_idx)
+                        let field_ty = self
+                            .lookup_variant_field_ty(enum_name, variant_idx, field_idx)
                             .unwrap_or(ir::Ty::Void);
 
                         let local_id = self.allocate_named_local(ident.name, field_ty);
@@ -238,11 +232,8 @@ impl<'db> ExprLowerer<'db> {
                             variant_idx,
                             Some(variant_name),
                         );
-                        let field_place = ir::Place::Field(
-                            Box::new(downcast_place),
-                            field_idx,
-                            Some(ident.name),
-                        );
+                        let field_place =
+                            ir::Place::Field(Box::new(downcast_place), field_idx, Some(ident.name));
                         self.emit_assign(
                             ir::Place::Local(local_id),
                             ir::Rvalue::Use(ir::Operand::Place(field_place)),

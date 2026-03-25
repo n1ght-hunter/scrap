@@ -54,11 +54,11 @@ impl<'db> ResolvedTy<'db> {
     pub fn contains_error(&self) -> bool {
         match self {
             ResolvedTy::Error => true,
-            ResolvedTy::App(_, args) => args.iter().any(|a| a.contains_error()),
+            ResolvedTy::App(_, args) => args.iter().any(ResolvedTy::contains_error),
             ResolvedTy::Fn(params, ret) => {
-                params.iter().any(|p| p.contains_error()) || ret.contains_error()
+                params.iter().any(ResolvedTy::contains_error) || ret.contains_error()
             }
-            ResolvedTy::Tuple(elems) => elems.iter().any(|e| e.contains_error()),
+            ResolvedTy::Tuple(elems) => elems.iter().any(ResolvedTy::contains_error),
             ResolvedTy::Ref(inner, _) => inner.contains_error(),
             ResolvedTy::Ptr(inner) => inner.contains_error(),
             _ => false,

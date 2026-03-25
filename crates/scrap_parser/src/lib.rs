@@ -59,10 +59,10 @@ impl<'db> CanOrModule<'db> {
 
     pub fn to_module(&self, db: &'db dyn scrap_shared::Db) -> scrap_ast::module::Module<'db> {
         match self {
-            CanOrModule::Module(module) => module.clone(),
+            CanOrModule::Module(module) => *module,
             CanOrModule::Can(can) => scrap_ast::module::Module::new(
                 db,
-                can.name(db).clone(),
+                *can.name(db),
                 ModuleKind::Loaded(
                     can.items(db).clone(),
                     scrap_ast::module::Inline::Yes,

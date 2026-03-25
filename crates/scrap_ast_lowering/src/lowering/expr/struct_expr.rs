@@ -4,7 +4,7 @@ use scrap_ast::expr::{Expr, StructExpr};
 use scrap_ir as ir;
 use scrap_shared::ident::Ident;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a struct initialization expression to an operand.
@@ -27,7 +27,11 @@ impl<'db> ExprLowerer<'db> {
     ) -> MResult<()> {
         // Check for enum struct variant: `Message::Move { x: 1, y: 2 }`
         if struct_expr.path.segments.len() == 2 {
-            let enum_name = struct_expr.path.segments[0].ident.name.text(self.db).to_string();
+            let enum_name = struct_expr.path.segments[0]
+                .ident
+                .name
+                .text(self.db)
+                .to_string();
             let variant_name = struct_expr.path.segments[1].ident.name;
 
             let variant_idx_opt = self.enum_info.get(&enum_name).and_then(|info| {
@@ -71,7 +75,8 @@ impl<'db> ExprLowerer<'db> {
             field_names.push(field_init.ident.name);
         }
 
-        let rvalue = ir::Rvalue::Aggregate(ir::AggregateKind::Struct(type_id, field_names), operands);
+        let rvalue =
+            ir::Rvalue::Aggregate(ir::AggregateKind::Struct(type_id, field_names), operands);
         self.emit_assign(dest, rvalue);
         Ok(())
     }
@@ -85,9 +90,8 @@ impl<'db> ExprLowerer<'db> {
     ) -> MResult<ir::Operand<'db>> {
         let base_operand = self.lower_expr(base)?;
 
-        let base_place = match base_operand {
-            ir::Operand::Place(place) => place,
-            _ => return Err(BuilderError::LowerExpressionError),
+        let ir::Operand::Place(base_place) = base_operand else {
+            return Err(BuilderError::LowerExpressionError);
         };
 
         let field_idx = self.resolve_field_index(base.id, field_ident.name)?;
@@ -107,10 +111,10 @@ impl<'db> ExprLowerer<'db> {
 
         if let scrap_tycheck::ResolvedTy::Adt(struct_sym) = base_resolved_ty {
             let struct_name = struct_sym.text(self.db);
-            if let Some(field_map) = self.struct_fields.get(struct_name.as_str()) {
-                if let Some(&idx) = field_map.get(&field_name) {
-                    return Ok(idx);
-                }
+            if let Some(field_map) = self.struct_fields.get(struct_name.as_str())
+                && let Some(&idx) = field_map.get(&field_name)
+            {
+                return Ok(idx);
             }
         }
 

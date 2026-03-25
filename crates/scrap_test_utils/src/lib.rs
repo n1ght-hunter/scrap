@@ -15,8 +15,9 @@ pub use scrap_macros::salsa_test;
 /// lines from the debug output, including the entire line if it only contains
 /// the salsa ID and whitespace.
 pub fn strip_salsa_ids(s: &str) -> String {
-    static RE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"[ \t]*\[salsa id\]: Id\([\da-fA-F]+\),[ \t]*\n").unwrap());
+    static RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"[ \t]*\[salsa id\]: Id\([\da-fA-F]+\),[ \t]*\n").unwrap()
+    });
     RE.replace_all(s, "").to_string()
 }
 

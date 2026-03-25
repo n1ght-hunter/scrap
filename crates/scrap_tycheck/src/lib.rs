@@ -51,7 +51,11 @@ pub fn check_types<'db>(
     can: Can<'db>,
     file: InputFile<'db>,
 ) -> TypeTable<'db> {
-    let mut ctx = TypeContext::new(db, file.content(db), file.path(db).to_str().unwrap_or("<unknown>"));
+    let mut ctx = TypeContext::new(
+        db,
+        file.content(db),
+        file.path(db).to_str().unwrap_or("<unknown>"),
+    );
 
     ctx.check_can(can);
 
@@ -134,7 +138,10 @@ mod tests {
         let table = TypeTable::new(db, expr_types, local_types, fn_return_types);
 
         // Verify types are recorded
-        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
+        assert_eq!(
+            table.expr_type(db, expr_id),
+            Some(&ResolvedTy::Int(IntTy::I32))
+        );
         assert_eq!(table.local_type(db, local_id), Some(&ResolvedTy::Bool));
     }
 
@@ -161,6 +168,9 @@ mod tests {
         let table = TypeTable::new(db, expr_types, local_types, fn_return_types);
 
         // The type should be resolved to Int, not a type variable
-        assert_eq!(table.expr_type(db, expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
+        assert_eq!(
+            table.expr_type(db, expr_id),
+            Some(&ResolvedTy::Int(IntTy::I32))
+        );
     }
 }

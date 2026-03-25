@@ -37,29 +37,29 @@ impl Drop for DiagnosticEmitter<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Emmited {
+enum Emitted {
     Yes,
     No,
 }
 
 #[derive(Default, Debug)]
 struct DiagnosticInner<'a> {
-    errors: parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>,
-    warnings: parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>,
-    others: parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>,
+    errors: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
+    warnings: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
+    others: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
 }
 
 impl<'a> DiagnosticInner<'a> {
-    fn push(&self, level: Level<'_>, emmited: Emmited, diag: Group<'a>) {
+    fn push(&self, level: Level<'_>, emitted: Emitted, diag: Group<'a>) {
         match level {
             Level::ERROR => {
-                self.errors.lock().push((emmited, diag));
+                self.errors.lock().push((emitted, diag));
             }
             Level::WARNING => {
-                self.warnings.lock().push((emmited, diag));
+                self.warnings.lock().push((emitted, diag));
             }
             _ => {
-                self.others.lock().push((emmited, diag));
+                self.others.lock().push((emitted, diag));
             }
         }
     }
@@ -73,9 +73,9 @@ impl<'a> DiagnosticInner<'a> {
     }
 
     fn has_unrendered(&self) -> bool {
-        let check = |input: &parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>| {
+        let check = |input: &parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>| {
             let guard = input.lock();
-            guard.par_iter().any(|(emitted, _)| *emitted == Emmited::No)
+            guard.par_iter().any(|(emitted, _)| *emitted == Emitted::No)
         };
         let result = AtomicBool::new(false);
         rayon::scope(|s| {
@@ -113,13 +113,13 @@ impl<'a> DiagnosticInner<'a> {
     }
 
     fn all_non_rendered(&self, render: impl Fn(Level, Report) + Sync + Send) {
-        let render = |level: Level, input: &parking_lot::Mutex<Vec<(Emmited, Group<'a>)>>| {
+        let render = |level: Level, input: &parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>| {
             let mut guard = input.lock();
             let report = guard
                 .par_iter_mut()
                 .filter_map(|(emitted, diag)| {
-                    if *emitted == Emmited::No {
-                        *emitted = Emmited::Yes;
+                    if *emitted == Emitted::No {
+                        *emitted = Emitted::Yes;
                         Some(diag.clone())
                     } else {
                         None
@@ -189,10 +189,10 @@ impl<'a> DiagnosticEmitter<'a> {
     }
 
     pub fn emit(&self, level: Level<'_>, diag: Group<'a>) {
-        let mut emitted = Emmited::No;
+        let mut emitted = Emitted::No;
         if self.auto_render {
-            emitted = Emmited::Yes;
-            self.render(&[diag.clone()]);
+            emitted = Emitted::Yes;
+            self.render(std::slice::from_ref(&diag));
         }
         self.diagnostics.push(level, emitted, diag);
     }

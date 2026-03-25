@@ -54,7 +54,7 @@ pub fn ir_ty_to_cl(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<Option<type
             Some(None)
         }
         ir::Ty::Ref(_, _) => Some(Some(types::I64)), // reference
-        ir::Ty::Ptr(_) => Some(Some(types::I64)), // GC-managed pointer
+        ir::Ty::Ptr(_) => Some(Some(types::I64)),    // GC-managed pointer
         ir::Ty::Tuple(_) => {
             // Tuple locals are decomposed into per-field sub-variables.
             // They have no single Cranelift type representation.
@@ -118,7 +118,10 @@ fn expand_param_types(
             // ADT params.
             emit_codegen_err(
                 db,
-                format!("cannot build signature for ADT param '{}' without layout info", type_id.name(db)),
+                format!(
+                    "cannot build signature for ADT param '{}' without layout info",
+                    type_id.name(db)
+                ),
             );
             None
         }
@@ -176,10 +179,7 @@ fn expand_param_types_with_layouts(
                 }
                 Some(())
             } else {
-                emit_codegen_err(
-                    db,
-                    format!("struct layout for '{}' not found", adt_name),
-                );
+                emit_codegen_err(db, format!("struct layout for '{}' not found", adt_name));
                 None
             }
         }

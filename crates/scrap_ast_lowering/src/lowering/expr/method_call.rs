@@ -8,7 +8,7 @@ use scrap_ir as ir;
 use scrap_shared::NodeId;
 use thin_vec::ThinVec;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a method call to an operand (allocates a temporary).
@@ -54,15 +54,10 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Look up the type name of a receiver expression for method call mangling.
-    fn lookup_method_type_name(
-        &self,
-        receiver: &Expr<'db>,
-    ) -> MResult<String> {
+    fn lookup_method_type_name(&self, receiver: &Expr<'db>) -> MResult<String> {
         if let Some(resolved) = self.lookup_expr_type(receiver.id) {
             match resolved {
-                scrap_tycheck::ResolvedTy::Adt(sym) => {
-                    Ok(sym.text(self.db).to_string())
-                }
+                scrap_tycheck::ResolvedTy::Adt(sym) => Ok(sym.text(self.db).to_string()),
                 _ => Err(crate::BuilderError::LowerExpressionError),
             }
         } else {

@@ -6,22 +6,27 @@ use cranelift_module::{Linkage, Module};
 use scrap_ir as ir;
 use std::collections::HashSet;
 
+use super::ResultExt;
 use super::context::CodegenContext;
 use super::cranelift_ir::FuncTranslator;
 use super::emit_codegen_err;
-use super::ty::{build_cl_signature, build_cl_signature_with_layouts, ir_ty_to_cl, ir_ty_to_cl_required};
-use super::ResultExt;
+use super::ty::{
+    build_cl_signature, build_cl_signature_with_layouts, ir_ty_to_cl, ir_ty_to_cl_required,
+};
 
 /// Scan a function body for locals that are targets of `Rvalue::Ref`.
 /// These locals need to be stack-spilled so we can take their address.
-fn collect_referenced_locals<'db>(db: &'db dyn scrap_shared::Db, body: ir::Body<'db>) -> HashSet<usize> {
+fn collect_referenced_locals<'db>(
+    db: &'db dyn scrap_shared::Db,
+    body: ir::Body<'db>,
+) -> HashSet<usize> {
     let mut referenced = HashSet::new();
     for block in body.blocks(db) {
         for stmt in block.statements(db) {
-            if let ir::StatementKind::Assign(_, ir::Rvalue::Ref(_, ref place)) = stmt.kind(db) {
-                if let ir::Place::Local(id) = place {
-                    referenced.insert(id.0);
-                }
+            if let ir::StatementKind::Assign(_, ir::Rvalue::Ref(_, ref place)) = stmt.kind(db)
+                && let ir::Place::Local(id) = place
+            {
+                referenced.insert(id.0);
             }
         }
     }
@@ -67,7 +72,10 @@ impl<'db> CodegenContext<'db> {
                     let sig = func.signature(self.db);
                     let name = sig.name(self.db).text(self.db);
                     let cl_sig = build_cl_signature_with_layouts(
-                        &self.module, sig, self.db, &self.struct_layouts,
+                        &self.module,
+                        sig,
+                        self.db,
+                        &self.struct_layouts,
                     )?;
                     let func_id = self
                         .module
@@ -116,9 +124,8 @@ impl<'db> CodegenContext<'db> {
         };
 
         // Set up the function context
-        let cl_sig = build_cl_signature_with_layouts(
-            &self.module, sig, self.db, &self.struct_layouts,
-        )?;
+        let cl_sig =
+            build_cl_signature_with_layouts(&self.module, sig, self.db, &self.struct_layouts)?;
         self.ctx.func.signature = cl_sig;
 
         let ret_ty = sig.return_ty(self.db);
@@ -151,8 +158,10 @@ impl<'db> CodegenContext<'db> {
             let mut enum_discriminants: std::collections::HashMap<usize, Variable> =
                 std::collections::HashMap::new();
             // Enum-specific: (local_id, variant_idx, field_idx) → Variable
-            let mut enum_variant_variables: std::collections::HashMap<(usize, usize, usize), Variable> =
-                std::collections::HashMap::new();
+            let mut enum_variant_variables: std::collections::HashMap<
+                (usize, usize, usize),
+                Variable,
+            > = std::collections::HashMap::new();
             for (i, decl) in local_decls.iter().enumerate() {
                 let ty = decl.ty(self.db);
                 if let ir::Ty::Tuple(ref fields) = ty {
@@ -183,10 +192,7 @@ impl<'db> CodegenContext<'db> {
                             tuple_variables.insert((i, field_idx), var);
                         }
                     } else {
-                        emit_codegen_err(
-                            self.db,
-                            format!("ADT '{}' layout not found", adt_name),
-                        );
+                        emit_codegen_err(self.db, format!("ADT '{}' layout not found", adt_name));
                         return None;
                     }
                 } else if referenced_locals.contains(&i) {
@@ -207,10 +213,10 @@ impl<'db> CodegenContext<'db> {
 
             // Mark *T locals for Cranelift stack maps (GC root tracking at safepoints)
             for (i, decl) in local_decls.iter().enumerate() {
-                if matches!(decl.ty(self.db), ir::Ty::Ptr(_)) {
-                    if let Some(var) = variables.get(&i) {
-                        builder.declare_var_needs_stack_map(*var);
-                    }
+                if matches!(decl.ty(self.db), ir::Ty::Ptr(_))
+                    && let Some(var) = variables.get(&i)
+                {
+                    builder.declare_var_needs_stack_map(*var);
                 }
             }
 
@@ -252,8 +258,7 @@ impl<'db> CodegenContext<'db> {
 
             // Emit yield point for cooperative scheduling (no-op if not in a coroutine)
             if let Some(&yield_id) = self.functions.get("__scrap_yield") {
-                let yield_ref =
-                    self.module.declare_func_in_func(yield_id, builder.func);
+                let yield_ref = self.module.declare_func_in_func(yield_id, builder.func);
                 builder.ins().call(yield_ref, &[]);
             }
 

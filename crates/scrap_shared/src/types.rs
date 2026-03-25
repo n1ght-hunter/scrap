@@ -1,4 +1,16 @@
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Copy,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum IntTy {
     Isize,
     I8,
@@ -66,7 +78,19 @@ impl IntTy {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Copy,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum UintTy {
     Usize,
     U8,
@@ -134,7 +158,19 @@ impl UintTy {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Copy,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum FloatTy {
     F16,
     F32,
@@ -171,7 +207,19 @@ impl FloatTy {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Copy,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum IntVal {
     Isize(isize),
     I8(i8),
@@ -194,7 +242,19 @@ impl IntVal {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Copy,
+    salsa::Update,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum UintVal {
     Usize(usize),
     U8(u8),
@@ -217,7 +277,7 @@ impl UintVal {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub enum FloatVal {
     F32(f32),
     F64(f64),
@@ -235,9 +295,20 @@ impl std::hash::Hash for FloatVal {
     }
 }
 
+impl PartialOrd for FloatVal {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Ord for FloatVal {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+        match (self, other) {
+            (FloatVal::F32(a), FloatVal::F32(b)) => a.to_bits().cmp(&b.to_bits()),
+            (FloatVal::F64(a), FloatVal::F64(b)) => a.to_bits().cmp(&b.to_bits()),
+            (FloatVal::F32(_), FloatVal::F64(_)) => std::cmp::Ordering::Less,
+            (FloatVal::F64(_), FloatVal::F32(_)) => std::cmp::Ordering::Greater,
+        }
     }
 }
 
@@ -253,7 +324,9 @@ impl FloatVal {
 /// A unique identifier for AST nodes. NodeIds are used throughout the compiler
 /// to track and reference specific nodes during analysis and compilation.
 /// Every AST node that can be referenced has a unique NodeId.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
 pub struct NodeId {
     id: i32,
     file_hash: u64,

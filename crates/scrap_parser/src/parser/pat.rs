@@ -24,10 +24,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         Ok(Pat {
             id: self.state.new_node_id(),
             kind: PatKind::Ident(
-                scrap_ast::pat::BindingMode(
-                    scrap_ast::pat::ByRef::No,
-                    mutability,
-                ),
+                scrap_ast::pat::BindingMode(scrap_ast::pat::ByRef::No, mutability),
                 ident,
                 None,
             ),

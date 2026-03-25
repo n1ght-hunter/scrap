@@ -54,11 +54,7 @@ impl<'db> TypeContext<'db> {
                 if n1 == n2 {
                     true
                 } else {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     false
                 }
             }
@@ -68,11 +64,7 @@ impl<'db> TypeContext<'db> {
                 if p1 == p2 {
                     true
                 } else {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     false
                 }
             }
@@ -80,11 +72,7 @@ impl<'db> TypeContext<'db> {
             // Applied types: unify name and all arguments
             (InferTy::App(n1, args1), InferTy::App(n2, args2)) => {
                 if n1 != n2 {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     return false;
                 }
                 if args1.len() != args2.len() {
@@ -102,11 +90,7 @@ impl<'db> TypeContext<'db> {
             // Function types
             (InferTy::Fn(params1, ret1), InferTy::Fn(params2, ret2)) => {
                 if params1.len() != params2.len() {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     return false;
                 }
                 // Unify parameter types
@@ -122,29 +106,19 @@ impl<'db> TypeContext<'db> {
             // Reference types: inner must unify, mutability must match
             (InferTy::Ref(inner1, m1), InferTy::Ref(inner2, m2)) => {
                 if m1 != m2 {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     return false;
                 }
                 self.unify(inner1, inner2, span)
             }
 
             // Pointer types: inner must unify
-            (InferTy::Ptr(inner1), InferTy::Ptr(inner2)) => {
-                self.unify(inner1, inner2, span)
-            }
+            (InferTy::Ptr(inner1), InferTy::Ptr(inner2)) => self.unify(inner1, inner2, span),
 
             // Tuple types
             (InferTy::Tuple(elems1), InferTy::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
-                    self.emit_type_mismatch(
-                        &self.ty_to_string(&t1),
-                        &self.ty_to_string(&t2),
-                        span,
-                    );
+                    self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                     return false;
                 }
                 for (e1, e2) in elems1.iter().zip(elems2.iter()) {
@@ -160,11 +134,7 @@ impl<'db> TypeContext<'db> {
 
             // Mismatch - types are incompatible
             _ => {
-                self.emit_type_mismatch(
-                    &self.ty_to_string(&t1),
-                    &self.ty_to_string(&t2),
-                    span,
-                );
+                self.emit_type_mismatch(&self.ty_to_string(&t1), &self.ty_to_string(&t2), span);
                 false
             }
         }

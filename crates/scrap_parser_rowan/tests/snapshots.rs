@@ -3,8 +3,8 @@
 //! These tests ensure the CST output remains consistent across changes.
 //! The same test inputs are used in scrap_parser for AST comparison.
 
-use scrap_parser_rowan::{SyntaxNode, parse_file};
 use scrap_lexer::lex_file;
+use scrap_parser_rowan::{SyntaxNode, parse_file};
 use scrap_test_utils::{salsa_assert_snapshot, salsa_test};
 
 fn parse(db: &dyn scrap_shared::Db, source: &str) -> SyntaxNode {

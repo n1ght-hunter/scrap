@@ -7,7 +7,7 @@ use crate::Token;
 /// A bitset type designed specifically for `Parser::expected_token_types`,
 /// which is very hot. `u128` is the smallest integer that will fit every
 /// `TokenType` value.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct TokenTypeSet(u128);
 
 impl TokenTypeSet {
@@ -20,11 +20,11 @@ impl TokenTypeSet {
     }
 
     pub fn insert(&mut self, token_type: Token) {
-        self.0 = self.0 | (1u128 << token_type as u32)
+        self.0 |= 1u128 << token_type as u32;
     }
 
     pub fn clear(&mut self) {
-        self.0 = 0
+        self.0 = 0;
     }
 
     pub fn contains(&self, token_type: Token) -> bool {
@@ -96,10 +96,10 @@ impl<'db> Deref for TokenStream<'db> {
 
 impl<'db> TokenStream<'db> {
     pub fn new(mut inner: Vec<Spanned<'db, Token>>) -> Self {
-        if let Some(last) = inner.last() {
-            if last.node != Token::Eof {
-                inner.push(Spanned::new(Token::Eof, last.span.clone()));
-            }
+        if let Some(last) = inner.last()
+            && last.node != Token::Eof
+        {
+            inner.push(Spanned::new(Token::Eof, last.span));
         }
         TokenStream {
             inner: Arc::new(inner),

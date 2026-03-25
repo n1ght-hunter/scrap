@@ -6,7 +6,7 @@ use scrap_ast::{
 };
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower an expression to a place (for use as LHS of assignment)
@@ -29,12 +29,15 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Field(base, field_ident) => {
                 // p.x as a place — field access on a struct
                 let base_operand = self.lower_expr(base)?;
-                let base_place = match base_operand {
-                    ir::Operand::Place(place) => place,
-                    _ => return Err(BuilderError::LowerExpressionError),
+                let ir::Operand::Place(base_place) = base_operand else {
+                    return Err(BuilderError::LowerExpressionError);
                 };
                 let field_idx = self.resolve_field_index(base.id, field_ident.name)?;
-                Ok(ir::Place::Field(Box::new(base_place), field_idx, Some(field_ident.name)))
+                Ok(ir::Place::Field(
+                    Box::new(base_place),
+                    field_idx,
+                    Some(field_ident.name),
+                ))
             }
             ExprKind::Unary(scrap_ast::operators::UnOp::Deref, inner) => {
                 // *x as a place — dereference through a reference
@@ -50,9 +53,7 @@ impl<'db> ExprLowerer<'db> {
                 };
                 Ok(ir::Place::Deref(Box::new(inner_place)))
             }
-            _ => {
-                Err(BuilderError::LowerExpressionError)
-            }
+            _ => Err(BuilderError::LowerExpressionError),
         }
     }
 
@@ -102,12 +103,8 @@ impl<'db> ExprLowerer<'db> {
 
         if is_integer && Self::is_checked_intrinsic(intrinsic_op) {
             // Checked path: produce (T, bool), assert, extract value
-            let result = self.lower_checked_binary_op(
-                intrinsic_op,
-                lhs_operand,
-                rhs_operand,
-                lhs_ty,
-            )?;
+            let result =
+                self.lower_checked_binary_op(intrinsic_op, lhs_operand, rhs_operand, lhs_ty)?;
             self.emit_assign(place, ir::Rvalue::Use(result));
         } else {
             // Unchecked path: direct intrinsic call
@@ -334,21 +331,86 @@ mod tests {
         let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Test unchecked (non-integer) assignment operators
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::AddAssign, false).unwrap(), ir::IntrinsicOp::Add);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::SubAssign, false).unwrap(), ir::IntrinsicOp::Sub);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::MulAssign, false).unwrap(), ir::IntrinsicOp::Mul);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::DivAssign, false).unwrap(), ir::IntrinsicOp::Div);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::RemAssign, false).unwrap(), ir::IntrinsicOp::Rem);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitXorAssign, false).unwrap(), ir::IntrinsicOp::BitXor);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitAndAssign, false).unwrap(), ir::IntrinsicOp::BitAnd);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::BitOrAssign, false).unwrap(), ir::IntrinsicOp::BitOr);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShlAssign, false).unwrap(), ir::IntrinsicOp::Shl);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::ShrAssign, false).unwrap(), ir::IntrinsicOp::Shr);
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::AddAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Add
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::SubAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Sub
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::MulAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Mul
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::DivAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Div
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::RemAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Rem
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::BitXorAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::BitXor
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::BitAndAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::BitAnd
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::BitOrAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::BitOr
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::ShlAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Shl
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::ShrAssign, false)
+                .unwrap(),
+            ir::IntrinsicOp::Shr
+        );
 
         // Test checked (integer) assignment operators
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::AddAssign, true).unwrap(), ir::IntrinsicOp::AddWithOverflow);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::SubAssign, true).unwrap(), ir::IntrinsicOp::SubWithOverflow);
-        assert_eq!(lowerer.convert_assign_op(AssignOpKind::MulAssign, true).unwrap(), ir::IntrinsicOp::MulWithOverflow);
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::AddAssign, true)
+                .unwrap(),
+            ir::IntrinsicOp::AddWithOverflow
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::SubAssign, true)
+                .unwrap(),
+            ir::IntrinsicOp::SubWithOverflow
+        );
+        assert_eq!(
+            lowerer
+                .convert_assign_op(AssignOpKind::MulAssign, true)
+                .unwrap(),
+            ir::IntrinsicOp::MulWithOverflow
+        );
     }
 
     #[scrap_macros::salsa_test]

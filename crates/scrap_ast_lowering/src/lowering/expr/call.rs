@@ -3,7 +3,7 @@
 use scrap_ast::expr::Expr;
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower the common parts of a function call (func operand + args).
@@ -11,9 +11,8 @@ impl<'db> ExprLowerer<'db> {
         &mut self,
         call_expr: &Expr<'db>,
     ) -> MResult<(ir::Operand<'db>, Vec<ir::Operand<'db>>)> {
-        let (func, args) = match &call_expr.kind {
-            scrap_ast::expr::ExprKind::Call(f, a) => (f, a),
-            _ => return Err(crate::BuilderError::LowerExpressionError),
+        let scrap_ast::expr::ExprKind::Call(func, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
         };
 
         let func_operand = self.lower_expr(func)?;
@@ -58,24 +57,19 @@ impl<'db> ExprLowerer<'db> {
 
     /// Check if a call expression is a `box(value)` builtin.
     fn is_box_call(&self, call_expr: &Expr<'db>) -> bool {
-        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind {
-            if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind {
-                if let Some(seg) = path.single_segment() {
-                    return seg.ident.name.text(self.db) == "box";
-                }
-            }
+        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind
+            && let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
+            && let Some(seg) = path.single_segment()
+        {
+            return seg.ident.name.text(self.db) == "box";
         }
         false
     }
 
     /// Lower a `box(value)` expression to `Rvalue::Box`.
-    fn lower_box_call(
-        &mut self,
-        call_expr: &Expr<'db>,
-    ) -> MResult<ir::Operand<'db>> {
-        let args = match &call_expr.kind {
-            scrap_ast::expr::ExprKind::Call(_, a) => a,
-            _ => return Err(crate::BuilderError::LowerExpressionError),
+    fn lower_box_call(&mut self, call_expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
+        let scrap_ast::expr::ExprKind::Call(_, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
         };
 
         // box(value) takes exactly one argument
@@ -92,47 +86,48 @@ impl<'db> ExprLowerer<'db> {
         let result_temp = self.allocate_temp(result_ty);
         let destination = ir::Place::Local(result_temp);
 
-        self.emit_assign(destination.clone(), ir::Rvalue::Box(inner_ty, value_operand));
+        self.emit_assign(
+            destination.clone(),
+            ir::Rvalue::Box(inner_ty, value_operand),
+        );
         Ok(ir::Operand::Place(destination))
     }
 
     /// Check if a call is an enum tuple variant construction (e.g. Option::Some(42))
-    fn is_enum_variant_call(&self, call_expr: &Expr<'db>) -> Option<(String, scrap_shared::ident::Symbol<'db>, usize)> {
-        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind {
-            if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind {
-                if path.segments.len() == 2 {
-                    let enum_name = path.segments[0].ident.name.text(self.db).to_string();
-                    let variant_name = path.segments[1].ident.name;
-                    if let Some(enum_info) = self.enum_info.get(&enum_name) {
-                        if let Some((_, variant_idx, _)) = enum_info
-                            .variants
-                            .iter()
-                            .find(|(name, _, _)| *name == variant_name)
-                        {
-                            return Some((enum_name, variant_name, *variant_idx));
-                        }
-                    }
-                }
+    fn is_enum_variant_call(
+        &self,
+        call_expr: &Expr<'db>,
+    ) -> Option<(String, scrap_shared::ident::Symbol<'db>, usize)> {
+        if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind
+            && let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
+            && path.segments.len() == 2
+        {
+            let enum_name = path.segments[0].ident.name.text(self.db).to_string();
+            let variant_name = path.segments[1].ident.name;
+            if let Some(enum_info) = self.enum_info.get(&enum_name)
+                && let Some((_, variant_idx, _)) = enum_info
+                    .variants
+                    .iter()
+                    .find(|(name, _, _)| *name == variant_name)
+            {
+                return Some((enum_name, variant_name, *variant_idx));
             }
         }
         None
     }
 
     /// Lower a function call to an operand (allocates a temporary).
-    pub(crate) fn lower_call(
-        &mut self,
-        call_expr: &Expr<'db>,
-    ) -> MResult<ir::Operand<'db>> {
+    pub(crate) fn lower_call(&mut self, call_expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
         // Intercept box(value) builtin
         if self.is_box_call(call_expr) {
             return self.lower_box_call(call_expr);
         }
 
         // Intercept enum tuple variant construction (e.g. Option::Some(42))
-        if let Some((enum_name, _variant_name, variant_idx)) = self.is_enum_variant_call(call_expr) {
-            let args = match &call_expr.kind {
-                scrap_ast::expr::ExprKind::Call(_, a) => a,
-                _ => return Err(crate::BuilderError::LowerExpressionError),
+        if let Some((enum_name, _variant_name, variant_idx)) = self.is_enum_variant_call(call_expr)
+        {
+            let scrap_ast::expr::ExprKind::Call(_, args) = &call_expr.kind else {
+                return Err(crate::BuilderError::LowerExpressionError);
             };
 
             let mut arg_operands = Vec::new();
@@ -163,14 +158,9 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Lower a `spawn` expression: dispatches on Call, MethodCall, or Block.
-    pub(crate) fn lower_spawn(
-        &mut self,
-        expr: &Expr<'db>,
-    ) -> MResult<ir::Operand<'db>> {
+    pub(crate) fn lower_spawn(&mut self, expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
         match &expr.kind {
-            scrap_ast::expr::ExprKind::Call(callee, args) => {
-                self.lower_spawn_call(callee, args)
-            }
+            scrap_ast::expr::ExprKind::Call(callee, args) => self.lower_spawn_call(callee, args),
             scrap_ast::expr::ExprKind::Block(block) => self.lower_spawn_block(block),
             // For other expressions (like MethodCall), fall through to a generic
             // lowering that treats the inner as a call.
@@ -218,7 +208,9 @@ impl<'db> ExprLowerer<'db> {
 
         // Ensure the function body is terminated.
         if !block_lowerer.cfg_builder.current_block_is_terminated() {
-            block_lowerer.cfg_builder.finish_block(ir::Terminator::Return);
+            block_lowerer
+                .cfg_builder
+                .finish_block(ir::Terminator::Return);
         }
 
         // Build the anonymous IR function.
@@ -254,10 +246,10 @@ impl<'db> ExprLowerer<'db> {
         }
 
         // Intercept enum tuple variant construction (e.g. Option::Some(42))
-        if let Some((enum_name, _variant_name, variant_idx)) = self.is_enum_variant_call(call_expr) {
-            let args = match &call_expr.kind {
-                scrap_ast::expr::ExprKind::Call(_, a) => a,
-                _ => return Err(crate::BuilderError::LowerExpressionError),
+        if let Some((enum_name, _variant_name, variant_idx)) = self.is_enum_variant_call(call_expr)
+        {
+            let scrap_ast::expr::ExprKind::Call(_, args) = &call_expr.kind else {
+                return Err(crate::BuilderError::LowerExpressionError);
             };
 
             let mut arg_operands = Vec::new();

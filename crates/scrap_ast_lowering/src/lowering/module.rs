@@ -15,7 +15,7 @@ use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
 use scrap_shared::ident::Symbol;
 
-use crate::{lowerer::ExprLowerer, lowering::lower_type, MResult};
+use crate::{MResult, lowerer::ExprLowerer, lowering::lower_type};
 
 /// Lower a module with its items
 pub fn lower_module<'db>(
@@ -30,16 +30,16 @@ pub fn lower_module<'db>(
     // Collect struct field maps for expression lowering (field name → index)
     let mut struct_field_maps: HashMap<String, HashMap<Symbol<'db>, usize>> = HashMap::new();
     for item in ast_items {
-        if let ItemKind::Struct(struct_def) = &item.kind {
-            if let VariantData::Struct { fields } = &struct_def.data {
-                let name = struct_def.ident.name.text(db).to_string();
-                let field_map = fields
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
-                    .collect();
-                struct_field_maps.insert(name, field_map);
-            }
+        if let ItemKind::Struct(struct_def) = &item.kind
+            && let VariantData::Struct { fields } = &struct_def.data
+        {
+            let name = struct_def.ident.name.text(db).to_string();
+            let field_map = fields
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
+                .collect();
+            struct_field_maps.insert(name, field_map);
         }
     }
 
@@ -84,8 +84,14 @@ pub fn lower_module<'db>(
     for item in ast_items {
         match &item.kind {
             ItemKind::Fn(fn_def) => {
-                let (mir_function, extras) =
-                    lower_function(db, *fn_def, source, type_table, &struct_field_maps, &enum_info_maps)?;
+                let (mir_function, extras) = lower_function(
+                    db,
+                    *fn_def,
+                    source,
+                    type_table,
+                    &struct_field_maps,
+                    &enum_info_maps,
+                )?;
                 items.push(ir::Items::Function(mir_function));
                 items.extend(extras);
             }
@@ -177,7 +183,15 @@ pub fn lower_function<'db>(
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let signature = lower_signature(db, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
-    let (body, extras) = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps, enum_info_maps)?;
+    let (body, extras) = lower_body(
+        db,
+        ast_function,
+        source,
+        type_table,
+        return_ty,
+        struct_field_maps,
+        enum_info_maps,
+    )?;
 
     Ok((ir::Function::new(db, signature, body), extras))
 }
@@ -192,7 +206,7 @@ pub fn lower_signature<'db>(
 
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &*arg.ty)?;
+        let param_ty = lower_type(db, &arg.ty)?;
         params.push(param_ty);
     }
 
@@ -219,7 +233,7 @@ pub fn lower_foreign_signature<'db>(
 
     let mut params = Vec::new();
     for arg in item.args.iter() {
-        let param_ty = lower_type(db, &*arg.ty)?;
+        let param_ty = lower_type(db, &arg.ty)?;
         params.push(param_ty);
     }
 
@@ -248,7 +262,15 @@ pub fn lower_method<'db>(
     );
     let signature = lower_signature_with_name(db, mangled, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
-    let (body, extras) = lower_body(db, ast_function, source, type_table, return_ty, struct_field_maps, enum_info_maps)?;
+    let (body, extras) = lower_body(
+        db,
+        ast_function,
+        source,
+        type_table,
+        return_ty,
+        struct_field_maps,
+        enum_info_maps,
+    )?;
 
     Ok((ir::Function::new(db, signature, body), extras))
 }
@@ -262,18 +284,16 @@ pub fn lower_signature_with_name<'db>(
 ) -> MResult<ir::Signature<'db>> {
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &*arg.ty)?;
+        let param_ty = lower_type(db, &arg.ty)?;
         params.push(param_ty);
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
         Some(ty) => lower_type(db, ty)?,
-        None => {
-            type_table
-                .fn_return_type(db, name)
-                .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
-                .unwrap_or(ir::Ty::Void)
-        }
+        None => type_table
+            .fn_return_type(db, name)
+            .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
+            .unwrap_or(ir::Ty::Void),
     };
 
     Ok(ir::Signature::new(db, name, params, return_ty))
@@ -301,7 +321,7 @@ pub fn lower_body<'db>(
     // _1, _2, ... are function parameters
     let param_count = ast_function.args(db).len();
     for param in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &*param.ty)?;
+        let param_ty = lower_type(db, &param.ty)?;
         let local_id = lowerer.allocate_named_local(param.ident.name, param_ty);
         lowerer.insert_binding(param.ident.name, local_id);
     }
@@ -356,5 +376,8 @@ pub fn lower_body<'db>(
     // 4. Build the CFG and return the body + any extra functions from spawn blocks
     let blocks = lowerer.cfg_builder.build();
     let extras = lowerer.extra_functions;
-    Ok((ir::Body::new(db, blocks, lowerer.local_decls, param_count), extras))
+    Ok((
+        ir::Body::new(db, blocks, lowerer.local_decls, param_count),
+        extras,
+    ))
 }

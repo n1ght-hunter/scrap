@@ -15,7 +15,7 @@ pub struct EnumDef<'db> {
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
-        write!(f, "enum {} {{\n", {
+        writeln!(f, "enum {} {{", {
             let mut s = String::new();
             self.ident.pretty_print(&mut s).unwrap();
             s
@@ -23,7 +23,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
         for variant in &self.variants {
             write!(f, "    ")?;
             variant.pretty_print(f)?;
-            write!(f, ",\n")?;
+            writeln!(f, ",")?;
         }
         write!(f, "}}")
     }

@@ -116,7 +116,7 @@ impl<'db> Path<'db> {
     pub fn extend(&self, db: &'db dyn Db, ident: Ident<'db>) -> Self {
         let mut new_segments = self.segments.clone();
         new_segments.push(PathSegment {
-            ident: ident,
+            ident,
             id: ident.id,
         });
         Path {

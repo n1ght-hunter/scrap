@@ -17,7 +17,7 @@ struct TrackedArgs<'db> {
     pub args: args::Args,
 }
 
-pub fn run_complier<I, T>(itr: I)
+pub fn run_compiler<I, T>(itr: I)
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -54,7 +54,6 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         .pop()
         .ok_or_else(|| anyhow::anyhow!("No entry file found"))?;
     let other_files = files;
-
 
     // Phase 1.5: Module resolution
     let modules = utils::collect_modules(db, entry_file, other_files.clone());
@@ -122,17 +121,21 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         if let Some(ref rt) = rt_lib {
             link_args.push(rt.to_str().unwrap().to_string());
             // System libraries required by Rust's std (bundled in the staticlib)
-            link_args.extend([
-                "advapi32.lib",
-                "bcrypt.lib",
-                "msvcrt.lib",
-                "ntdll.lib",
-                "userenv.lib",
-                "ws2_32.lib",
-                // Modern MSVC CRT components
-                "vcruntime.lib",
-                "ucrt.lib",
-            ].iter().map(|s| s.to_string()));
+            link_args.extend(
+                [
+                    "advapi32.lib",
+                    "bcrypt.lib",
+                    "msvcrt.lib",
+                    "ntdll.lib",
+                    "userenv.lib",
+                    "ws2_32.lib",
+                    // Modern MSVC CRT components
+                    "vcruntime.lib",
+                    "ucrt.lib",
+                ]
+                .iter()
+                .map(std::string::ToString::to_string),
+            );
         }
 
         let status = std::process::Command::new("lld-link.exe")
@@ -141,7 +144,10 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
             .map_err(|e| anyhow::anyhow!("Failed to run lld-link.exe: {e}"))?;
 
         if !status.success() {
-            anyhow::bail!("Linking failed with exit code: {}", status.code().unwrap_or(-1));
+            anyhow::bail!(
+                "Linking failed with exit code: {}",
+                status.code().unwrap_or(-1)
+            );
         }
 
         eprintln!("Compiled to {}", exe_path.display());
@@ -171,12 +177,12 @@ fn find_scrap_rt_lib() -> Option<std::path::PathBuf> {
     }
 
     // Check relative to the compiler binary
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let rt = dir.join("scrap_rt.lib");
-            if rt.exists() {
-                return Some(rt);
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        let rt = dir.join("scrap_rt.lib");
+        if rt.exists() {
+            return Some(rt);
         }
     }
 

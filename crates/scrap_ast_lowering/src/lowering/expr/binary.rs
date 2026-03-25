@@ -1,12 +1,9 @@
 //! Binary operation lowering
 
-use scrap_ast::{
-    expr::Expr,
-    operators::BinOpKind,
-};
+use scrap_ast::{expr::Expr, operators::BinOpKind};
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 /// Whether an operation should use checked (overflow-detecting) semantics.
 enum LoweredBinOp {
@@ -18,17 +15,12 @@ enum LoweredBinOp {
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a binary operation to an operand
-    pub(crate) fn lower_binary_op(
-        &mut self,
-        binary_expr: &Expr<'db>,
-    ) -> MResult<ir::Operand<'db>> {
+    pub(crate) fn lower_binary_op(&mut self, binary_expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
         // Extract operator and operands from binary expression
-        let (op, lhs, rhs) = match &binary_expr.kind {
-            scrap_ast::expr::ExprKind::Binary(o, l, r) => (o, l, r),
-            _ => return Err(crate::BuilderError::LowerExpressionError),
+        let scrap_ast::expr::ExprKind::Binary(op, lhs, rhs) = &binary_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
         };
 
-        // Recursively lower the left and right operands
         let lhs_operand = self.lower_expr(lhs)?;
         let rhs_operand = self.lower_expr(rhs)?;
 
@@ -42,20 +34,12 @@ impl<'db> ExprLowerer<'db> {
             LoweredBinOp::Unchecked(intrinsic_op) => {
                 let temp = self.allocate_temp(result_ty);
                 let place = ir::Place::Local(temp);
-                let rvalue = ir::Rvalue::Intrinsic(
-                    intrinsic_op,
-                    vec![lhs_operand, rhs_operand],
-                );
+                let rvalue = ir::Rvalue::Intrinsic(intrinsic_op, vec![lhs_operand, rhs_operand]);
                 self.emit_assign(place, rvalue);
                 Ok(ir::Operand::Place(ir::Place::Local(temp)))
             }
             LoweredBinOp::Checked(intrinsic_op) => {
-                self.lower_checked_binary_op(
-                    intrinsic_op,
-                    lhs_operand,
-                    rhs_operand,
-                    result_ty,
-                )
+                self.lower_checked_binary_op(intrinsic_op, lhs_operand, rhs_operand, result_ty)
             }
         }
     }
@@ -66,9 +50,8 @@ impl<'db> ExprLowerer<'db> {
         binary_expr: &Expr<'db>,
         dest: ir::Place<'db>,
     ) -> MResult<()> {
-        let (op, lhs, rhs) = match &binary_expr.kind {
-            scrap_ast::expr::ExprKind::Binary(o, l, r) => (o, l, r),
-            _ => return Err(crate::BuilderError::LowerExpressionError),
+        let scrap_ast::expr::ExprKind::Binary(op, lhs, rhs) = &binary_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
         };
 
         let lhs_operand = self.lower_expr(lhs)?;
@@ -78,10 +61,7 @@ impl<'db> ExprLowerer<'db> {
 
         match lowered {
             LoweredBinOp::Unchecked(intrinsic_op) => {
-                let rvalue = ir::Rvalue::Intrinsic(
-                    intrinsic_op,
-                    vec![lhs_operand, rhs_operand],
-                );
+                let rvalue = ir::Rvalue::Intrinsic(intrinsic_op, vec![lhs_operand, rhs_operand]);
                 self.emit_assign(dest, rvalue);
             }
             LoweredBinOp::Checked(intrinsic_op) => {
@@ -120,10 +100,7 @@ impl<'db> ExprLowerer<'db> {
 
         // Emit: _pair = intrinsic(lhs, rhs)
         let pair_place = ir::Place::Local(pair_temp);
-        let rvalue = ir::Rvalue::Intrinsic(
-            intrinsic_op,
-            vec![lhs_operand, rhs_operand],
-        );
+        let rvalue = ir::Rvalue::Intrinsic(intrinsic_op, vec![lhs_operand, rhs_operand]);
         self.emit_assign(pair_place, rvalue);
 
         // Extract the overflow flag: _pair.1
@@ -170,11 +147,7 @@ impl<'db> ExprLowerer<'db> {
     ///
     /// Integer arithmetic ops are checked (overflow detection).
     /// Float ops, comparisons, logical, and bitwise ops are unchecked.
-    fn classify_bin_op(
-        &self,
-        op: BinOpKind,
-        result_ty: &ir::Ty<'db>,
-    ) -> LoweredBinOp {
+    fn classify_bin_op(&self, op: BinOpKind, result_ty: &ir::Ty<'db>) -> LoweredBinOp {
         let is_integer = matches!(result_ty, ir::Ty::Int(_) | ir::Ty::Uint(_));
 
         match op {
@@ -182,8 +155,12 @@ impl<'db> ExprLowerer<'db> {
             BinOpKind::Add if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::AddWithOverflow),
             BinOpKind::Sub if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::SubWithOverflow),
             BinOpKind::Mul if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::MulWithOverflow),
-            BinOpKind::Div if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::DivWithZeroCheck),
-            BinOpKind::Rem if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::RemWithZeroCheck),
+            BinOpKind::Div if is_integer => {
+                LoweredBinOp::Checked(ir::IntrinsicOp::DivWithZeroCheck)
+            }
+            BinOpKind::Rem if is_integer => {
+                LoweredBinOp::Checked(ir::IntrinsicOp::RemWithZeroCheck)
+            }
 
             // Shifts — checked for integers
             BinOpKind::Shl if is_integer => LoweredBinOp::Checked(ir::IntrinsicOp::ShlChecked),
@@ -233,7 +210,6 @@ impl<'db> ExprLowerer<'db> {
             _ => ir::AssertMessage::Overflow(op),
         }
     }
-
 }
 
 #[cfg(test)]

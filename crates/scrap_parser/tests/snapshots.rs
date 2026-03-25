@@ -3,15 +3,15 @@
 //! These tests ensure the AST output remains consistent across changes.
 //! The same test inputs are used in scrap_parser_rowan for CST comparison.
 
-use scrap_parser::{CanOrModule, parse_tokens};
 use scrap_lexer::lex_file;
+use scrap_parser::{CanOrModule, parse_tokens};
 use scrap_test_utils::{salsa_assert_snapshot, salsa_test};
 
 fn parse<'db>(db: &'db dyn scrap_shared::Db, source: &str) -> CanOrModule<'db> {
     let file = scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.into());
     let tokens = lex_file(db, file).expect("lexing failed");
-    let parsed = parse_tokens(db, file, tokens, true, vec!["test".to_string()])
-        .expect("parsing failed");
+    let parsed =
+        parse_tokens(db, file, tokens, true, vec!["test".to_string()]).expect("parsing failed");
     parsed.ast(db).clone()
 }
 

@@ -36,4 +36,3 @@ impl<'db> ParsedFile<'db> {
         SyntaxNode::new_root(self.green(db).clone())
     }
 }
-

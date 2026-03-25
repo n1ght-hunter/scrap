@@ -41,12 +41,10 @@ fn cmd_new(name: String, path: Option<PathBuf>) -> Result<()> {
     println!("Creating new Scrap project: {}", name);
 
     // Create project directory structure
-    fs::create_dir_all(&project_path)
-        .context("Failed to create project directory")?;
+    fs::create_dir_all(&project_path).context("Failed to create project directory")?;
 
     let src_dir = project_path.join("src");
-    fs::create_dir(&src_dir)
-        .context("Failed to create src directory")?;
+    fs::create_dir(&src_dir).context("Failed to create src directory")?;
 
     // Create Scrap.toml manifest
     let manifest = ScrapManifest {
@@ -56,8 +54,8 @@ fn cmd_new(name: String, path: Option<PathBuf>) -> Result<()> {
         },
     };
 
-    let manifest_toml = toml::to_string_pretty(&manifest)
-        .context("Failed to serialize manifest")?;
+    let manifest_toml =
+        toml::to_string_pretty(&manifest).context("Failed to serialize manifest")?;
 
     fs::write(project_path.join("Scrap.toml"), manifest_toml)
         .context("Failed to write Scrap.toml")?;
@@ -67,8 +65,7 @@ fn cmd_new(name: String, path: Option<PathBuf>) -> Result<()> {
     print("Hello, world!");
 }
 "#;
-    fs::write(src_dir.join("main.sc"), main_content)
-        .context("Failed to write main.sc")?;
+    fs::write(src_dir.join("main.sc"), main_content).context("Failed to write main.sc")?;
 
     println!("     Created binary package `{}`", name);
 

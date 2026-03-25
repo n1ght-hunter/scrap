@@ -14,7 +14,7 @@ impl salsa::Database for ScrapDb {}
 
 #[salsa::db]
 pub trait Db: salsa::Database + Sync {
-    /// get dignostic handler
+    /// get diagnostic handler
     fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a>;
 }
 
@@ -67,13 +67,13 @@ pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> Option<Inp
     tracing::debug!("Loading file: {}", input_path.path(db).display());
     let path = input_path.path(db);
     match std::fs::read_to_string(path) {
-        Ok(content) => return Some(InputFile::new(db, path.clone(), content)),
+        Ok(content) => Some(InputFile::new(db, path.clone(), content)),
         Err(e) => {
             db.dcx()
                 .emit_err(Level::ERROR.primary_title("Failed to read file").element(
                     Level::HELP.message(format!("Could not read file '{}': {}", path.display(), e)),
                 ));
-            return None;
+            None
         }
-    };
+    }
 }

@@ -30,7 +30,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         }
 
         let expr = self.parse_expr()?;
-        return Ok(Stmt {
+        Ok(Stmt {
             id: self.state.new_node_id(),
             span: expr.span,
             kind: if self.eat(Token::Semicolon) {
@@ -38,18 +38,6 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             } else {
                 StmtKind::Expr(Box::new(expr))
             },
-        });
-
-        // Err(Level::ERROR
-        //     .primary_title("unexpected token while parsing statement")
-        //     .element(
-        //         scrap_diagnostics::Snippet::source(self.source)
-        //             .path(self.state.file_name)
-        //             .annotation(
-        //                 scrap_diagnostics::AnnotationKind::Primary
-        //                     .span(self.token.span.to_range(self.db))
-        //                     .label("expected a statement here".to_string()),
-        //             ),
-        //     ))
+        })
     }
 }

@@ -43,6 +43,7 @@ pub mod expr;
 pub mod fndef;
 pub mod foreign;
 pub mod ident;
+pub mod impl_block;
 pub mod item;
 pub mod lit;
 pub mod local;
@@ -50,7 +51,6 @@ pub mod module;
 pub mod pat;
 pub mod stmt;
 pub mod structdef;
-pub mod impl_block;
 pub mod ty;
 
 pub struct Parser<'a, 'db> {
@@ -121,7 +121,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         self.token = self
             .token_stream
             .curr()
-            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)))
+            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)));
     }
 
     #[inline]
@@ -129,7 +129,7 @@ impl<'a, 'db> Parser<'a, 'db> {
     pub fn eat(&mut self, expected: Token) -> bool {
         let is_present = self.check(expected);
         if is_present {
-            self.bump()
+            self.bump();
         }
         is_present
     }
@@ -145,7 +145,7 @@ impl<'a, 'db> Parser<'a, 'db> {
                 // self.unexpected_try_recover(&exp.tok)
             }
         } else {
-            return self.expect_one_of(&[expected], &[]);
+            self.expect_one_of(&[expected], &[])
         }
     }
 
@@ -163,27 +163,9 @@ impl<'a, 'db> Parser<'a, 'db> {
         } else if inedible.contains(&self.token.node) {
             // leave it in the input
             Ok(Recovered::No)
-        // } else if *self.token != Token::Eof
-        //     && self.last_unexpected_token_span == Some(self.token.span)
-        // {
-        //     FatalError.raise();
         } else {
             Err(self.unexpected_token_error(edible))
         }
-        // if edible.iter().any(|node| *node == *self.token) {
-        //     self.bump();
-        //     Ok(Recovered::No)
-        // } else if inedible.iter().any(|node| *node == *self.token) {
-        //     // leave it in the input
-        //     Ok(Recovered::No)
-        // } else if *self.token != Token::Eof
-        //     && self.last_unexpected_token_span == Some(self.token.span)
-        // {
-        //     FatalError.raise();
-        // } else {
-        //     self.expected_one_of_not_found(edible, inedible)
-        //         .map(|error_guaranteed| Recovered::Yes(error_guaranteed))
-        // }
     }
 
     fn position(&self) -> usize {

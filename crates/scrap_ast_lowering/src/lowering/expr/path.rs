@@ -3,7 +3,7 @@
 use scrap_ir as ir;
 use scrap_shared::path::Path;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a path (variable reference) to an operand
@@ -25,26 +25,22 @@ impl<'db> ExprLowerer<'db> {
             let enum_name = path.segments[0].ident.name.text(self.db).to_string();
             let variant_name = path.segments[1].ident.name;
 
-            if let Some(enum_info) = self.enum_info.get(&enum_name) {
-                if let Some((_, variant_idx, variant_info)) = enum_info
+            if let Some(enum_info) = self.enum_info.get(&enum_name)
+                && let Some((_, variant_idx, variant_info)) = enum_info
                     .variants
                     .iter()
                     .find(|(name, _, _)| *name == variant_name)
-                {
-                    // Only construct aggregate for unit variants here.
-                    // Tuple/struct variants are handled by call/struct_init lowering.
-                    if matches!(variant_info, crate::lowerer::VariantInfo::Unit) {
-                        let type_id = ir::TypeId::new(self.db, enum_name);
-                        let rvalue = ir::Rvalue::Aggregate(
-                            ir::AggregateKind::EnumVariant(type_id, *variant_idx),
-                            vec![],
-                        );
-                        let result_ty = ir::Ty::Adt(type_id);
-                        let temp = self.allocate_temp(result_ty);
-                        self.emit_assign(ir::Place::Local(temp), rvalue);
-                        return Ok(ir::Operand::Place(ir::Place::Local(temp)));
-                    }
-                }
+                && matches!(variant_info, crate::lowerer::VariantInfo::Unit)
+            {
+                let type_id = ir::TypeId::new(self.db, enum_name);
+                let rvalue = ir::Rvalue::Aggregate(
+                    ir::AggregateKind::EnumVariant(type_id, *variant_idx),
+                    vec![],
+                );
+                let result_ty = ir::Ty::Adt(type_id);
+                let temp = self.allocate_temp(result_ty);
+                self.emit_assign(ir::Place::Local(temp), rvalue);
+                return Ok(ir::Operand::Place(ir::Place::Local(temp)));
             }
         }
 

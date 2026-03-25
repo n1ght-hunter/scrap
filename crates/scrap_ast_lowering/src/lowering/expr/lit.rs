@@ -37,11 +37,7 @@ fn unescape_string(s: &str) -> String {
 
 impl<'db> ExprLowerer<'db> {
     /// Build an IR constant from a literal (shared by lower_literal and lower_literal_into).
-    fn build_constant(
-        &self,
-        lit: &Lit<'db>,
-        ty: &ir::Ty<'db>,
-    ) -> MResult<ir::Constant<'db>> {
+    fn build_constant(&self, lit: &Lit<'db>, ty: &ir::Ty<'db>) -> MResult<ir::Constant<'db>> {
         let start = lit.span.start(self.db);
         let end = lit.span.end(self.db);
         let text = &self.source[start..end];
@@ -125,14 +121,16 @@ impl<'db> ExprLowerer<'db> {
                             self.db.dcx().emit_err(
                                 Level::ERROR
                                     .primary_title("Unsupported float type")
-                                    .element(Snippet::source(self.source).annotation(
-                                        AnnotationKind::Primary
-                                            .span(lit.span.to_range(self.db))
-                                            .label(format!(
-                                                "{} is not yet supported",
-                                                float_ty.name_str()
-                                            )),
-                                    )),
+                                    .element(
+                                        Snippet::source(self.source).annotation(
+                                            AnnotationKind::Primary
+                                                .span(lit.span.to_range(self.db))
+                                                .label(format!(
+                                                    "{} is not yet supported",
+                                                    float_ty.name_str()
+                                                )),
+                                        ),
+                                    ),
                             ),
                         ));
                     }
@@ -194,11 +192,13 @@ impl<'db> ExprLowerer<'db> {
             self.db.dcx().emit_err(
                 Level::ERROR
                     .primary_title("Could not determine literal type")
-                    .element(Snippet::source(self.source).annotation(
-                        AnnotationKind::Primary
-                            .span(lit.span.to_range(self.db))
-                            .label("Type not found in type table"),
-                    )),
+                    .element(
+                        Snippet::source(self.source).annotation(
+                            AnnotationKind::Primary
+                                .span(lit.span.to_range(self.db))
+                                .label("Type not found in type table"),
+                        ),
+                    ),
             ),
         ))
     }
@@ -218,7 +218,10 @@ mod tests {
         assert!(result.is_ok());
 
         let operand = result.unwrap();
-        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::Int(_))));
+        assert!(matches!(
+            operand,
+            ir::Operand::Constant(ir::Constant::Int(_))
+        ));
 
         // Literals no longer allocate temporaries
         assert_eq!(lowerer.local_decls.len(), 0);
@@ -233,7 +236,10 @@ mod tests {
         assert!(result.is_ok());
 
         let operand = result.unwrap();
-        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::Bool(_))));
+        assert!(matches!(
+            operand,
+            ir::Operand::Constant(ir::Constant::Bool(_))
+        ));
         assert_eq!(lowerer.local_decls.len(), 0);
     }
 
@@ -246,7 +252,10 @@ mod tests {
         assert!(result.is_ok());
 
         let operand = result.unwrap();
-        assert!(matches!(operand, ir::Operand::Constant(ir::Constant::String(_))));
+        assert!(matches!(
+            operand,
+            ir::Operand::Constant(ir::Constant::String(_))
+        ));
         assert_eq!(lowerer.local_decls.len(), 0);
     }
 }

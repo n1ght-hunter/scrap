@@ -13,15 +13,14 @@ pub fn parse_input_files<'db>(
 ) -> Vec<scrap_parser::ParsedFile<'db>> {
     let root_path = &args.entry_source_file;
 
-    let modules = args
-        .source_files
+    args.source_files
         .par_iter()
         .chain(rayon::iter::once(&args.entry_source_file))
         .filter_map(|file_path| {
             let (is_root, root_path_segments) =
                 crate::utils::compute_relative_path_segments(args, db, root_path, file_path)?;
 
-            let modifed = match std::fs::metadata(file_path).and_then(|m| m.modified()) {
+            let modified = match std::fs::metadata(file_path).and_then(|m| m.modified()) {
                 Ok(m) => m,
                 Err(e) => {
                     db.dcx().emit_err(
@@ -36,7 +35,7 @@ pub fn parse_input_files<'db>(
                 }
             };
             let input_path =
-                scrap_shared::salsa::get_input_path(db, file_path.to_path_buf(), modifed);
+                scrap_shared::salsa::get_input_path(db, file_path.to_path_buf(), modified);
             let input_file = scrap_shared::salsa::load_file(db, input_path)?;
             let lexed_tokens = scrap_lexer::lex_file(db, input_file);
             let parsed_file = scrap_parser::parse_tokens(
@@ -48,9 +47,7 @@ pub fn parse_input_files<'db>(
             )?;
             Some(parsed_file)
         })
-        .collect::<Vec<_>>();
-
-    modules
+        .collect::<Vec<_>>()
 }
 
 pub type Modules<'db> =
@@ -90,17 +87,16 @@ pub fn resolve_modules<'db>(
         {
             match module.kind(db) {
                 ModuleKind::Unloaded => {
-                    if let Some(resolved_module) = resolve_module_by_id(db, modules, &module.id(db))
+                    if let Some(resolved_module) = resolve_module_by_id(db, modules, module.id(db))
                     {
                         // Recursively resolve the module
                         let recursively_resolved =
-                            resolve_module_recursive(db, modules, resolved_module);
+                            resolve_module_recursive(db, modules, *resolved_module);
                         let _ = std::mem::replace(module, recursively_resolved);
                     }
                 }
                 ModuleKind::Loaded(..) => {
-                    // Also resolve already loaded modules recursively
-                    let recursively_resolved = resolve_module_recursive(db, modules, module);
+                    let recursively_resolved = resolve_module_recursive(db, modules, *module);
                     let _ = std::mem::replace(module, recursively_resolved);
                 }
             }
@@ -114,7 +110,7 @@ pub fn resolve_modules<'db>(
 fn resolve_module_recursive<'db>(
     db: &'db dyn scrap_shared::Db,
     modules: &Modules<'db>,
-    module: &scrap_ast::module::Module<'db>,
+    module: scrap_ast::module::Module<'db>,
 ) -> scrap_ast::module::Module<'db> {
     // Match on the module kind to get items
     match module.kind(db) {
@@ -132,18 +128,17 @@ fn resolve_module_recursive<'db>(
                         ModuleKind::Unloaded => {
                             // Resolve unloaded modules from the modules hashmap
                             if let Some(resolved_nested) =
-                                resolve_module_by_id(db, modules, &nested_module.id(db))
+                                resolve_module_by_id(db, modules, nested_module.id(db))
                             {
                                 // Recursive call to resolve nested modules
                                 let recursively_resolved =
-                                    resolve_module_recursive(db, modules, resolved_nested);
+                                    resolve_module_recursive(db, modules, *resolved_nested);
                                 let _ = std::mem::replace(nested_module, recursively_resolved);
                             }
                         }
                         ModuleKind::Loaded(..) => {
-                            // Also recursively resolve already loaded modules
                             let recursively_resolved =
-                                resolve_module_recursive(db, modules, nested_module);
+                                resolve_module_recursive(db, modules, *nested_module);
                             let _ = std::mem::replace(nested_module, recursively_resolved);
                         }
                     }
@@ -159,12 +154,10 @@ fn resolve_module_recursive<'db>(
         }
         ModuleKind::Unloaded => {
             // If unloaded, try to resolve it from the modules hashmap
-            if let Some(resolved) = resolve_module_by_id(db, modules, &module.id(db)) {
-                // Recursively resolve the newly loaded module
-                resolve_module_recursive(db, modules, resolved)
+            if let Some(resolved) = resolve_module_by_id(db, modules, module.id(db)) {
+                resolve_module_recursive(db, modules, *resolved)
             } else {
-                // If still unresolved, return as is
-                module.clone()
+                module
             }
         }
     }
@@ -173,10 +166,9 @@ fn resolve_module_recursive<'db>(
 fn resolve_module_by_id<'a, 'db>(
     db: &'db dyn scrap_shared::Db,
     modules: &'a Modules<'db>,
-    module_id: &scrap_shared::id::ModuleId<'db>,
+    module_id: scrap_shared::id::ModuleId<'db>,
 ) -> Option<&'a scrap_ast::module::Module<'db>> {
-    // ModuleIds are now interned by path string, so direct lookup works
-    if let Some(mo) = modules.get(module_id) {
+    if let Some(mo) = modules.get(&module_id) {
         Some(mo)
     } else {
         db.dcx().emit_err(

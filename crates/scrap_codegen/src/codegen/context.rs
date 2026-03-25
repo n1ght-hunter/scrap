@@ -1,8 +1,8 @@
 //! CodegenContext — holds the Cranelift module and compilation state.
 
-use cranelift::prelude::*;
-use cranelift::codegen::isa::unwind::UnwindInfo;
 use cranelift::codegen::binemit::CodeOffset;
+use cranelift::codegen::isa::unwind::UnwindInfo;
+use cranelift::prelude::*;
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use scrap_ir as ir;
@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use target_lexicon::Triple;
 
-use super::emit_codegen_err;
 use super::ResultExt;
+use super::emit_codegen_err;
 
 /// Per-function unwind metadata collected during compilation.
 pub(crate) struct UnwindEntry {
@@ -46,13 +46,14 @@ pub struct CodegenContext<'db> {
 impl<'db> CodegenContext<'db> {
     /// Create a new code generation context targeting x86_64-pc-windows-msvc.
     pub fn new(db: &'db dyn scrap_shared::Db) -> Option<Self> {
-        let target_triple =
-            Triple::from_str("x86_64-pc-windows-msvc").map_err(|e| {
-                format!("failed to parse target triple: {e}")
-            }).or_emit(db)?;
+        let target_triple = Triple::from_str("x86_64-pc-windows-msvc")
+            .map_err(|e| format!("failed to parse target triple: {e}"))
+            .or_emit(db)?;
 
         let mut shared_builder = settings::builder();
-        shared_builder.set("preserve_frame_pointers", "true").unwrap();
+        shared_builder
+            .set("preserve_frame_pointers", "true")
+            .unwrap();
         let shared_flags = settings::Flags::new(shared_builder);
         let isa = cranelift::codegen::isa::lookup(target_triple)
             .map_err(|e| format!("ISA lookup failed: {e}"))
@@ -125,35 +126,34 @@ impl<'db> CodegenContext<'db> {
 
             // Call __scrap_gc_init before main
             if let Some(&gc_init_id) = self.functions.get("__scrap_gc_init") {
-                let gc_init_ref =
-                    self.module.declare_func_in_func(gc_init_id, builder.func);
+                let gc_init_ref = self.module.declare_func_in_func(gc_init_id, builder.func);
                 builder.ins().call(gc_init_ref, &[]);
             }
 
             // Call __scrap_sched_init after gc_init
             if let Some(&sched_init_id) = self.functions.get("__scrap_sched_init") {
-                let sched_init_ref =
-                    self.module.declare_func_in_func(sched_init_id, builder.func);
+                let sched_init_ref = self
+                    .module
+                    .declare_func_in_func(sched_init_id, builder.func);
                 builder.ins().call(sched_init_ref, &[]);
             }
 
             // Call main
-            let main_ref =
-                self.module.declare_func_in_func(main_func_id, builder.func);
+            let main_ref = self.module.declare_func_in_func(main_func_id, builder.func);
             builder.ins().call(main_ref, &[]);
 
             // Call __scrap_sched_shutdown after main (runs remaining coroutines)
             if let Some(&sched_shutdown_id) = self.functions.get("__scrap_sched_shutdown") {
-                let sched_shutdown_ref =
-                    self.module.declare_func_in_func(sched_shutdown_id, builder.func);
+                let sched_shutdown_ref = self
+                    .module
+                    .declare_func_in_func(sched_shutdown_id, builder.func);
                 builder.ins().call(sched_shutdown_ref, &[]);
             }
 
             // Call ExitProcess(0) for a clean exit after main + scheduler finish.
             // Programs that need a specific exit code call ExitProcess explicitly.
             if let Some(&exit_id) = self.functions.get("ExitProcess") {
-                let exit_ref =
-                    self.module.declare_func_in_func(exit_id, builder.func);
+                let exit_ref = self.module.declare_func_in_func(exit_id, builder.func);
                 let zero = builder.ins().iconst(types::I64, 0);
                 builder.ins().call(exit_ref, &[zero]);
             }
@@ -285,8 +285,7 @@ impl<'db> CodegenContext<'db> {
                 .module
                 .declare_function("__scrap_sched_init", Linkage::Import, &sig)
                 .or_emit(self.db)?;
-            self.functions
-                .insert("__scrap_sched_init".to_string(), fid);
+            self.functions.insert("__scrap_sched_init".to_string(), fid);
         }
 
         // __scrap_sched_shutdown()
@@ -359,9 +358,7 @@ impl<'db> CodegenContext<'db> {
         let mut desc = DataDescription::new();
         desc.define(data.into_boxed_slice());
         desc.set_align(8);
-        self.module
-            .define_data(data_id, &desc)
-            .or_emit(self.db)?;
+        self.module.define_data(data_id, &desc).or_emit(self.db)?;
 
         self.gc_shapes.insert(key, data_id);
         Some(data_id)
@@ -400,10 +397,10 @@ impl<'db> CodegenContext<'db> {
                 };
                 (bytes, bytes, vec![])
             }
-            ir::Ty::Str => (8, 8, vec![]), // pointer
+            ir::Ty::Str => (8, 8, vec![]),        // pointer
             ir::Ty::Ref(_, _) => (8, 8, vec![0]), // reference that the GC must trace
-            ir::Ty::Ptr(_) => (8, 8, vec![0]), // pointer that the GC must trace
-            _ => (8, 8, vec![]), // default: pointer-sized
+            ir::Ty::Ptr(_) => (8, 8, vec![0]),    // pointer that the GC must trace
+            _ => (8, 8, vec![]),                  // default: pointer-sized
         }
     }
 
@@ -551,7 +548,7 @@ impl<'db> CodegenContext<'db> {
     /// Write `.pdata` and `.xdata` sections into the COFF object for Windows SEH.
     fn emit_unwind_tables(product: &mut ObjectProduct, entries: &[UnwindEntry]) {
         use cranelift_object::object::write::{Relocation, SymbolId};
-        use cranelift_object::object::{pe, SectionKind};
+        use cranelift_object::object::{SectionKind, pe};
 
         // Collect function symbols before taking &mut product.object
         let func_syms: Vec<SymbolId> = entries
@@ -573,36 +570,45 @@ impl<'db> CodegenContext<'db> {
             let pdata_offset = obj.append_section_data(pdata_id, &[0u8; 12], 4);
 
             // BeginAddress → RVA of function start
-            obj.add_relocation(pdata_id, Relocation {
-                offset: pdata_offset,
-                symbol: func_sym,
-                addend: 0,
-                flags: cranelift_object::object::RelocationFlags::Coff {
-                    typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+            obj.add_relocation(
+                pdata_id,
+                Relocation {
+                    offset: pdata_offset,
+                    symbol: func_sym,
+                    addend: 0,
+                    flags: cranelift_object::object::RelocationFlags::Coff {
+                        typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+                    },
                 },
-            })
+            )
             .unwrap();
 
             // EndAddress → RVA of function end
-            obj.add_relocation(pdata_id, Relocation {
-                offset: pdata_offset + 4,
-                symbol: func_sym,
-                addend: entry.code_size as i64,
-                flags: cranelift_object::object::RelocationFlags::Coff {
-                    typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+            obj.add_relocation(
+                pdata_id,
+                Relocation {
+                    offset: pdata_offset + 4,
+                    symbol: func_sym,
+                    addend: entry.code_size as i64,
+                    flags: cranelift_object::object::RelocationFlags::Coff {
+                        typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+                    },
                 },
-            })
+            )
             .unwrap();
 
             // UnwindData → RVA of UNWIND_INFO in .xdata
-            obj.add_relocation(pdata_id, Relocation {
-                offset: pdata_offset + 8,
-                symbol: xdata_sym,
-                addend: xdata_offset as i64,
-                flags: cranelift_object::object::RelocationFlags::Coff {
-                    typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+            obj.add_relocation(
+                pdata_id,
+                Relocation {
+                    offset: pdata_offset + 8,
+                    symbol: xdata_sym,
+                    addend: xdata_offset as i64,
+                    flags: cranelift_object::object::RelocationFlags::Coff {
+                        typ: pe::IMAGE_REL_AMD64_ADDR32NB,
+                    },
                 },
-            })
+            )
             .unwrap();
         }
     }
@@ -621,7 +627,7 @@ impl<'db> CodegenContext<'db> {
         entries: &[(FuncId, CodeOffset, Vec<u32>)],
     ) {
         use cranelift_object::object::write::{Relocation, Symbol};
-        use cranelift_object::object::{pe, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+        use cranelift_object::object::{SectionKind, SymbolFlags, SymbolKind, SymbolScope, pe};
 
         // Collect function symbols before borrowing product.object mutably.
         let func_syms: Vec<_> = entries
@@ -631,7 +637,7 @@ impl<'db> CodegenContext<'db> {
 
         let obj = &mut product.object;
 
-        // --- __scrap_stackmap_count ---
+        // __scrap_stackmap_count
         let count_section = obj.add_section(
             vec![],
             b".scrap_smcount".to_vec(),
@@ -651,7 +657,7 @@ impl<'db> CodegenContext<'db> {
             flags: SymbolFlags::None,
         });
 
-        // --- __scrap_stackmap_roots (packed u32 array) ---
+        // __scrap_stackmap_roots (packed u32 array)
         let roots_section = obj.add_section(
             vec![],
             b".scrap_smroots".to_vec(),
@@ -684,7 +690,7 @@ impl<'db> CodegenContext<'db> {
             flags: SymbolFlags::None,
         });
 
-        // --- __scrap_stackmap_index (sorted array of IndexEntry) ---
+        // __scrap_stackmap_index (sorted array of IndexEntry)
         // Each IndexEntry: return_addr(u64) + roots_start(u32) + roots_count(u32) = 16 bytes
         let index_section = obj.add_section(
             vec![],

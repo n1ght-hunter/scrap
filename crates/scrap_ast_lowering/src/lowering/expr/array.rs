@@ -3,15 +3,14 @@
 use scrap_ast::expr::Expr;
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower an array literal to an operand
     pub(crate) fn lower_array(&mut self, array_expr: &Expr<'db>) -> MResult<ir::Operand<'db>> {
         // Extract elements from array expression
-        let elements = match &array_expr.kind {
-            scrap_ast::expr::ExprKind::Array(elems) => elems,
-            _ => return Err(crate::BuilderError::LowerExpressionError),
+        let scrap_ast::expr::ExprKind::Array(elements) = &array_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
         };
 
         // Lower each element to an operand

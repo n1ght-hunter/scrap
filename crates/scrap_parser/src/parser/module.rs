@@ -36,7 +36,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                     Span::new(self.db, start_span, self.token.span.end(self.db)),
                 ),
             );
-            self.modules.push(module.clone());
+            self.modules.push(module);
 
             Ok(ItemKind::Module(module))
         } else {

@@ -45,9 +45,9 @@ impl<'db> Parser<'db> {
 
                 self.finish_node(); // finish BINARY_EXPR
 
-                // Important: For chained operators (a + b + c), the checkpoint
-                // already captures the previous BINARY_EXPR, so the next iteration
-                // will wrap it again, creating proper left-associativity
+            // Important: For chained operators (a + b + c), the checkpoint
+            // already captures the previous BINARY_EXPR, so the next iteration
+            // will wrap it again, creating proper left-associativity
             } else {
                 // Not an infix operator, stop parsing
                 break;

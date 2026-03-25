@@ -25,9 +25,7 @@ impl ObjectCompiler {
         )?;
         let module = ObjectModule::new(builder);
 
-        Ok(Self {
-            module,
-        })
+        Ok(Self { module })
     }
 
     /// Finalizes the object file and returns the compiled bytes.

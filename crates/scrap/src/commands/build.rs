@@ -26,12 +26,15 @@ fn cmd_build(_release: bool) -> Result<()> {
     }
 
     // Parse manifest
-    let manifest_content = fs::read_to_string(&manifest_path)
-        .context("Failed to read Scrap.toml")?;
-    let manifest: ScrapManifest = toml::from_str(&manifest_content)
-        .context("Failed to parse Scrap.toml")?;
+    let manifest_content =
+        fs::read_to_string(&manifest_path).context("Failed to read Scrap.toml")?;
+    let manifest: ScrapManifest =
+        toml::from_str(&manifest_content).context("Failed to parse Scrap.toml")?;
 
-    println!("   Compiling {} v{}", manifest.package.name, manifest.package.version);
+    println!(
+        "   Compiling {} v{}",
+        manifest.package.name, manifest.package.version
+    );
 
     // Find main source file
     let main_path = PathBuf::from("src/main.sc");

@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 use scrap_errors::ErrorGuaranteed;
+use scrap_shared::NodeId;
 use scrap_shared::ident::Symbol;
 use scrap_shared::types::{IntTy, Mutability};
-use scrap_shared::NodeId;
 use scrap_span::Span;
 
 use crate::{
@@ -140,8 +140,6 @@ impl<'db> TypeContext<'db> {
         self.db
     }
 
-    // === Type Variable Management ===
-
     /// Create a fresh type variable.
     pub fn fresh_ty_var(&mut self) -> InferTy<'db> {
         let vid = TyVid(self.next_ty_vid);
@@ -152,7 +150,9 @@ impl<'db> TypeContext<'db> {
 
     /// Get the current binding of a type variable (if solved).
     pub fn probe(&self, vid: TyVid) -> Option<&InferTy<'db>> {
-        self.ty_vars.get(vid.0 as usize).and_then(|opt| opt.as_ref())
+        self.ty_vars
+            .get(vid.0 as usize)
+            .and_then(|opt| opt.as_ref())
     }
 
     /// Bind a type variable to a type.
@@ -197,8 +197,6 @@ impl<'db> TypeContext<'db> {
             _ => ty.clone(),
         }
     }
-
-    // === Scope Management ===
 
     /// Push a new scope onto the scope stack.
     pub fn push_scope(&mut self) {
@@ -254,8 +252,6 @@ impl<'db> TypeContext<'db> {
         None
     }
 
-    // === Borrow Tracking ===
-
     /// Record a borrow of a variable and check borrow rules.
     pub fn record_borrow(&mut self, name: Symbol<'db>, mutability: Mutability, span: Span<'db>) {
         // Collect existing borrows across all scopes
@@ -269,19 +265,10 @@ impl<'db> TypeContext<'db> {
         if mutability.is_mut() {
             // &mut: no other borrows allowed
             if !existing.is_empty() {
-                self.emit_borrow_conflict(
-                    &name.text(self.db),
-                    span,
-                );
+                self.emit_borrow_conflict(name.text(self.db), span);
             }
-        } else {
-            // &: no &mut borrows allowed
-            if existing.iter().any(|(m, _)| m.is_mut()) {
-                self.emit_borrow_conflict(
-                    &name.text(self.db),
-                    span,
-                );
-            }
+        } else if existing.iter().any(|(m, _)| m.is_mut()) {
+            self.emit_borrow_conflict(name.text(self.db), span);
         }
 
         // Record the borrow in the current scope
@@ -295,10 +282,11 @@ impl<'db> TypeContext<'db> {
 
     /// Look up the recorded InferTy for a given expression NodeId.
     pub fn lookup_expr_type_infer(&self, node_id: NodeId) -> InferTy<'db> {
-        self.expr_types.get(&node_id).cloned().unwrap_or(InferTy::Error)
+        self.expr_types
+            .get(&node_id)
+            .cloned()
+            .unwrap_or(InferTy::Error)
     }
-
-    // === Type Parameters ===
 
     /// Set the type parameters for the current context.
     pub fn set_type_params(&mut self, params: Vec<Symbol<'db>>) {
@@ -320,8 +308,6 @@ impl<'db> TypeContext<'db> {
         &self.type_params
     }
 
-    // === Return Type ===
-
     /// Set the current function's return type.
     pub fn set_return_ty(&mut self, ty: InferTy<'db>) {
         self.current_return_ty = Some(ty);
@@ -337,8 +323,6 @@ impl<'db> TypeContext<'db> {
         self.current_return_ty.as_ref()
     }
 
-    // === Function Management ===
-
     /// Register a function signature.
     pub fn register_function(&mut self, name: Symbol<'db>, sig: FnSig<'db>) {
         self.functions.insert(name, sig);
@@ -348,8 +332,6 @@ impl<'db> TypeContext<'db> {
     pub fn lookup_function(&self, name: Symbol<'db>) -> Option<&FnSig<'db>> {
         self.functions.get(&name)
     }
-
-    // === Struct Management ===
 
     /// Register a struct definition.
     pub fn register_struct(&mut self, name: Symbol<'db>, def: StructDef<'db>) {
@@ -361,8 +343,6 @@ impl<'db> TypeContext<'db> {
         self.structs.get(&name)
     }
 
-    // === Enum Management ===
-
     /// Register an enum definition.
     pub fn register_enum(&mut self, name: Symbol<'db>, def: EnumDef<'db>) {
         self.enums.insert(name, def);
@@ -372,8 +352,6 @@ impl<'db> TypeContext<'db> {
     pub fn lookup_enum(&self, name: Symbol<'db>) -> Option<&EnumDef<'db>> {
         self.enums.get(&name)
     }
-
-    // === Constraint Collection ===
 
     /// Add an equality constraint between two types.
     pub fn constrain_eq(&mut self, t1: InferTy<'db>, t2: InferTy<'db>, span: Span<'db>) {
@@ -397,8 +375,6 @@ impl<'db> TypeContext<'db> {
     pub fn take_constraints(&mut self) -> Vec<Constraint<'db>> {
         std::mem::take(&mut self.constraints)
     }
-
-    // === Type Recording ===
 
     /// Record the type of an expression.
     pub fn record_expr_type(&mut self, node_id: NodeId, ty: InferTy<'db>) {
@@ -470,17 +446,11 @@ impl<'db> TypeContext<'db> {
             InferTy::Tuple(elems) => {
                 ResolvedTy::Tuple(elems.iter().map(|e| self.resolve_to_final(e)).collect())
             }
-            InferTy::Ref(inner, m) => {
-                ResolvedTy::Ref(Box::new(self.resolve_to_final(&inner)), m)
-            }
-            InferTy::Ptr(inner) => {
-                ResolvedTy::Ptr(Box::new(self.resolve_to_final(&inner)))
-            }
+            InferTy::Ref(inner, m) => ResolvedTy::Ref(Box::new(self.resolve_to_final(&inner)), m),
+            InferTy::Ptr(inner) => ResolvedTy::Ptr(Box::new(self.resolve_to_final(&inner))),
             InferTy::Error => ResolvedTy::Error,
         }
     }
-
-    // === Error Emission ===
 
     /// Emit a type mismatch error.
     pub fn emit_type_mismatch(
@@ -490,26 +460,20 @@ impl<'db> TypeContext<'db> {
         span: Span<'db>,
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
-            Level::ERROR
-                .primary_title("type mismatch")
-                .element(
-                    Snippet::source(self.source)
-                        .path(self.file_name)
-                        .annotation(
-                            AnnotationKind::Primary
-                                .span(span.to_range(self.db))
-                                .label(format!("expected `{}`, found `{}`", expected, found)),
-                        ),
-                ),
+            Level::ERROR.primary_title("type mismatch").element(
+                Snippet::source(self.source)
+                    .path(self.file_name)
+                    .annotation(
+                        AnnotationKind::Primary
+                            .span(span.to_range(self.db))
+                            .label(format!("expected `{}`, found `{}`", expected, found)),
+                    ),
+            ),
         )
     }
 
     /// Emit an error for assignment to an immutable variable.
-    pub fn emit_immutable_assign_error(
-        &self,
-        name: &str,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_immutable_assign_error(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!("cannot assign to immutable variable `{}`", name))
@@ -522,18 +486,15 @@ impl<'db> TypeContext<'db> {
                                 .label("cannot assign"),
                         ),
                 )
-                .element(Level::NOTE.message(
-                    format!("consider making this binding mutable: `let mut {}`", name),
-                )),
+                .element(Level::NOTE.message(format!(
+                    "consider making this binding mutable: `let mut {}`",
+                    name
+                ))),
         )
     }
 
     /// Emit an error for borrowing an immutable variable as mutable.
-    pub fn emit_cannot_borrow_as_mutable(
-        &self,
-        name: &str,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_cannot_borrow_as_mutable(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
@@ -549,18 +510,15 @@ impl<'db> TypeContext<'db> {
                                 .label("cannot borrow as mutable"),
                         ),
                 )
-                .element(Level::NOTE.message(
-                    format!("consider making this binding mutable: `let mut {}`", name),
-                )),
+                .element(Level::NOTE.message(format!(
+                    "consider making this binding mutable: `let mut {}`",
+                    name
+                ))),
         )
     }
 
     /// Emit a borrow conflict error.
-    pub fn emit_borrow_conflict(
-        &self,
-        name: &str,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_borrow_conflict(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
@@ -580,10 +538,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an error for writing through an immutable reference.
-    pub fn emit_immutable_ref_deref_error(
-        &self,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_immutable_ref_deref_error(&self, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title("cannot assign to data behind a `&` reference")
@@ -603,7 +558,7 @@ impl<'db> TypeContext<'db> {
     pub fn emit_undefined_variable(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
-                .primary_title(&format!("undefined variable `{}`", name))
+                .primary_title(format!("undefined variable `{}`", name))
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
@@ -620,7 +575,7 @@ impl<'db> TypeContext<'db> {
     pub fn emit_undefined_function(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
-                .primary_title(&format!("undefined function `{}`", name))
+                .primary_title(format!("undefined function `{}`", name))
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
@@ -665,7 +620,9 @@ impl<'db> TypeContext<'db> {
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
-                .primary_title(format!("struct `{struct_name}` has no field named `{field_name}`"))
+                .primary_title(format!(
+                    "struct `{struct_name}` has no field named `{field_name}`"
+                ))
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
@@ -688,7 +645,9 @@ impl<'db> TypeContext<'db> {
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
-                .primary_title(format!("missing field `{field_name}` in initializer of `{struct_name}`"))
+                .primary_title(format!(
+                    "missing field `{field_name}` in initializer of `{struct_name}`"
+                ))
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
@@ -702,24 +661,17 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an infinite type error (occurs check failure).
-    pub fn emit_infinite_type(
-        &self,
-        var_name: &str,
-        ty: &str,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_infinite_type(&self, var_name: &str, ty: &str, span: Span<'db>) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
-            Level::ERROR
-                .primary_title("infinite type")
-                .element(
-                    Snippet::source(self.source)
-                        .path(self.file_name)
-                        .annotation(
-                            AnnotationKind::Primary
-                                .span(span.to_range(self.db))
-                                .label(format!("`{}` occurs in `{}`", var_name, ty)),
-                        ),
-                ),
+            Level::ERROR.primary_title("infinite type").element(
+                Snippet::source(self.source)
+                    .path(self.file_name)
+                    .annotation(
+                        AnnotationKind::Primary
+                            .span(span.to_range(self.db))
+                            .label(format!("`{}` occurs in `{}`", var_name, ty)),
+                    ),
+            ),
         )
     }
 
@@ -736,19 +688,12 @@ impl<'db> TypeContext<'db> {
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
-                        .annotation(
-                            AnnotationKind::Primary
-                                .span(span.to_range(self.db))
-                                .label(format!(
-                                    "expected {} type arguments, found {}",
-                                    expected, found
-                                )),
-                        ),
+                        .annotation(AnnotationKind::Primary.span(span.to_range(self.db)).label(
+                            format!("expected {} type arguments, found {}", expected, found),
+                        )),
                 ),
         )
     }
-
-    // === Type Display ===
 
     /// Convert a type to a human-readable string.
     pub fn ty_to_string(&self, ty: &InferTy<'db>) -> String {
@@ -775,7 +720,11 @@ impl<'db> TypeContext<'db> {
             InferTy::Fn(params, ret) => {
                 let params_str: Vec<_> =
                     params.iter().map(|p| self.ty_to_string_inner(p)).collect();
-                format!("fn({}) -> {}", params_str.join(", "), self.ty_to_string_inner(ret))
+                format!(
+                    "fn({}) -> {}",
+                    params_str.join(", "),
+                    self.ty_to_string_inner(ret)
+                )
             }
             InferTy::Tuple(elems) => {
                 if elems.is_empty() {

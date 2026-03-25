@@ -28,11 +28,7 @@ pub fn format_file(source: &str, config: &FormatterConfig) -> String {
 
 /// Helper function to format a file within a tracked function context
 #[salsa::tracked]
-fn format_file_impl(
-    db: &dyn scrap_shared::Db,
-    source: String,
-    config: FormatterConfig,
-) -> String {
+fn format_file_impl(db: &dyn scrap_shared::Db, source: String, config: FormatterConfig) -> String {
     use scrap_shared::InputFile;
 
     // Create an input file from the source
@@ -372,9 +368,9 @@ fn format_variant<'a>(
     }
 
     // Optional tuple data: check for L_PAREN indicating tuple variant
-    let has_tuple = node.children_with_tokens().any(
-        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN),
-    );
+    let has_tuple = node
+        .children_with_tokens()
+        .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN));
 
     if has_tuple {
         docs.push(arena.text("("));
@@ -383,21 +379,17 @@ fn format_variant<'a>(
         let mut in_parens = false;
         let types: Vec<_> = node
             .children_with_tokens()
-            .filter_map(|child| {
-                match child {
-                    rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN => {
-                        in_parens = true;
-                        None
-                    }
-                    rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::R_PAREN => {
-                        in_parens = false;
-                        None
-                    }
-                    rowan::NodeOrToken::Node(n) if in_parens => {
-                        Some(format_node(arena, &n, config))
-                    }
-                    _ => None,
+            .filter_map(|child| match child {
+                rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::L_PAREN => {
+                    in_parens = true;
+                    None
                 }
+                rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::R_PAREN => {
+                    in_parens = false;
+                    None
+                }
+                rowan::NodeOrToken::Node(n) if in_parens => Some(format_node(arena, &n, config)),
+                _ => None,
             })
             .collect();
 
@@ -531,9 +523,9 @@ fn format_if_expr<'a>(
     }
 
     // Check for else keyword and format else block
-    let has_else = node.children_with_tokens().any(
-        |t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ELSE_KW),
-    );
+    let has_else = node
+        .children_with_tokens()
+        .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ELSE_KW));
 
     if has_else {
         if let Some(else_block) = blocks.get(1) {

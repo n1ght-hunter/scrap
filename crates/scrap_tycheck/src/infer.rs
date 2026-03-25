@@ -16,11 +16,7 @@ use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 use scrap_shared::{ident::Symbol, path::Path};
 use scrap_span::Span;
 
-use crate::{
-    constraints::ConstraintKind,
-    context::TypeContext,
-    types::InferTy,
-};
+use crate::{constraints::ConstraintKind, context::TypeContext, types::InferTy};
 
 impl<'db> TypeContext<'db> {
     /// Infer the type of an expression.
@@ -50,11 +46,15 @@ impl<'db> TypeContext<'db> {
 
             ExprKind::AssignOp(op, lhs, rhs) => self.infer_assign_op(op, lhs, rhs, expr.span),
 
-            ExprKind::Unary(op, inner) => self.infer_unary_op(op, inner, expr.span),
+            ExprKind::Unary(op, inner) => self.infer_unary_op(*op, inner, expr.span),
 
-            ExprKind::Struct(struct_expr) => self.infer_struct_init(&struct_expr.path, &struct_expr.fields, expr.span),
+            ExprKind::Struct(struct_expr) => {
+                self.infer_struct_init(&struct_expr.path, &struct_expr.fields, expr.span)
+            }
 
-            ExprKind::Field(base, field_ident) => self.infer_field_access(base, field_ident, expr.span),
+            ExprKind::Field(base, field_ident) => {
+                self.infer_field_access(base, field_ident, expr.span)
+            }
 
             ExprKind::Match(scrutinee, arms) => self.infer_match(scrutinee, arms, expr.span),
 
@@ -86,7 +86,7 @@ impl<'db> TypeContext<'db> {
         match lit.kind {
             LitKind::Bool => InferTy::Bool,
             LitKind::Integer => self.fresh_ty_var(), // Will be resolved by context or default to i32
-            LitKind::Float => self.fresh_ty_var(),   // Will be resolved by context or default to f64
+            LitKind::Float => self.fresh_ty_var(), // Will be resolved by context or default to f64
             LitKind::Str => InferTy::Str,
         }
     }
@@ -114,29 +114,19 @@ impl<'db> TypeContext<'db> {
                 return self.fresh_ty_var();
             }
 
-            self.emit_undefined_variable(&name.text(self.db()), span);
+            self.emit_undefined_variable(name.text(self.db()), span);
             InferTy::Error
         } else if path.segments.len() == 2 {
-            // Multi-segment path: check for enum unit variant (e.g. Option::None)
             let enum_name = path.segments[0].ident.name;
             let variant_name = path.segments[1].ident.name;
 
-            if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
-                if let Some((_, variant_def)) = enum_def
+            if let Some(enum_def) = self.lookup_enum(enum_name).cloned()
+                && let Some((_, _variant_def)) = enum_def
                     .variants
                     .iter()
                     .find(|(name, _)| *name == variant_name)
-                {
-                    match variant_def {
-                        crate::context::EnumVariantDef::Unit => {
-                            return InferTy::Adt(enum_name);
-                        }
-                        _ => {
-                            // Tuple/struct variant used without args — handled in call/struct init
-                            return InferTy::Adt(enum_name);
-                        }
-                    }
-                }
+            {
+                return InferTy::Adt(enum_name);
             }
 
             // Could be a module::item path — return fresh var for now
@@ -166,20 +156,39 @@ impl<'db> TypeContext<'db> {
             }
 
             // Comparison operators: T -> T -> bool
-            BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Le | BinOpKind::Gt | BinOpKind::Ge => {
+            BinOpKind::Eq
+            | BinOpKind::Ne
+            | BinOpKind::Lt
+            | BinOpKind::Le
+            | BinOpKind::Gt
+            | BinOpKind::Ge => {
                 self.constrain_eq_with_kind(lhs_ty, rhs_ty, span, ConstraintKind::BinaryOp);
                 InferTy::Bool
             }
 
             // Logical operators: bool -> bool -> bool
             BinOpKind::And | BinOpKind::Or => {
-                self.constrain_eq_with_kind(lhs_ty, InferTy::Bool, lhs.span, ConstraintKind::BinaryOp);
-                self.constrain_eq_with_kind(rhs_ty, InferTy::Bool, rhs.span, ConstraintKind::BinaryOp);
+                self.constrain_eq_with_kind(
+                    lhs_ty,
+                    InferTy::Bool,
+                    lhs.span,
+                    ConstraintKind::BinaryOp,
+                );
+                self.constrain_eq_with_kind(
+                    rhs_ty,
+                    InferTy::Bool,
+                    rhs.span,
+                    ConstraintKind::BinaryOp,
+                );
                 InferTy::Bool
             }
 
             // Bitwise operators: operands must match, result is same type
-            BinOpKind::BitAnd | BinOpKind::BitOr | BinOpKind::BitXor | BinOpKind::Shl | BinOpKind::Shr => {
+            BinOpKind::BitAnd
+            | BinOpKind::BitOr
+            | BinOpKind::BitXor
+            | BinOpKind::Shl
+            | BinOpKind::Shr => {
                 self.constrain_eq_with_kind(lhs_ty.clone(), rhs_ty, span, ConstraintKind::BinaryOp);
                 lhs_ty
             }
@@ -187,12 +196,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a unary operation.
-    fn infer_unary_op(
-        &mut self,
-        op: &UnOp,
-        inner: &Expr<'db>,
-        _span: Span<'db>,
-    ) -> InferTy<'db> {
+    fn infer_unary_op(&mut self, op: UnOp, inner: &Expr<'db>, _span: Span<'db>) -> InferTy<'db> {
         let inner_ty = self.infer_expr(inner);
         match op {
             UnOp::Deref => {
@@ -210,7 +214,11 @@ impl<'db> TypeContext<'db> {
                     }
                     InferTy::Error => InferTy::Error,
                     _ => {
-                        self.emit_type_mismatch("&_ or *_", &self.ty_to_string(&inner_ty), inner.span);
+                        self.emit_type_mismatch(
+                            "&_ or *_",
+                            &self.ty_to_string(&inner_ty),
+                            inner.span,
+                        );
                         InferTy::Error
                     }
                 }
@@ -230,22 +238,17 @@ impl<'db> TypeContext<'db> {
         let inner_ty = self.infer_expr(inner);
 
         // Check borrow rules on the inner expression
-        if let ExprKind::Path(path) = &inner.kind {
-            if let Some(segment) = path.single_segment() {
-                let name = segment.ident.name;
-                // For &mut, require the variable to be declared mut
-                if mutability.is_mut() {
-                    if let Some(var_mut) = self.lookup_var_mutability(name) {
-                        if var_mut.is_not() {
-                            self.emit_cannot_borrow_as_mutable(
-                                name.text(self.db()),
-                                inner.span,
-                            );
-                        }
-                    }
-                }
-                self.record_borrow(name, mutability, span);
+        if let ExprKind::Path(path) = &inner.kind
+            && let Some(segment) = path.single_segment()
+        {
+            let name = segment.ident.name;
+            if mutability.is_mut()
+                && let Some(var_mut) = self.lookup_var_mutability(name)
+                && var_mut.is_not()
+            {
+                self.emit_cannot_borrow_as_mutable(name.text(self.db()), inner.span);
             }
+            self.record_borrow(name, mutability, span);
         }
 
         // Auto-deref through *T: `&x` where `x: *T` produces `&T`, not `&(*T)`
@@ -295,45 +298,47 @@ impl<'db> TypeContext<'db> {
                     for (arg, (_, param_ty)) in args.iter().zip(sig.params.iter()) {
                         let arg_ty = self.infer_expr(arg);
                         let expected_ty = self.substitute(param_ty, &subst);
-                        self.constrain_eq_with_kind(arg_ty, expected_ty, arg.span, ConstraintKind::FunctionArg);
+                        self.constrain_eq_with_kind(
+                            arg_ty,
+                            expected_ty,
+                            arg.span,
+                            ConstraintKind::FunctionArg,
+                        );
                     }
 
                     // Return the instantiated return type
                     return self.substitute(&sig.return_ty, &subst);
                 }
 
-                self.emit_undefined_function(&name.text(self.db()), span);
+                self.emit_undefined_function(name.text(self.db()), span);
                 return InferTy::Error;
             }
 
-            // Multi-segment path: check for enum tuple variant (e.g. Option::Some(42))
             if path.segments.len() == 2 {
                 let enum_name = path.segments[0].ident.name;
                 let variant_name = path.segments[1].ident.name;
 
-                if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
-                    if let Some((_, variant_def)) = enum_def
+                if let Some(enum_def) = self.lookup_enum(enum_name).cloned()
+                    && let Some((_, variant_def)) = enum_def
                         .variants
                         .iter()
                         .find(|(name, _)| *name == variant_name)
-                    {
-                        if let crate::context::EnumVariantDef::Tuple(field_tys) = variant_def {
-                            if args.len() != field_tys.len() {
-                                self.emit_arity_mismatch(field_tys.len(), args.len(), span);
-                                return InferTy::Error;
-                            }
-                            for (arg, expected_ty) in args.iter().zip(field_tys.iter()) {
-                                let arg_ty = self.infer_expr(arg);
-                                self.constrain_eq_with_kind(
-                                    arg_ty,
-                                    expected_ty.clone(),
-                                    arg.span,
-                                    ConstraintKind::FunctionArg,
-                                );
-                            }
-                            return InferTy::Adt(enum_name);
-                        }
+                    && let crate::context::EnumVariantDef::Tuple(field_tys) = variant_def
+                {
+                    if args.len() != field_tys.len() {
+                        self.emit_arity_mismatch(field_tys.len(), args.len(), span);
+                        return InferTy::Error;
                     }
+                    for (arg, expected_ty) in args.iter().zip(field_tys.iter()) {
+                        let arg_ty = self.infer_expr(arg);
+                        self.constrain_eq_with_kind(
+                            arg_ty,
+                            expected_ty.clone(),
+                            arg.span,
+                            ConstraintKind::FunctionArg,
+                        );
+                    }
+                    return InferTy::Adt(enum_name);
                 }
             }
         }
@@ -343,7 +348,11 @@ impl<'db> TypeContext<'db> {
         let arg_tys: Vec<_> = args.iter().map(|a| self.infer_expr(a)).collect();
         let ret_ty = self.fresh_ty_var();
 
-        self.constrain_eq(callee_ty, InferTy::Fn(arg_tys, Box::new(ret_ty.clone())), span);
+        self.constrain_eq(
+            callee_ty,
+            InferTy::Fn(arg_tys, Box::new(ret_ty.clone())),
+            span,
+        );
 
         ret_ty
     }
@@ -358,7 +367,12 @@ impl<'db> TypeContext<'db> {
     ) -> InferTy<'db> {
         // Condition must be bool
         let cond_ty = self.infer_expr(cond);
-        self.constrain_eq_with_kind(cond_ty, InferTy::Bool, cond.span, ConstraintKind::IfCondition);
+        self.constrain_eq_with_kind(
+            cond_ty,
+            InferTy::Bool,
+            cond.span,
+            ConstraintKind::IfCondition,
+        );
 
         // Infer then branch
         let then_ty = self.infer_block(then_block);
@@ -399,7 +413,11 @@ impl<'db> TypeContext<'db> {
             StmtKind::Expr(expr) => self.infer_expr(expr),
             StmtKind::Semi(expr) => {
                 let ty = self.infer_expr(expr);
-                if ty.is_never() { InferTy::Never } else { InferTy::unit() }
+                if ty.is_never() {
+                    InferTy::Never
+                } else {
+                    InferTy::unit()
+                }
             }
             StmtKind::Item(_) => {
                 // Items are handled during signature collection
@@ -424,7 +442,12 @@ impl<'db> TypeContext<'db> {
         let var_ty = match (declared_ty, init_ty) {
             (Some(decl), Some(init)) => {
                 // Both declared and initialized - they must match
-                self.constrain_eq_with_kind(decl.clone(), init, local.span, ConstraintKind::LetBinding);
+                self.constrain_eq_with_kind(
+                    decl.clone(),
+                    init,
+                    local.span,
+                    ConstraintKind::LetBinding,
+                );
                 decl
             }
             (Some(decl), None) => decl,
@@ -457,12 +480,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of an assignment.
-    fn infer_assign(
-        &mut self,
-        lhs: &Expr<'db>,
-        rhs: &Expr<'db>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+    fn infer_assign(&mut self, lhs: &Expr<'db>, rhs: &Expr<'db>, span: Span<'db>) -> InferTy<'db> {
         let lhs_ty = self.infer_expr(lhs);
         self.check_assign_mutability(lhs);
         let rhs_ty = self.infer_expr(rhs);
@@ -495,15 +513,11 @@ impl<'db> TypeContext<'db> {
     fn check_assign_mutability(&self, lhs: &Expr<'db>) {
         match &lhs.kind {
             ExprKind::Path(path) => {
-                if let Some(segment) = path.single_segment() {
-                    if let Some(mutability) = self.lookup_var_mutability(segment.ident.name) {
-                        if mutability.is_not() {
-                            self.emit_immutable_assign_error(
-                                segment.ident.name.text(self.db()),
-                                lhs.span,
-                            );
-                        }
-                    }
+                if let Some(segment) = path.single_segment()
+                    && let Some(mutability) = self.lookup_var_mutability(segment.ident.name)
+                    && mutability.is_not()
+                {
+                    self.emit_immutable_assign_error(segment.ident.name.text(self.db()), lhs.span);
                 }
             }
             ExprKind::Field(base, _) => {
@@ -546,7 +560,12 @@ impl<'db> TypeContext<'db> {
         let first_ty = self.infer_expr(&elements[0]);
         for elem in elements.iter().skip(1) {
             let elem_ty = self.infer_expr(elem);
-            self.constrain_eq_with_kind(first_ty.clone(), elem_ty, elem.span, ConstraintKind::ArrayElement);
+            self.constrain_eq_with_kind(
+                first_ty.clone(),
+                elem_ty,
+                elem.span,
+                ConstraintKind::ArrayElement,
+            );
         }
 
         InferTy::App(Symbol::new(self.db(), "Array".to_string()), vec![first_ty])
@@ -565,26 +584,23 @@ impl<'db> TypeContext<'db> {
             let enum_name = path.segments[0].ident.name;
             let variant_name = path.segments[1].ident.name;
 
-            if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
-                if let Some((_, variant_def)) = enum_def
+            if let Some(enum_def) = self.lookup_enum(enum_name).cloned()
+                && let Some((_, variant_def)) = enum_def
                     .variants
                     .iter()
                     .find(|(name, _)| *name == variant_name)
-                {
-                    if let crate::context::EnumVariantDef::Struct(field_defs) = variant_def {
-                        // Constrain field types
-                        for field_init in fields.iter() {
-                            let field_ty = self.infer_expr(&field_init.expr);
-                            if let Some((_, expected_ty)) = field_defs
-                                .iter()
-                                .find(|(name, _)| *name == field_init.ident.name)
-                            {
-                                self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
-                            }
-                        }
-                        return InferTy::Adt(enum_name);
+                && let crate::context::EnumVariantDef::Struct(field_defs) = variant_def
+            {
+                for field_init in fields.iter() {
+                    let field_ty = self.infer_expr(&field_init.expr);
+                    if let Some((_, expected_ty)) = field_defs
+                        .iter()
+                        .find(|(name, _)| *name == field_init.ident.name)
+                    {
+                        self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
                     }
                 }
+                return InferTy::Adt(enum_name);
             }
         }
 
@@ -599,7 +615,7 @@ impl<'db> TypeContext<'db> {
         let struct_def = match self.lookup_struct(struct_name) {
             Some(def) => def.clone(),
             None => {
-                self.emit_undefined_variable(&struct_name.text(self.db()), span);
+                self.emit_undefined_variable(struct_name.text(self.db()), span);
                 return InferTy::Error;
             }
         };
@@ -617,12 +633,14 @@ impl<'db> TypeContext<'db> {
                 let note = if struct_def.fields.is_empty() {
                     "all struct fields are already assigned".to_string()
                 } else {
-                    let available: Vec<_> = struct_def.fields.iter()
+                    let available: Vec<_> = struct_def
+                        .fields
+                        .iter()
                         .map(|(n, _)| format!("`{}`", n.text(self.db())))
                         .collect();
                     format!("available fields are: {}", available.join(", "))
                 };
-                self.emit_unknown_struct_field(&sn, &fn_, field_init.ident.span, note);
+                self.emit_unknown_struct_field(sn, fn_, field_init.ident.span, note);
                 has_error = true;
             }
         }
@@ -633,7 +651,7 @@ impl<'db> TypeContext<'db> {
             if !provided {
                 let sn = struct_name.text(self.db());
                 let fn_ = def_name.text(self.db());
-                self.emit_missing_struct_field(&sn, &fn_, span);
+                self.emit_missing_struct_field(sn, fn_, span);
                 has_error = true;
             }
         }
@@ -780,22 +798,16 @@ impl<'db> TypeContext<'db> {
                 InferTy::App(*name, new_args)
             }
             InferTy::Fn(params, ret) => {
-                let new_params: Vec<_> =
-                    params.iter().map(|p| self.substitute(p, subst)).collect();
+                let new_params: Vec<_> = params.iter().map(|p| self.substitute(p, subst)).collect();
                 let new_ret = self.substitute(ret, subst);
                 InferTy::Fn(new_params, Box::new(new_ret))
             }
             InferTy::Tuple(elems) => {
-                let new_elems: Vec<_> =
-                    elems.iter().map(|e| self.substitute(e, subst)).collect();
+                let new_elems: Vec<_> = elems.iter().map(|e| self.substitute(e, subst)).collect();
                 InferTy::Tuple(new_elems)
             }
-            InferTy::Ref(inner, m) => {
-                InferTy::Ref(Box::new(self.substitute(inner, subst)), *m)
-            }
-            InferTy::Ptr(inner) => {
-                InferTy::Ptr(Box::new(self.substitute(inner, subst)))
-            }
+            InferTy::Ref(inner, m) => InferTy::Ref(Box::new(self.substitute(inner, subst)), *m),
+            InferTy::Ptr(inner) => InferTy::Ptr(Box::new(self.substitute(inner, subst))),
             _ => ty.clone(),
         }
     }
@@ -816,12 +828,7 @@ impl<'db> TypeContext<'db> {
             self.push_scope();
             self.bind_match_pattern(&arm.pat, &scrutinee_ty);
             let arm_ty = self.infer_expr(&arm.body);
-            self.constrain_eq_with_kind(
-                result_ty.clone(),
-                arm_ty,
-                span,
-                ConstraintKind::MatchArm,
-            );
+            self.constrain_eq_with_kind(result_ty.clone(), arm_ty, span, ConstraintKind::MatchArm);
             self.pop_scope();
         }
 
@@ -850,7 +857,11 @@ impl<'db> TypeContext<'db> {
         // Construct mangled name: TypeName::method_name
         let mangled = Symbol::new(
             self.db(),
-            format!("{}::{}", type_name.text(self.db()), method.name.text(self.db())),
+            format!(
+                "{}::{}",
+                type_name.text(self.db()),
+                method.name.text(self.db())
+            ),
         );
 
         let sig = match self.lookup_function(mangled) {
@@ -891,11 +902,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Bind variables from a match pattern into the current scope.
-    fn bind_match_pattern(
-        &mut self,
-        pat: &scrap_ast::pat::Pat<'db>,
-        scrutinee_ty: &InferTy<'db>,
-    ) {
+    fn bind_match_pattern(&mut self, pat: &scrap_ast::pat::Pat<'db>, scrutinee_ty: &InferTy<'db>) {
         use scrap_ast::pat::PatKind;
         match &pat.kind {
             PatKind::Wildcard | PatKind::Missing | PatKind::Lit(_) => {}
@@ -907,46 +914,38 @@ impl<'db> TypeContext<'db> {
                 // Unit variant pattern (e.g. Option::None) - no bindings
             }
             PatKind::TupleStruct(path, sub_pats) => {
-                // e.g. Option::Some(val) — look up variant field types and bind sub-patterns
                 if path.segments.len() == 2 {
                     let enum_name = path.segments[0].ident.name;
                     let variant_name = path.segments[1].ident.name;
-                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
-                        if let Some((_, variant_def)) = enum_def
-                            .variants
-                            .iter()
-                            .find(|(name, _)| *name == variant_name)
-                        {
-                            if let crate::context::EnumVariantDef::Tuple(field_tys) = variant_def {
-                                for (sub_pat, field_ty) in sub_pats.iter().zip(field_tys.iter()) {
-                                    self.bind_match_pattern(sub_pat, field_ty);
-                                }
-                            }
+                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned()
+                        && let Some((_, crate::context::EnumVariantDef::Tuple(field_tys))) =
+                            enum_def
+                                .variants
+                                .iter()
+                                .find(|(name, _)| *name == variant_name)
+                    {
+                        for (sub_pat, field_ty) in sub_pats.iter().zip(field_tys.iter()) {
+                            self.bind_match_pattern(sub_pat, field_ty);
                         }
                     }
                 }
             }
             PatKind::Struct(path, field_pats) => {
-                // e.g. Message::Move { x, y } — look up variant field types
                 if path.segments.len() == 2 {
                     let enum_name = path.segments[0].ident.name;
                     let variant_name = path.segments[1].ident.name;
-                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned() {
-                        if let Some((_, variant_def)) = enum_def
-                            .variants
-                            .iter()
-                            .find(|(name, _)| *name == variant_name)
-                        {
-                            if let crate::context::EnumVariantDef::Struct(field_defs) = variant_def
+                    if let Some(enum_def) = self.lookup_enum(enum_name).cloned()
+                        && let Some((_, crate::context::EnumVariantDef::Struct(field_defs))) =
+                            enum_def
+                                .variants
+                                .iter()
+                                .find(|(name, _)| *name == variant_name)
+                    {
+                        for fp in field_pats {
+                            if let Some((_, field_ty)) =
+                                field_defs.iter().find(|(name, _)| *name == fp.ident.name)
                             {
-                                for fp in field_pats {
-                                    if let Some((_, field_ty)) = field_defs
-                                        .iter()
-                                        .find(|(name, _)| *name == fp.ident.name)
-                                    {
-                                        self.bind_match_pattern(&fp.pat, field_ty);
-                                    }
-                                }
+                                self.bind_match_pattern(&fp.pat, field_ty);
                             }
                         }
                     }

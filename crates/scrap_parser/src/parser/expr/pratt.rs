@@ -54,12 +54,11 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                 continue;
             }
 
-            let op = match AssocOp::from_token(&self.token.node) {
-                Some(op) => op,
-                None => break,
+            let Some(op) = AssocOp::from_token(&self.token.node) else {
+                break;
             };
 
-            let (left_prec, right_prec) = Self::precedence(&op);
+            let (left_prec, right_prec) = Self::precedence(op);
 
             if left_prec < min_prec {
                 break;
@@ -111,7 +110,7 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
     /// - Right-associative operators: `right = left`
     ///
     /// Precedence levels range from 2 (assignment, lowest) to 20 (mul/div/rem, highest).
-    fn precedence(op: &AssocOp) -> (u8, u8) {
+    fn precedence(op: AssocOp) -> (u8, u8) {
         match op {
             AssocOp::Assign | AssocOp::AssignOp(_) => (2, 2), // Right-associative
             AssocOp::Binary(BinOpKind::Or) => (3, 4),

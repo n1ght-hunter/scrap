@@ -18,6 +18,7 @@ use crate::cfg_builder::BasicBlockBuilder;
 /// - CFG builder for managing basic blocks and control flow
 /// - Source text for extracting literal values from spans
 /// - Type table for looking up types resolved during type checking
+///
 /// Info about a single enum variant for lowering.
 #[derive(Debug, Clone)]
 pub enum VariantInfo<'db> {
@@ -78,12 +79,18 @@ impl<'db> ExprLowerer<'db> {
     }
 
     /// Look up the type of an expression by its NodeId from the type table
-    pub(crate) fn lookup_expr_type(&self, node_id: scrap_shared::NodeId) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
+    pub(crate) fn lookup_expr_type(
+        &self,
+        node_id: scrap_shared::NodeId,
+    ) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
         self.type_table.expr_type(self.db, node_id)
     }
 
     /// Look up the type of a local variable by its NodeId from the type table
-    pub(crate) fn lookup_local_type(&self, node_id: scrap_shared::NodeId) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
+    pub(crate) fn lookup_local_type(
+        &self,
+        node_id: scrap_shared::NodeId,
+    ) -> Option<&scrap_tycheck::ResolvedTy<'db>> {
         self.type_table.local_type(self.db, node_id)
     }
 
@@ -97,7 +104,10 @@ impl<'db> ExprLowerer<'db> {
 
     /// Look up the type of a local variable from type table and convert to IR type.
     /// Returns Bool as fallback for tests that don't populate the type table.
-    pub(crate) fn lookup_and_convert_local_type(&self, node_id: scrap_shared::NodeId) -> ir::Ty<'db> {
+    pub(crate) fn lookup_and_convert_local_type(
+        &self,
+        node_id: scrap_shared::NodeId,
+    ) -> ir::Ty<'db> {
         self.lookup_local_type(node_id)
             .map(|resolved| crate::ty_convert::resolved_to_ir(self.db, resolved))
             .unwrap_or(ir::Ty::Bool) // Fallback for tests

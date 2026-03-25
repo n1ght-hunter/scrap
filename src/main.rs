@@ -11,5 +11,5 @@ fn setup_logging() {
 fn main() {
     setup_logging();
 
-    scrap_driver::run_complier(std::env::args_os());
+    scrap_driver::run_compiler(std::env::args_os());
 }

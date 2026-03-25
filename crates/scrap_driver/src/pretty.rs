@@ -27,12 +27,11 @@ pub enum CompilationOutput<'db> {
 
 impl PpMode {
     /// Returns true if this mode requires AST to be available
-    pub fn needs_ast(&self) -> bool {
+    pub fn needs_ast(self) -> bool {
         matches!(self, PpMode::PrettyAst | PpMode::DebugAst)
     }
 
-    /// Returns true if this mode requires IR to be available
-    pub fn needs_ir(&self) -> bool {
+    pub fn needs_ir(self) -> bool {
         matches!(self, PpMode::DebugIr | PpMode::PrettyIr)
     }
 
@@ -53,11 +52,7 @@ impl PpMode {
 }
 
 /// Print the compilation result in the specified format
-pub fn print<'db>(
-    db: &'db dyn scrap_shared::Db,
-    mode: PpMode,
-    output: CompilationOutput<'db>,
-) {
+pub fn print<'db>(db: &'db dyn scrap_shared::Db, mode: PpMode, output: CompilationOutput<'db>) {
     match (mode, output) {
         (PpMode::PrettyAst, CompilationOutput::Ast(ast)) => {
             ast.print();

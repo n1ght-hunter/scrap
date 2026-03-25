@@ -3,7 +3,7 @@
 use scrap_ast::{block::Block, expr::Expr};
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, MResult};
+use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower an if-expression with optional else
@@ -48,10 +48,7 @@ impl<'db> ExprLowerer<'db> {
         let then_operand = self.lower_block(then_block)?;
         if !self.cfg_builder.current_block_is_terminated() {
             if let Some(result) = result_temp {
-                self.emit_assign(
-                    ir::Place::Local(result),
-                    ir::Rvalue::Use(then_operand),
-                );
+                self.emit_assign(ir::Place::Local(result), ir::Rvalue::Use(then_operand));
             }
             self.cfg_builder
                 .finish_block(ir::Terminator::Goto { target: cont_bb });
@@ -61,13 +58,10 @@ impl<'db> ExprLowerer<'db> {
         self.cfg_builder.set_current_block(else_bb);
         if let Some(else_expr) = else_expr {
             let else_operand = self.lower_expr(else_expr)?;
-            if !self.cfg_builder.current_block_is_terminated() {
-                if let Some(result) = result_temp {
-                    self.emit_assign(
-                        ir::Place::Local(result),
-                        ir::Rvalue::Use(else_operand),
-                    );
-                }
+            if !self.cfg_builder.current_block_is_terminated()
+                && let Some(result) = result_temp
+            {
+                self.emit_assign(ir::Place::Local(result), ir::Rvalue::Use(else_operand));
             }
         }
         if !self.cfg_builder.current_block_is_terminated() {
@@ -350,7 +344,10 @@ mod tests {
         let return_zero = create_return_expr(db, Some(zero2));
         let else_block_expr = Expr {
             id: test_node_id(),
-            kind: ExprKind::Block(Box::new(create_block(db, vec![create_expr_stmt(db, return_zero)]))),
+            kind: ExprKind::Block(Box::new(create_block(
+                db,
+                vec![create_expr_stmt(db, return_zero)],
+            ))),
             span: test_span(db),
         };
 
@@ -369,7 +366,9 @@ mod tests {
         for block in &blocks {
             // Every block should have a terminator
             let term = block.terminator(db);
-            assert!(!matches!(term, ir::Terminator::Unreachable) || block.statements(db).is_empty());
+            assert!(
+                !matches!(term, ir::Terminator::Unreachable) || block.statements(db).is_empty()
+            );
         }
     }
 }

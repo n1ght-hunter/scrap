@@ -18,12 +18,11 @@ impl Parse for VecItems {
 
 fn extract_token_string(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
-        if attr.path().is_ident("token") {
-            if let Ok(Meta::List(meta_list)) = attr.meta.clone().try_into() {
-                if let Ok(lit_str) = syn::parse2::<LitStr>(meta_list.tokens) {
-                    return Some(lit_str.value());
-                }
-            }
+        if attr.path().is_ident("token")
+            && let Meta::List(meta_list) = &attr.meta
+            && let Ok(lit_str) = syn::parse2::<LitStr>(meta_list.tokens.clone())
+        {
+            return Some(lit_str.value());
         }
     }
     None
@@ -31,12 +30,11 @@ fn extract_token_string(attrs: &[Attribute]) -> Option<String> {
 
 fn extract_display_string(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
-        if attr.path().is_ident("display") {
-            if let Ok(Meta::List(meta_list)) = attr.meta.clone().try_into() {
-                if let Ok(lit_str) = syn::parse2::<LitStr>(meta_list.tokens) {
-                    return Some(lit_str.value());
-                }
-            }
+        if attr.path().is_ident("display")
+            && let Meta::List(meta_list) = &attr.meta
+            && let Ok(lit_str) = syn::parse2::<LitStr>(meta_list.tokens.clone())
+        {
+            return Some(lit_str.value());
         }
     }
     None
@@ -50,17 +48,16 @@ fn create_display_arm(
     match variant_fields {
         syn::Fields::Unit => {
             if let Some(token_str) = extract_token_string(variant_attrs) {
-                // Escape braces in token strings for format strings
                 let escaped_token = token_str.replace("{", "{{").replace("}", "}}");
                 Some(quote! {
                     Token::#variant_name => write!(f, #escaped_token)
                 })
-            } else if let Some(display_str) = extract_display_string(variant_attrs) {
-                Some(quote! {
-                    Token::#variant_name => write!(f, #display_str)
-                })
             } else {
-                None
+                extract_display_string(variant_attrs).map(|display_str| {
+                    quote! {
+                        Token::#variant_name => write!(f, #display_str)
+                    }
+                })
             }
         }
         syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
@@ -69,16 +66,11 @@ fn create_display_arm(
                 Token::#variant_name(val) => write!(f, "{}", val)
             })
         }
-        _ => {
-            // For more complex fields, use custom display if available
-            if let Some(display_str) = extract_display_string(variant_attrs) {
-                Some(quote! {
-                    Token::#variant_name(..) => write!(f, #display_str)
-                })
-            } else {
-                None
+        _ => extract_display_string(variant_attrs).map(|display_str| {
+            quote! {
+                Token::#variant_name(..) => write!(f, #display_str)
             }
-        }
+        }),
     }
 }
 

@@ -192,7 +192,7 @@ pub enum UnwindAction {
 
 /// Terminators are instructions that end a basic block and transfer control.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Default, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum Terminator<'db> {
     Goto {
@@ -221,13 +221,8 @@ pub enum Terminator<'db> {
         target: BasicBlockId,
         unwind: UnwindAction,
     },
+    #[default]
     Unreachable,
-}
-
-impl<'db> Default for Terminator<'db> {
-    fn default() -> Self {
-        Self::Unreachable
-    }
 }
 
 /// Targets for a `SwitchInt` terminator: labeled value→block pairs + otherwise.

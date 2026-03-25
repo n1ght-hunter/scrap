@@ -2,10 +2,10 @@
 
 use scrap_ast::expr::Expr;
 use scrap_ir as ir;
-use scrap_shared::types::Mutability;
 use scrap_shared::NodeId;
+use scrap_shared::types::Mutability;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a dereference expression `*expr` to an operand.
@@ -99,9 +99,8 @@ impl<'db> ExprLowerer<'db> {
         }
 
         // Normal case: take stack address via Rvalue::Ref
-        let inner_place = match inner_operand {
-            ir::Operand::Place(place) => place,
-            _ => return Err(BuilderError::LowerExpressionError),
+        let ir::Operand::Place(inner_place) = inner_operand else {
+            return Err(BuilderError::LowerExpressionError);
         };
 
         let ref_ty = self.lookup_and_convert_type(expr_id);

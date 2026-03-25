@@ -123,7 +123,6 @@ pub fn acquire_stack(size: usize) -> Stack {
     POOL.get_or_init(|| StackPool::new(64)).acquire(size)
 }
 
-
 pub fn release_stack(stack: Stack) {
     let released = THREAD_CACHE.with(|cache| cache.borrow_mut().release(stack));
     if let Some(stack) = released {

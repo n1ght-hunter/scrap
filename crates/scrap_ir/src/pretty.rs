@@ -87,7 +87,13 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         let abi = ext.abi(self.db);
         let sig = ext.signature(self.db);
         self.write_indent();
-        write!(self.output, "extern \"{}\" fn {}", abi.text(self.db), sig.name(self.db).text(self.db)).unwrap();
+        write!(
+            self.output,
+            "extern \"{}\" fn {}",
+            abi.text(self.db),
+            sig.name(self.db).text(self.db)
+        )
+        .unwrap();
 
         write!(self.output, "(").unwrap();
         let params = sig.params(self.db);
@@ -276,12 +282,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                         .unwrap();
                     }
                     None => {
-                        writeln!(
-                            self.output,
-                            ") -> unwind {};",
-                            self.unwind_str(unwind)
-                        )
-                        .unwrap();
+                        writeln!(self.output, ") -> unwind {};", self.unwind_str(unwind)).unwrap();
                     }
                 }
             }
@@ -326,39 +327,37 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, ")").unwrap();
             }
             Rvalue::Constant(c) => self.print_constant(c),
-            Rvalue::Aggregate(kind, operands) => {
-                match kind {
-                    AggregateKind::Struct(type_id, field_names) => {
-                        write!(self.output, "{} {{ ", type_id.name(self.db)).unwrap();
-                        for (i, op) in operands.iter().enumerate() {
-                            if i > 0 {
-                                write!(self.output, ", ").unwrap();
-                            }
-                            if let Some(name) = field_names.get(i) {
-                                write!(self.output, "{}: ", name.text(self.db)).unwrap();
-                            }
-                            self.print_operand(op);
+            Rvalue::Aggregate(kind, operands) => match kind {
+                AggregateKind::Struct(type_id, field_names) => {
+                    write!(self.output, "{} {{ ", type_id.name(self.db)).unwrap();
+                    for (i, op) in operands.iter().enumerate() {
+                        if i > 0 {
+                            write!(self.output, ", ").unwrap();
                         }
-                        write!(self.output, " }}").unwrap();
-                    }
-                    AggregateKind::EnumVariant(type_id, variant_idx) => {
-                        write!(
-                            self.output,
-                            "{}::variant_{}(",
-                            type_id.name(self.db),
-                            variant_idx
-                        )
-                        .unwrap();
-                        for (i, op) in operands.iter().enumerate() {
-                            if i > 0 {
-                                write!(self.output, ", ").unwrap();
-                            }
-                            self.print_operand(op);
+                        if let Some(name) = field_names.get(i) {
+                            write!(self.output, "{}: ", name.text(self.db)).unwrap();
                         }
-                        write!(self.output, ")").unwrap();
+                        self.print_operand(op);
                     }
+                    write!(self.output, " }}").unwrap();
                 }
-            }
+                AggregateKind::EnumVariant(type_id, variant_idx) => {
+                    write!(
+                        self.output,
+                        "{}::variant_{}(",
+                        type_id.name(self.db),
+                        variant_idx
+                    )
+                    .unwrap();
+                    for (i, op) in operands.iter().enumerate() {
+                        if i > 0 {
+                            write!(self.output, ", ").unwrap();
+                        }
+                        self.print_operand(op);
+                    }
+                    write!(self.output, ")").unwrap();
+                }
+            },
             Rvalue::Array(operands) => {
                 write!(self.output, "[").unwrap();
                 for (i, op) in operands.iter().enumerate() {
@@ -449,31 +448,62 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Constant::Int(val) => {
                 let ty = val.ty();
                 match val {
-                    scrap_shared::types::IntVal::Isize(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::IntVal::I8(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::IntVal::I16(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::IntVal::I32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::IntVal::I64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::IntVal::I128(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                }.unwrap();
+                    scrap_shared::types::IntVal::Isize(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::IntVal::I8(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::IntVal::I16(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::IntVal::I32(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::IntVal::I64(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::IntVal::I128(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                }
+                .unwrap();
             }
             Constant::Uint(val) => {
                 let ty = val.ty();
                 match val {
-                    scrap_shared::types::UintVal::Usize(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::UintVal::U8(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::UintVal::U16(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::UintVal::U32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::UintVal::U64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::UintVal::U128(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                }.unwrap();
+                    scrap_shared::types::UintVal::Usize(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::UintVal::U8(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::UintVal::U16(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::UintVal::U32(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::UintVal::U64(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::UintVal::U128(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                }
+                .unwrap();
             }
             Constant::Float(val) => {
                 let ty = val.ty();
                 match val {
-                    scrap_shared::types::FloatVal::F32(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                    scrap_shared::types::FloatVal::F64(v) => write!(self.output, "{}_{}", v, ty.name_str()),
-                }.unwrap();
+                    scrap_shared::types::FloatVal::F32(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                    scrap_shared::types::FloatVal::F64(v) => {
+                        write!(self.output, "{}_{}", v, ty.name_str())
+                    }
+                }
+                .unwrap();
             }
             Constant::Void => write!(self.output, "void").unwrap(),
             Constant::Bool(b) => write!(self.output, "{}", b).unwrap(),
@@ -560,9 +590,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn assert_msg_str(&self, msg: &AssertMessage) -> &'static str {
         match msg {
-            AssertMessage::Overflow(IntrinsicOp::AddWithOverflow) => {
-                "attempt to add with overflow"
-            }
+            AssertMessage::Overflow(IntrinsicOp::AddWithOverflow) => "attempt to add with overflow",
             AssertMessage::Overflow(IntrinsicOp::SubWithOverflow) => {
                 "attempt to subtract with overflow"
             }

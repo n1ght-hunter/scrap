@@ -31,7 +31,7 @@ pub enum AssocOp {
     Assign,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for AssocOp {
+impl scrap_shared::pretty_print::PrettyPrint for AssocOp {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self {
             AssocOp::Assign => write!(f, "="),

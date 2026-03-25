@@ -12,13 +12,9 @@
 
 use std::cell::Cell;
 use std::ptr::null_mut;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use crate::sync::{Condvar, Mutex};
-
-// ---------------------------------------------------------------------------
-// Debug logging — only compiled when the `gc-debug` feature is enabled.
-// ---------------------------------------------------------------------------
 
 macro_rules! gc_log {
     ($($arg:tt)*) => {
@@ -26,10 +22,6 @@ macro_rules! gc_log {
         eprintln!("[GC] {}", format_args!($($arg)*));
     };
 }
-
-// ---------------------------------------------------------------------------
-// GcShape — type descriptor emitted by the compiler as a data section.
-// ---------------------------------------------------------------------------
 
 #[repr(C)]
 pub struct GcShape {
@@ -49,10 +41,6 @@ impl GcShape {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ObjHeader — prepended to every GC-allocated object.
-// ---------------------------------------------------------------------------
-
 const MARK_WHITE: u8 = 0;
 const MARK_GRAY: u8 = 1;
 const MARK_BLACK: u8 = 2;
@@ -71,10 +59,6 @@ impl ObjHeader {
         unsafe { (self as *mut ObjHeader).add(1) as *mut u8 }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Stack map table — extern symbols emitted by codegen into the COFF object.
-// ---------------------------------------------------------------------------
 
 unsafe extern "C" {
     static __scrap_stackmap_count: u64;
@@ -134,10 +118,6 @@ fn find_stack_map(return_addr: u64) -> Option<(usize, usize)> {
     let entry = &state.entries[idx];
     Some((entry.roots_start as usize, entry.roots_count as usize))
 }
-
-// ---------------------------------------------------------------------------
-// Frame-pointer stack walking
-// ---------------------------------------------------------------------------
 
 /// Walk the RBP chain starting from `initial_rbp`, discovering GC roots
 /// via the stack map table. Each discovered non-null root pointer is passed
@@ -206,10 +186,6 @@ unsafe fn walk_stack_roots(initial_rbp: u64, mark_root: &mut impl FnMut(*mut u8)
     );
 }
 
-// ---------------------------------------------------------------------------
-// STW coordination
-// ---------------------------------------------------------------------------
-
 /// Set by the GC thread to request all other threads to pause at safepoints.
 pub(crate) static GC_SCAN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -265,10 +241,6 @@ pub(crate) fn gc_safepoint() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Global heap state (protected by mutex).
-// ---------------------------------------------------------------------------
-
 struct HeapState {
     all_objects: *mut ObjHeader,
     bytes_allocated: usize,
@@ -286,10 +258,6 @@ static HEAP: Mutex<HeapState> = Mutex::new(HeapState {
     bytes_allocated: 0,
     threshold: INITIAL_HEAP_THRESHOLD,
 });
-
-// ---------------------------------------------------------------------------
-// Exported C ABI functions
-// ---------------------------------------------------------------------------
 
 /// Initialize the GC. Called from `_start` before `main`.
 #[unsafe(no_mangle)]
@@ -397,10 +365,6 @@ pub extern "C" fn __scrap_gc_collect() {
     let mut heap = mutex_lock!(HEAP);
     collect(&mut heap);
 }
-
-// ---------------------------------------------------------------------------
-// Collection: STW pause + mark + sweep
-// ---------------------------------------------------------------------------
 
 /// Run a full GC cycle. Caller must hold the HEAP mutex.
 fn collect(heap: &mut HeapState) {
@@ -546,10 +510,6 @@ fn collect(heap: &mut HeapState) {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Sweep phase — free white objects, reset marks on survivors.
-// ---------------------------------------------------------------------------
-
 unsafe fn sweep_phase(heap: &mut HeapState) {
     unsafe {
         let mut prev: *mut *mut ObjHeader = &raw mut heap.all_objects;
@@ -597,10 +557,6 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
         );
     }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 unsafe fn data_ptr_to_header(data: *mut u8) -> Option<*mut ObjHeader> {
     unsafe {

@@ -19,7 +19,7 @@ use scrap_ast::expr::{Expr, ExprKind};
 use scrap_ast::operators::UnOp;
 use scrap_ir as ir;
 
-use crate::{lowerer::ExprLowerer, BuilderError, MResult};
+use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower an expression to an operand
@@ -42,14 +42,14 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Unary(UnOp::Neg, inner) => self.lower_unary_neg(inner, expr.id),
             ExprKind::Unary(UnOp::Not, inner) => self.lower_unary_not(inner, expr.id),
             ExprKind::Struct(struct_expr) => self.lower_struct_init(struct_expr, expr.id),
-            ExprKind::Field(base, field_ident) => self.lower_field_access(base, field_ident, expr.id),
+            ExprKind::Field(base, field_ident) => {
+                self.lower_field_access(base, field_ident, expr.id)
+            }
             ExprKind::Match(scrutinee, arms) => self.lower_match(scrutinee, arms),
             ExprKind::MethodCall(receiver, method, args) => {
                 self.lower_method_call(receiver, method, args, expr.id)
             }
-            ExprKind::AddrOf(mutability, inner) => {
-                self.lower_addr_of(*mutability, inner, expr.id)
-            }
+            ExprKind::AddrOf(mutability, inner) => self.lower_addr_of(*mutability, inner, expr.id),
             ExprKind::Spawn(inner) => self.lower_spawn(inner),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
         }
@@ -57,27 +57,13 @@ impl<'db> ExprLowerer<'db> {
 
     /// Lower an expression directly into a destination place.
     /// Avoids allocating a temporary — the result is written to `dest`.
-    pub fn lower_expr_into(
-        &mut self,
-        expr: &Expr<'db>,
-        dest: ir::Place<'db>,
-    ) -> MResult<()> {
+    pub fn lower_expr_into(&mut self, expr: &Expr<'db>, dest: ir::Place<'db>) -> MResult<()> {
         match &expr.kind {
-            ExprKind::Lit(lit) => {
-                self.lower_literal_into(lit, expr.id, dest)
-            }
-            ExprKind::Binary(_, _, _) => {
-                self.lower_binary_op_into(expr, dest)
-            }
-            ExprKind::Call(_, _) => {
-                self.lower_call_into(expr, dest)
-            }
-            ExprKind::Paren(inner) => {
-                self.lower_expr_into(inner, dest)
-            }
-            ExprKind::Struct(struct_expr) => {
-                self.lower_struct_init_into(struct_expr, dest)
-            }
+            ExprKind::Lit(lit) => self.lower_literal_into(lit, expr.id, dest),
+            ExprKind::Binary(_, _, _) => self.lower_binary_op_into(expr, dest),
+            ExprKind::Call(_, _) => self.lower_call_into(expr, dest),
+            ExprKind::Paren(inner) => self.lower_expr_into(inner, dest),
+            ExprKind::Struct(struct_expr) => self.lower_struct_init_into(struct_expr, dest),
             // For other expressions, fall back to lower_expr + assign
             _ => {
                 let operand = self.lower_expr(expr)?;

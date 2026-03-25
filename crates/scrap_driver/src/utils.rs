@@ -3,9 +3,9 @@ use scrap_diagnostics::Level;
 
 use crate::parsing::Modules;
 
-pub fn compute_relative_path_segments<'a, 'db>(
+pub fn compute_relative_path_segments(
     args: &crate::args::Args,
-    db: &'db dyn scrap_shared::Db,
+    db: &dyn scrap_shared::Db,
     root_path: &std::path::PathBuf,
     file_path: &std::path::PathBuf,
 ) -> Option<(bool, Vec<String>)> {
@@ -44,8 +44,8 @@ pub fn compute_relative_path_segments<'a, 'db>(
         .chain(diff.components().skip(1).filter_map(|comp| {
             let os_str = comp.as_os_str();
             if let Some(s) = os_str.to_str() {
-                if s.ends_with(".sc") {
-                    Some(s[..s.len() - 3].to_string())
+                if let Some(stripped) = s.strip_suffix(".sc") {
+                    Some(stripped.to_string())
                 } else {
                     Some(s.to_string())
                 }
@@ -102,7 +102,7 @@ pub fn collect_modules<'db>(
     let entry_module = entry_file.ast(db).to_module(db);
     modules.insert(entry_module.id(db), entry_module);
     entry_file.modules(db).iter().for_each(|module| {
-        modules.insert(module.id(db), module.clone());
+        modules.insert(module.id(db), *module);
     });
 
     other_files.iter().for_each(|file| {
@@ -111,7 +111,7 @@ pub fn collect_modules<'db>(
         modules.insert(main_module.id(db), main_module);
         // Also insert any nested modules declared in this file
         file.modules(db).iter().for_each(|module| {
-            modules.insert(module.id(db), module.clone());
+            modules.insert(module.id(db), *module);
         });
     });
 
@@ -153,14 +153,12 @@ pub fn lower_input_files_to_ir<'db>(
     entry_file: scrap_parser::ParsedFile<'db>,
     other_files: Vec<scrap_parser::ParsedFile<'db>>,
     type_table: scrap_tycheck::TypeTable<'db>,
-) -> (
-    Option<scrap_ir::Module<'db>>,
-    Vec<scrap_ir::Module<'db>>,
-) {
+) -> (Option<scrap_ir::Module<'db>>, Vec<scrap_ir::Module<'db>>) {
     // Lower entry file
     let entry_module = entry_file.ast(db).to_module(db);
     let entry_module_id = entry_module.id(db);
-    let entry_ir = scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id, type_table);
+    let entry_ir =
+        scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id, type_table);
 
     // Lower other files in parallel
     let other_ir: Vec<_> = other_files
@@ -173,7 +171,7 @@ pub fn lower_input_files_to_ir<'db>(
         .collect();
 
     (entry_ir, other_ir)
-} 
+}
 
 /// Create a LoweredIr Can from entry and other modules (tracked function for creating tracked structs)
 #[salsa::tracked(persist)]
@@ -190,4 +188,3 @@ pub fn create_lowered_ir<'db>(
     modules.append(&mut other_ir);
     scrap_ast_lowering::LoweredIr::new(db, scrap_ir::Can::new(db, modules))
 }
-

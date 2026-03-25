@@ -47,7 +47,7 @@ inflections = "1.1.1"
 heck = "0.5.0"
 target-lexicon = "0.13"
 clap = { version = "4", features = ["derive"] }
-salsa = { version = "0.25", features = ["persistence"] }
+salsa = { version = "0.26", features = ["persistence"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
 pathdiff = "0.2.3"
@@ -108,7 +108,7 @@ bitflags = "2"
 
 # overide dependencies with git sources
 [patch.crates-io]
-salsa = { git = "https://github.com/n1ght-hunter/salsa.git", rev = "a885bb4" }
+salsa = { git = "https://github.com/n1ght-hunter/salsa.git", rev = "eb1d2646ac230e5138dbd3938ac5ab3f14144421" }
 
 [profile.release]
 

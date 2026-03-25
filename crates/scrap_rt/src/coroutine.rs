@@ -13,10 +13,6 @@ use std::thread::{self, JoinHandle};
 
 use crate::sync::{Condvar, Mutex};
 
-// ---------------------------------------------------------------------------
-// Typed wrappers for raw pointers
-// ---------------------------------------------------------------------------
-
 /// Type-safe wrapper around a compiler-generated spawn trampoline.
 ///
 /// The codegen emits one trampoline per spawn-site with the C signature
@@ -42,10 +38,6 @@ impl Trampoline {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Stack overflow detection
-// ---------------------------------------------------------------------------
-
 // Stack limit for the currently running coroutine on this worker thread.
 // Set to the stack's committed_bottom when a coroutine is resumed.
 // Cleared to 0 when the coroutine yields or completes.
@@ -67,10 +59,6 @@ fn stack_overflow_abort() -> ! {
     std::process::exit(101);
 }
 
-// ---------------------------------------------------------------------------
-// Scheduler internals
-// ---------------------------------------------------------------------------
-
 /// A live coroutine.
 /// `Send` because `CoroutineStack` is `Send`.
 struct Task {
@@ -87,10 +75,6 @@ struct SchedulerState {
 }
 
 static STATE: OnceLock<SchedulerState> = OnceLock::new();
-
-// ---------------------------------------------------------------------------
-// Worker thread logic
-// ---------------------------------------------------------------------------
 
 fn worker_loop() {
     let state = STATE.get().expect("scheduler not initialized");
@@ -189,10 +173,6 @@ fn resume_task(mut task: Task, state: &SchedulerState) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// GC support: expose queued coroutine RBPs for stack scanning
-// ---------------------------------------------------------------------------
-
 /// Return the saved RBPs of all coroutines currently sitting in the
 /// scheduler queue. Called by the GC during STW to scan queued coroutine stacks.
 pub(crate) fn get_queued_coro_rbps() -> Vec<u64> {
@@ -202,10 +182,6 @@ pub(crate) fn get_queued_coro_rbps() -> Vec<u64> {
     let queue = mutex_lock!(state.queue);
     queue.iter().map(|task| task.coro.saved_rbp()).collect()
 }
-
-// ---------------------------------------------------------------------------
-// Public ABI (called from compiler-generated code)
-// ---------------------------------------------------------------------------
 
 /// Initialize the coroutine scheduler. Called from `_start` before `main`.
 #[unsafe(no_mangle)]
@@ -258,10 +234,7 @@ pub extern "C" fn __scrap_spawn(trampoline: usize, args_ptr: *const u8, nargs: u
         tramp.call(args_copy.as_ptr());
     });
 
-    let task = Task {
-        coro,
-        stack_limit,
-    };
+    let task = Task { coro, stack_limit };
 
     let state = STATE.get().expect("scheduler not initialized");
     mutex_lock!(state.queue).push_back(task);

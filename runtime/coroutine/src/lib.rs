@@ -15,7 +15,7 @@ pub use context::yield_current;
 pub use pool::{acquire_stack, release_stack};
 pub use stack::Stack;
 
-use context::{swap_registers, SavedContext};
+use context::{SavedContext, swap_registers};
 use std::cell::Cell;
 use std::ptr::null_mut;
 
@@ -166,11 +166,7 @@ impl CoroutineStack {
 
         // Copy used portion from old stack to new stack.
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                old_rsp as *const u8,
-                new_rsp as *mut u8,
-                used,
-            );
+            std::ptr::copy_nonoverlapping(old_rsp as *const u8, new_rsp as *mut u8, used);
         }
 
         // Conservative pointer relocation: scan every 8-byte-aligned word
@@ -270,19 +266,19 @@ impl Drop for CoroutineStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn basic_run_to_completion() {
         let flag = Arc::new(AtomicU64::new(0));
         let f = flag.clone();
         let mut coro = CoroutineStack::new(move || {
-            f.store(42, Ordering::SeqCst);
+            f.store(42, Ordering::Relaxed);
         });
         let status = coro.resume();
         assert_eq!(status, CoroutineStatus::Completed);
-        assert_eq!(flag.load(Ordering::SeqCst), 42);
+        assert_eq!(flag.load(Ordering::Relaxed), 42);
     }
 
     #[test]
@@ -290,21 +286,21 @@ mod tests {
         let counter = Arc::new(AtomicU64::new(0));
         let c = counter.clone();
         let mut coro = CoroutineStack::new(move || {
-            c.store(1, Ordering::SeqCst);
+            c.store(1, Ordering::Relaxed);
             yield_current();
-            c.store(2, Ordering::SeqCst);
+            c.store(2, Ordering::Relaxed);
             yield_current();
-            c.store(3, Ordering::SeqCst);
+            c.store(3, Ordering::Relaxed);
         });
 
         assert_eq!(coro.resume(), CoroutineStatus::Yielded);
-        assert_eq!(counter.load(Ordering::SeqCst), 1);
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
 
         assert_eq!(coro.resume(), CoroutineStatus::Yielded);
-        assert_eq!(counter.load(Ordering::SeqCst), 2);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
 
         assert_eq!(coro.resume(), CoroutineStatus::Completed);
-        assert_eq!(counter.load(Ordering::SeqCst), 3);
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
     }
 
     #[test]
@@ -312,14 +308,14 @@ mod tests {
         let counter = Arc::new(AtomicU64::new(0));
         let c = counter.clone();
         let mut coro = CoroutineStack::new(move || {
-            c.fetch_add(1, Ordering::SeqCst);
+            c.fetch_add(1, Ordering::Relaxed);
             yield_current();
-            c.fetch_add(1, Ordering::SeqCst);
+            c.fetch_add(1, Ordering::Relaxed);
         });
 
         // First resume on the main thread.
         assert_eq!(coro.resume(), CoroutineStatus::Yielded);
-        assert_eq!(counter.load(Ordering::SeqCst), 1);
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
 
         // Send to another thread and resume there.
         let handle = std::thread::spawn(move || {
@@ -327,7 +323,7 @@ mod tests {
             coro // return so it's dropped on this thread
         });
         handle.join().unwrap();
-        assert_eq!(counter.load(Ordering::SeqCst), 2);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
     }
 
     #[test]
@@ -344,7 +340,7 @@ mod tests {
         let c = counter.clone();
         let mut coro = CoroutineStack::new(move || {
             for _ in 0..100 {
-                c.fetch_add(1, Ordering::SeqCst);
+                c.fetch_add(1, Ordering::Relaxed);
                 yield_current();
             }
         });
@@ -353,6 +349,6 @@ mod tests {
             assert_eq!(coro.resume(), CoroutineStatus::Yielded);
         }
         assert_eq!(coro.resume(), CoroutineStatus::Completed);
-        assert_eq!(counter.load(Ordering::SeqCst), 100);
+        assert_eq!(counter.load(Ordering::Relaxed), 100);
     }
 }

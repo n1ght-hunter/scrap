@@ -6,3 +6,5 @@ node_modules
 .jj
 lib.clif
 local/
+*.local*
+*.log

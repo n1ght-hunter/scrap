@@ -76,12 +76,11 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let mut params = ThinVec::new();
 
         // Check for self parameter as the first param
-        if !self.check(Token::RParen) {
-            if let Some(self_param) = self.try_parse_self_param(type_name)? {
-                params.push(self_param);
-                // Eat trailing comma after self
-                let _ = self.eat(Token::Comma);
-            }
+        if !self.check(Token::RParen)
+            && let Some(self_param) = self.try_parse_self_param(type_name)?
+        {
+            params.push(self_param);
+            let _ = self.eat(Token::Comma);
         }
 
         // Parse remaining regular parameters
@@ -135,7 +134,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         // Case 2: `&self` or `&mut self`
         if self.check(Token::BitAnd) {
             // Copy lookahead info to avoid borrow conflicts
-            let ahead1_info = self.look_ahead(1).map(|t| (t.node.clone(), t.span));
+            let ahead1_info = self.look_ahead(1).map(|t| (t.node, t.span));
             if let Some((ahead1_tok, ahead1_span)) = ahead1_info {
                 let ahead1_text = &self.source[ahead1_span.to_range(self.db)];
 
@@ -148,7 +147,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
                 if ahead1_tok == Token::Ident && ahead1_text == "mut" {
                     // Check if it's `&mut self`
-                    let ahead2_info = self.look_ahead(2).map(|t| (t.node.clone(), t.span));
+                    let ahead2_info = self.look_ahead(2).map(|t| (t.node, t.span));
                     if let Some((ahead2_tok, ahead2_span)) = ahead2_info {
                         let ahead2_text = &self.source[ahead2_span.to_range(self.db)];
                         if ahead2_tok == Token::Ident && ahead2_text == "self" {
