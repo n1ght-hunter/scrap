@@ -4,6 +4,7 @@ use scrap_lexer::Token;
 /// Maps directly to lexer tokens plus additional syntax nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u16)]
+#[allow(non_camel_case_types)]
 pub enum SyntaxKind {
     // Trivia
     WHITESPACE,

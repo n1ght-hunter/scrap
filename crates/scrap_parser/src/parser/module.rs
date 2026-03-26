@@ -103,7 +103,7 @@ mod tests {
                             _ => panic!("Expected function item inside module"),
                         }
                     }
-                    _ => panic!("Expected loaded module"),
+                    scrap_ast::module::ModuleKind::Unloaded => panic!("Expected loaded module"),
                 }
             }
             _ => panic!("Expected module item"),

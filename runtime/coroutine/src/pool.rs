@@ -32,7 +32,7 @@ impl StackPool {
             if s_size == size {
                 return free.swap_remove(i);
             }
-            if s_size > size && best_bigger.map_or(true, |(_, best)| s_size < best) {
+            if s_size > size && best_bigger.is_none_or(|(_, best)| s_size < best) {
                 best_bigger = Some((i, s_size));
             }
         }
@@ -78,10 +78,8 @@ impl LocalCache {
                     self.allocated += 1;
                     return Some(stack);
                 }
-                if s_size > size {
-                    if best_bigger.map_or(true, |(_, best)| s_size < best) {
-                        best_bigger = Some((i, s_size));
-                    }
+                if s_size > size && best_bigger.is_none_or(|(_, best)| s_size < best) {
+                    best_bigger = Some((i, s_size));
                 }
             }
         }

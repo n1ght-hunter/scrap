@@ -459,28 +459,28 @@ fn format_block_expr<'a>(
     node: &SyntaxNode,
     config: &FormatterConfig,
 ) -> DocBuilder<'a, Arena<'a>> {
-    if let Some(block) = node.children().find(|n| n.kind() == SyntaxKind::BLOCK) {
-        if let Some(stmt_list) = block.children().find(|n| n.kind() == SyntaxKind::STMT_LIST) {
-            let stmts: Vec<_> = stmt_list
-                .children()
-                .map(|stmt| format_node(arena, &stmt, config))
-                .collect();
+    if let Some(block) = node.children().find(|n| n.kind() == SyntaxKind::BLOCK)
+        && let Some(stmt_list) = block.children().find(|n| n.kind() == SyntaxKind::STMT_LIST)
+    {
+        let stmts: Vec<_> = stmt_list
+            .children()
+            .map(|stmt| format_node(arena, &stmt, config))
+            .collect();
 
-            if stmts.is_empty() {
-                return arena.text("{}");
-            }
-
-            return arena
-                .text("{")
-                .append(arena.hardline())
-                .append(
-                    arena
-                        .intersperse(stmts, arena.hardline())
-                        .indent(config.indent_width),
-                )
-                .append(arena.hardline())
-                .append(arena.text("}"));
+        if stmts.is_empty() {
+            return arena.text("{}");
         }
+
+        return arena
+            .text("{")
+            .append(arena.hardline())
+            .append(
+                arena
+                    .intersperse(stmts, arena.hardline())
+                    .indent(config.indent_width),
+            )
+            .append(arena.hardline())
+            .append(arena.text("}"));
     }
 
     arena.text("{}")
@@ -498,7 +498,7 @@ fn format_if_expr<'a>(
     // Collect all non-block expression nodes (these form the condition)
     let mut condition_parts = Vec::new();
     let mut blocks = Vec::new();
-    let mut found_else = false;
+    let _found_else = false;
 
     for child in node.children() {
         match child.kind() {
@@ -519,7 +519,7 @@ fn format_if_expr<'a>(
     }
 
     // Format then block
-    if let Some(then_block) = blocks.get(0) {
+    if let Some(then_block) = blocks.first() {
         docs.push(format_node(arena, then_block, config));
     }
 
@@ -528,11 +528,9 @@ fn format_if_expr<'a>(
         .children_with_tokens()
         .any(|t| matches!(t, rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ELSE_KW));
 
-    if has_else {
-        if let Some(else_block) = blocks.get(1) {
-            docs.push(arena.text(" else "));
-            docs.push(format_node(arena, else_block, config));
-        }
+    if has_else && let Some(else_block) = blocks.get(1) {
+        docs.push(arena.text(" else "));
+        docs.push(format_node(arena, else_block, config));
     }
 
     arena.concat(docs)
@@ -643,10 +641,10 @@ fn format_literal_expr<'a>(
 ) -> DocBuilder<'a, Arena<'a>> {
     // Skip trivia to get the actual literal token
     for child in node.children_with_tokens() {
-        if let rowan::NodeOrToken::Token(token) = child {
-            if !is_trivia(&token) {
-                return arena.text(token.text().to_string());
-            }
+        if let rowan::NodeOrToken::Token(token) = child
+            && !is_trivia(&token)
+        {
+            return arena.text(token.text().to_string());
         }
     }
     arena.nil()
@@ -693,11 +691,11 @@ fn format_let_stmt<'a>(
     // Pattern - need to skip trivia to get identifier
     if let Some(pat) = node.children().find(|n| n.kind() == SyntaxKind::IDENT_PAT) {
         for child in pat.children_with_tokens() {
-            if let rowan::NodeOrToken::Token(token) = child {
-                if !is_trivia(&token) {
-                    docs.push(arena.text(token.text().to_string()));
-                    break;
-                }
+            if let rowan::NodeOrToken::Token(token) = child
+                && !is_trivia(&token)
+            {
+                docs.push(arena.text(token.text().to_string()));
+                break;
             }
         }
     }
@@ -762,10 +760,10 @@ fn format_expr_stmt<'a>(
 fn format_name<'a>(arena: &'a Arena<'a>, node: &SyntaxNode) -> DocBuilder<'a, Arena<'a>> {
     // Find first non-trivia token (should be the IDENT)
     for child in node.children_with_tokens() {
-        if let rowan::NodeOrToken::Token(token) = child {
-            if !is_trivia(&token) {
-                return arena.text(token.text().to_string());
-            }
+        if let rowan::NodeOrToken::Token(token) = child
+            && !is_trivia(&token)
+        {
+            return arena.text(token.text().to_string());
         }
     }
     arena.nil()
@@ -779,10 +777,10 @@ fn format_path<'a>(arena: &'a Arena<'a>, node: &SyntaxNode) -> DocBuilder<'a, Ar
         .filter_map(|seg| {
             // Find first non-trivia token in the segment
             for child in seg.children_with_tokens() {
-                if let rowan::NodeOrToken::Token(token) = child {
-                    if !is_trivia(&token) {
-                        return Some(arena.text(token.text().to_string()));
-                    }
+                if let rowan::NodeOrToken::Token(token) = child
+                    && !is_trivia(&token)
+                {
+                    return Some(arena.text(token.text().to_string()));
                 }
             }
             None

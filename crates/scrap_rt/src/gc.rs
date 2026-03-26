@@ -123,9 +123,8 @@ fn find_stack_map(return_addr: u64) -> Option<(usize, usize)> {
 /// via the stack map table. Each discovered non-null root pointer is passed
 /// to `mark_root`.
 unsafe fn walk_stack_roots(initial_rbp: u64, mark_root: &mut impl FnMut(*mut u8)) {
-    let state = match STACK_MAPS.get() {
-        Some(s) => s,
-        None => return,
+    let Some(state) = STACK_MAPS.get() else {
+        return;
     };
     if state.entries.is_empty() {
         return;
@@ -143,7 +142,7 @@ unsafe fn walk_stack_roots(initial_rbp: u64, mark_root: &mut impl FnMut(*mut u8)
                 break;
             }
             // Validate pointer alignment and basic readability
-            if rbp % 8 != 0 {
+            if !rbp.is_multiple_of(8) {
                 break;
             }
 
@@ -217,14 +216,14 @@ thread_local! {
 /// Check if the current thread is the GC thread (called from coroutine.rs).
 #[allow(dead_code)]
 pub(crate) fn is_gc_thread() -> bool {
-    IS_GC_THREAD.with(|c| c.get())
+    IS_GC_THREAD.with(std::cell::Cell::get)
 }
 
 /// Called from `__scrap_yield` when `GC_SCAN_REQUESTED` is true.
 /// The calling thread registers its current RBP and blocks until GC is done.
 /// Must NOT be called on the GC thread itself.
 pub(crate) fn gc_safepoint() {
-    if IS_GC_THREAD.with(|c| c.get()) {
+    if IS_GC_THREAD.with(std::cell::Cell::get) {
         return;
     }
 
@@ -422,11 +421,11 @@ fn collect(heap: &mut HeapState) {
         // 1. Walk the GC thread's own stack
         gc_log!("collect: walking GC thread stack (rbp={:#x})", gc_rbp);
         walk_stack_roots(gc_rbp, &mut |root| {
-            if let Some(header) = data_ptr_to_header(root) {
-                if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                    (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                    worklist.push(header);
-                }
+            if let Some(header) = data_ptr_to_header(root)
+                && (*header).mark.load(Ordering::Relaxed) == MARK_WHITE
+            {
+                (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                worklist.push(header);
             }
         });
 
@@ -434,11 +433,11 @@ fn collect(heap: &mut HeapState) {
         for &rbp in &parked_rbps {
             gc_log!("collect: walking parked coroutine stack (rbp={:#x})", rbp);
             walk_stack_roots(rbp, &mut |root| {
-                if let Some(header) = data_ptr_to_header(root) {
-                    if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                        (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                        worklist.push(header);
-                    }
+                if let Some(header) = data_ptr_to_header(root)
+                    && (*header).mark.load(Ordering::Relaxed) == MARK_WHITE
+                {
+                    (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                    worklist.push(header);
                 }
             });
         }
@@ -447,11 +446,11 @@ fn collect(heap: &mut HeapState) {
         for rbp in &queued_rbps {
             gc_log!("collect: walking queued coroutine stack (rbp={:#x})", rbp);
             walk_stack_roots(*rbp, &mut |root| {
-                if let Some(header) = data_ptr_to_header(root) {
-                    if (*header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                        (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                        worklist.push(header);
-                    }
+                if let Some(header) = data_ptr_to_header(root)
+                    && (*header).mark.load(Ordering::Relaxed) == MARK_WHITE
+                {
+                    (*header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                    worklist.push(header);
                 }
             });
         }
@@ -473,13 +472,12 @@ fn collect(heap: &mut HeapState) {
                 let data = (*obj).data_ptr();
                 for &offset in (*shape).pointer_offsets() {
                     let field_ptr = *(data.add(offset as usize) as *const *mut u8);
-                    if !field_ptr.is_null() {
-                        if let Some(child_header) = data_ptr_to_header(field_ptr) {
-                            if (*child_header).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                                (*child_header).mark.store(MARK_GRAY, Ordering::Relaxed);
-                                worklist.push(child_header);
-                            }
-                        }
+                    if !field_ptr.is_null()
+                        && let Some(child_header) = data_ptr_to_header(field_ptr)
+                        && (*child_header).mark.load(Ordering::Relaxed) == MARK_WHITE
+                    {
+                        (*child_header).mark.store(MARK_GRAY, Ordering::Relaxed);
+                        worklist.push(child_header);
                     }
                 }
             }
