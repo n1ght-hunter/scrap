@@ -43,12 +43,12 @@ fn format_file(path: &PathBuf, check: bool, verbose: bool) -> Result<bool, Strin
     if check {
         if source != formatted {
             println!("{}: File is not formatted", path.display());
-            return Ok(false);
+            Ok(false)
         } else {
             if verbose {
                 println!("{}: File is formatted correctly", path.display());
             }
-            return Ok(true);
+            Ok(true)
         }
     } else {
         if source != formatted {
@@ -62,7 +62,7 @@ fn format_file(path: &PathBuf, check: bool, verbose: bool) -> Result<bool, Strin
                 println!("{}: No changes needed", path.display());
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 }
 

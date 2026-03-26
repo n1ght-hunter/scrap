@@ -205,7 +205,7 @@ fn main() -> Result<(), String> {
     let exe = output_dir.join("hello.exe");
 
     let res = std::process::Command::new("lld-link.exe")
-        .args(&[
+        .args([
             obj_path.to_str().unwrap(),
             "kernel32.lib",
             "/SUBSYSTEM:CONSOLE",

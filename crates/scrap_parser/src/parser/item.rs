@@ -182,7 +182,7 @@ mod tests {
                         assert_eq!(*inline, Inline::Yes);
                         assert_eq!(span.to_range(db), 0..17);
                     }
-                    _ => panic!("Expected loaded module"),
+                    scrap_ast::module::ModuleKind::Unloaded => panic!("Expected loaded module"),
                 }
             }
             _ => panic!("Expected module item"),
@@ -202,7 +202,7 @@ mod tests {
                 );
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Unloaded => {}
-                    _ => panic!("Expected loaded module"),
+                    scrap_ast::module::ModuleKind::Loaded(..) => panic!("Expected unloaded module"),
                 }
             }
             _ => panic!("Expected module item"),

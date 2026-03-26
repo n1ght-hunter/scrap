@@ -21,13 +21,7 @@ impl<'db> Parser<'db> {
         self.parse_atom_expr();
 
         // Parse infix operators using the Pratt algorithm
-        loop {
-            // Check if current token is an infix operator
-            let op = match self.current_kind() {
-                Some(kind) => kind,
-                None => break,
-            };
-
+        while let Some(op) = self.current_kind() {
             if let Some((l_bp, r_bp)) = infix_binding_power(op) {
                 // Check if this operator's precedence is high enough
                 if l_bp < min_bp {

@@ -157,8 +157,8 @@ pub(crate) unsafe extern "C" fn bootstrap_green_task() {
 ///
 /// No-op if called outside a coroutine (CALLER_CTX / CORO_CTX are null).
 pub fn yield_current() {
-    let caller = super::CALLER_CTX.with(|c| c.get());
-    let coro = super::CORO_CTX.with(|c| c.get());
+    let caller = super::CALLER_CTX.with(std::cell::Cell::get);
+    let coro = super::CORO_CTX.with(std::cell::Cell::get);
     if caller.is_null() || coro.is_null() {
         return; // Not inside a coroutine — no-op.
     }

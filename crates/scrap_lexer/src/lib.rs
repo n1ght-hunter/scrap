@@ -250,13 +250,13 @@ mod tests {
     fn basic() {
         let file = std::fs::read_to_string("../../tests/basic.sc").unwrap();
 
-        let mut lexer = Token::lexer(&file);
+        let lexer = Token::lexer(&file);
 
         let mut has_err = false;
 
         let mut tokens = Vec::new();
 
-        while let Some(res_token) = lexer.next() {
+        for res_token in lexer {
             match res_token {
                 Ok(token) => {
                     tokens.push(token);

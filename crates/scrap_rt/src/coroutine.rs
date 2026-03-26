@@ -30,7 +30,7 @@ impl Trampoline {
     /// `addr` must be a valid pointer to a function with the signature
     /// `extern "C" fn(*const u8)`.
     unsafe fn from_raw(addr: usize) -> Self {
-        Self(unsafe { std::mem::transmute(addr) })
+        Self(unsafe { std::mem::transmute::<usize, extern "C" fn(*const u8)>(addr) })
     }
 
     fn call(self, args: *const u8) {
@@ -196,7 +196,7 @@ pub extern "C" fn __scrap_sched_init() {
     state.shutdown.store(false, Ordering::Release);
 
     let nworkers = thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(4);
 
     let mut handles = mutex_lock!(state.workers);
@@ -255,7 +255,7 @@ pub extern "C" fn __scrap_yield() {
         crate::gc::gc_safepoint();
     }
 
-    let limit = STACK_LIMIT.with(|c| c.get());
+    let limit = STACK_LIMIT.with(std::cell::Cell::get);
     if limit == 0 {
         return; // Main thread — no coroutine, no check.
     }

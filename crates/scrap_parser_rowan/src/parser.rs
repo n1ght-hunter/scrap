@@ -58,6 +58,7 @@ impl<'db> Parser<'db> {
     }
 
     /// Get the current token from the original stream (may include trivia)
+    #[allow(dead_code)]
     fn current(&self) -> Option<&Spanned<'db, Token>> {
         self.tokens.get(self.pos)
     }

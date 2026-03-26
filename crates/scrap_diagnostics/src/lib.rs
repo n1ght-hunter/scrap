@@ -254,7 +254,7 @@ mod tests {
                 .element(
                     Snippet::source(source)
                         .path(file_name)
-                        .patch(Patch::new(23..22, "<expr>")),
+                        .patch(Patch::new(23..23, "<expr>")),
                 ),
         );
     }

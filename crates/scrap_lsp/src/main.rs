@@ -65,6 +65,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::mutable_key_type)] // Uri has interior mutability but is used as a key safely
 fn main_loop(connection: Connection, _params: InitializeParams) -> Result<()> {
     let mut docs: FxHashMap<Uri, String> = FxHashMap::default();
 
@@ -94,6 +95,7 @@ fn main_loop(connection: Connection, _params: InitializeParams) -> Result<()> {
 // notifications
 // =====================================================================
 
+#[allow(clippy::mutable_key_type)]
 fn handle_notification(
     conn: &Connection,
     note: &lsp_server::Notification,
@@ -123,6 +125,7 @@ fn handle_notification(
 // requests
 // =====================================================================
 
+#[allow(clippy::mutable_key_type)]
 fn handle_request(
     conn: &Connection,
     req: &Request,
