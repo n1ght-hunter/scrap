@@ -28,6 +28,7 @@ rayon.workspace = true
 hashbrown.workspace = true
 indexmap = {workspace = true, features = ["serde"]}
 thin-vec.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

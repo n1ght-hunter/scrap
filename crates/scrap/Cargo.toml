@@ -13,6 +13,7 @@ toml.workspace = true
 scrap_driver.workspace = true
 scrap_formatter.workspace = true
 scrap_shared.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

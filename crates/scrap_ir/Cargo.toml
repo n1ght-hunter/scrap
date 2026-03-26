@@ -9,6 +9,7 @@ salsa.workspace = true
 scrap_shared.workspace = true
 serde.workspace = true
 thin-vec.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

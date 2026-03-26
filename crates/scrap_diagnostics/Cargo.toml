@@ -12,6 +12,7 @@ salsa.workspace = true
 parking_lot.workspace = true
 rayon.workspace = true
 scrap_errors.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

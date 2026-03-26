@@ -1083,6 +1083,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtmalloc"
+version = "0.1.0"
+source = "git+https://github.com/n1ght-hunter/rtmalloc.git#567d1945ee9326c3411ea7264aebff17cd2edc24"
+dependencies = [
+ "cfg-if",
+ "serde",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1173,17 +1183,21 @@ dependencies = [
  "scrap_shared",
  "serde",
  "serde_json",
- "toml",
+ "toml 0.9.11+spec-1.1.0",
+ "workspace-hack",
 ]
 
 [[package]]
 name = "scrap_allocator"
 version = "0.1.0"
 dependencies = [
+ "cfg-if",
  "mimalloc",
  "rpmalloc",
+ "rtmalloc",
  "tcmalloc",
  "tikv-jemallocator",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1200,6 +1214,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "thin-vec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1220,6 +1235,7 @@ dependencies = [
  "serde",
  "thin-vec",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1244,11 +1260,15 @@ dependencies = [
  "scrap_span",
  "target-lexicon",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
 name = "scrap_coroutine"
 version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
 
 [[package]]
 name = "scrap_diagnostics"
@@ -1262,6 +1282,7 @@ dependencies = [
  "salsa",
  "scrap_errors",
  "scrap_span",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1291,6 +1312,7 @@ dependencies = [
  "serde_json",
  "thin-vec",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1299,6 +1321,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1313,6 +1336,7 @@ dependencies = [
  "scrap_lexer",
  "scrap_parser_rowan",
  "scrap_shared",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1324,6 +1348,7 @@ dependencies = [
  "scrap_span",
  "serde",
  "thin-vec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1339,6 +1364,7 @@ dependencies = [
  "scrap_span",
  "serde",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1355,6 +1381,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1365,6 +1392,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1390,6 +1418,7 @@ dependencies = [
  "thin-vec",
  "thiserror",
  "tracing",
+ "workspace-hack",
  "wyhash",
 ]
 
@@ -1406,6 +1435,7 @@ dependencies = [
  "scrap_test_utils",
  "serde",
  "text-size",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1413,7 +1443,9 @@ name = "scrap_rt"
 version = "0.1.0"
 dependencies = [
  "parking_lot",
+ "scrap_allocator",
  "scrap_coroutine",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1426,6 +1458,7 @@ dependencies = [
  "serde",
  "thin-vec",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1434,6 +1467,7 @@ version = "0.1.0"
 dependencies = [
  "salsa",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1443,6 +1477,7 @@ dependencies = [
  "insta",
  "regex",
  "scrap_macros",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1459,14 +1494,17 @@ dependencies = [
  "serde",
  "thin-vec",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
 name = "scrapc"
 version = "0.1.0"
 dependencies = [
+ "scrap_allocator",
  "scrap_driver",
  "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1521,6 +1559,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_spanned"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1711,17 +1758,38 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.8.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
+dependencies = [
+ "serde",
+ "serde_spanned 0.6.9",
+ "toml_datetime 0.6.11",
+ "toml_edit",
+]
+
+[[package]]
+name = "toml"
 version = "0.9.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3afc9a848309fe1aaffaed6e1546a7a14de1f935dc9d89d32afd9a44bab7c46"
 dependencies = [
  "indexmap",
  "serde_core",
- "serde_spanned",
- "toml_datetime",
+ "serde_spanned 1.0.4",
+ "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
  "toml_writer",
  "winnow",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1734,6 +1802,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_edit"
+version = "0.22.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_spanned 0.6.9",
+ "toml_datetime 0.6.11",
+ "toml_write",
+ "winnow",
+]
+
+[[package]]
 name = "toml_parser"
 version = "1.0.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1741,6 +1823,12 @@ checksum = "a3198b4b0a8e11f09dd03e133c0280504d0801269e9afa46362ffde1cbeebf44"
 dependencies = [
  "winnow",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "toml_writer"
@@ -1977,12 +2065,35 @@ name = "winnow"
 version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "wit-bindgen"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "hashbrown 0.16.1",
+ "indexmap",
+ "log",
+ "proc-macro2",
+ "quote",
+ "regex-automata",
+ "regex-syntax",
+ "serde_core",
+ "smallvec",
+ "syn",
+ "tracing",
+ "tracing-core",
+ "windows-sys 0.61.2",
+ "winnow",
+]
 
 [[package]]
 name = "wyhash"

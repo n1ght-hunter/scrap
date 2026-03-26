@@ -1,0 +1,3 @@
+[tools]
+typos = "latest"
+"github:guppy-rs/guppy" = { version = "latest", version_prefix = "cargo-hakari-" }

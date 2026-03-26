@@ -5,6 +5,8 @@
 
 #![allow(unsafe_code)]
 
+use scrap_allocator as _;
+
 #[macro_use]
 mod sync;
 mod coroutine;
