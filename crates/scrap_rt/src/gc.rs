@@ -215,6 +215,7 @@ thread_local! {
 }
 
 /// Check if the current thread is the GC thread (called from coroutine.rs).
+#[allow(dead_code)]
 pub(crate) fn is_gc_thread() -> bool {
     IS_GC_THREAD.with(|c| c.get())
 }

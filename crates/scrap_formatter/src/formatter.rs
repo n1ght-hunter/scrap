@@ -35,10 +35,11 @@ fn format_file_impl(db: &dyn scrap_shared::Db, source: String, config: Formatter
     let file = InputFile::new(db, std::path::PathBuf::from("<format>"), source.clone());
 
     // Lex the file
-    let tokens = match scrap_lexer::lex_file(db, file) {
-        Some(tokens) => tokens,
-        None => return source, // Return original on lex error
-    };
+    let tokens = scrap_lexer::lex_file(db, file);
+    // If there are lexing errors, return the original source unformatted
+    if db.dcx().has_errors() {
+        return source;
+    }
 
     // Parse the file using the Rowan parser
     let parsed = scrap_parser_rowan::parse_file(db, file, tokens);
