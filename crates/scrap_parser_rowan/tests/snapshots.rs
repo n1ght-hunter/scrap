@@ -9,7 +9,7 @@ use scrap_test_utils::{salsa_assert_snapshot, salsa_test};
 
 fn parse(db: &dyn scrap_shared::Db, source: &str) -> SyntaxNode {
     let file = scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.into());
-    let tokens = lex_file(db, file).expect("lexing failed");
+    let tokens = lex_file(db, file);
     let parsed = parse_file(db, file, tokens);
     parsed.syntax(db)
 }

@@ -20,6 +20,7 @@ macro_rules! mutex_lock {
 }
 
 /// Try to lock a mutex, abstracting over std vs parking_lot.
+#[allow(unused_macros)]
 macro_rules! mutex_try_lock {
     ($mutex:expr) => {{
         #[cfg(not(feature = "parking-lot"))]

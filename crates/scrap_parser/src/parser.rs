@@ -244,7 +244,11 @@ pub mod parse_test_utils {
 
     pub fn parse_with<'a, 'db>(db: &'db dyn scrap_shared::Db, source: &'a str) -> Parser<'a, 'db> {
         let file = scrap_shared::salsa::InputFile::new(db, "test.sc".into(), source.into());
-        let token_iter = scrap_lexer::lex_file(db, file).unwrap();
+        let token_iter = scrap_lexer::lex_file(db, file);
+        if db.dcx().has_errors() {
+            db.dcx().render_all();
+            scrap_errors::FatalError.raise();
+        }
 
         test_parser(db, source, token_iter)
     }

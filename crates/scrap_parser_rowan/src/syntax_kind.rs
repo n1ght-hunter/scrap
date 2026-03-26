@@ -21,6 +21,10 @@ pub enum SyntaxKind {
     MOD_KW,
     USE_KW,
     PUB_KW,
+    EXTERN_KW,
+    MATCH_KW,
+    IMPL_KW,
+    SPAWN_KW,
 
     // Literals
     STRING_LIT,
@@ -65,7 +69,10 @@ pub enum SyntaxKind {
 
     // Other operators
     ARROW,
+    FAT_ARROW,
     EQ,
+    BANG,
+    DOT,
 
     // Delimiters
     L_PAREN,
@@ -160,6 +167,10 @@ impl From<Token> for SyntaxKind {
             Token::Mod => SyntaxKind::MOD_KW,
             Token::Use => SyntaxKind::USE_KW,
             Token::Pub => SyntaxKind::PUB_KW,
+            Token::Extern => SyntaxKind::EXTERN_KW,
+            Token::Match => SyntaxKind::MATCH_KW,
+            Token::Impl => SyntaxKind::IMPL_KW,
+            Token::Spawn => SyntaxKind::SPAWN_KW,
 
             // Literals
             Token::Str => SyntaxKind::STRING_LIT,
@@ -204,7 +215,10 @@ impl From<Token> for SyntaxKind {
 
             // Other operators
             Token::Arrow => SyntaxKind::ARROW,
+            Token::FatArrow => SyntaxKind::FAT_ARROW,
             Token::Assign => SyntaxKind::EQ,
+            Token::Bang => SyntaxKind::BANG,
+            Token::Dot => SyntaxKind::DOT,
 
             // Delimiters
             Token::LParen => SyntaxKind::L_PAREN,
