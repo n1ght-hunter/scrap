@@ -1,3 +1,5 @@
+use scrap_allocator as _;
+
 fn setup_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(

@@ -9,9 +9,11 @@ crate-type = ["staticlib"]
 [features]
 gc-debug = []
 parking-lot = ["dep:parking_lot"]
+rtmalloc = ["scrap_allocator/rtmalloc"]
 
 [dependencies]
 scrap_coroutine = { workspace = true }
+scrap_allocator = { workspace = true }
 parking_lot = { workspace = true, optional = true }
 
 [lints]
