@@ -97,7 +97,7 @@ cranelift = "0.128"
 cranelift-module = "0.128"
 cranelift-jit = "0.128"
 cranelift-native = "0.128"
-cranelift-object = "0.128"
+cranelift-object = "0.130"
 # Lexer
 logos = "0.16"
 
