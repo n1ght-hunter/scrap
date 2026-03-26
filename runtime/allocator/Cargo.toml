@@ -19,6 +19,7 @@ tcmalloc-crate = { package = "tcmalloc", version = "0.3", features = [
 mimalloc-crate = { package = "mimalloc", version = "0.1", optional = true }
 rpmalloc-crate = { package = "rpmalloc", version = "0.2", optional = true }
 rtmalloc = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.6", optional = true }
 

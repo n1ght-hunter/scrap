@@ -7,6 +7,7 @@ edition.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 scrap_driver = { workspace = true }
 scrap_allocator = { workspace = true, features = ["mimalloc"] }
+workspace-hack = { version = "0.1", path = "crates/workspace-hack" }
 
 
 [workspace]
@@ -41,7 +42,9 @@ scrap_driver = { path = "crates/scrap_driver" }
 scrap_tycheck = { path = "crates/scrap_tycheck" }
 scrap_test_utils = { path = "crates/scrap_test_utils" }
 
-rtmalloc = { git = "https://github.com/n1ght-hunter/rtmalloc.git", features = ["nightly"] }
+rtmalloc = { git = "https://github.com/n1ght-hunter/rtmalloc.git", features = [
+    "nightly",
+] }
 
 cfg-if = "1"
 either = "1"
