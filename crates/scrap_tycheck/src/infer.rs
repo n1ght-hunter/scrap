@@ -695,7 +695,13 @@ impl<'db> TypeContext<'db> {
             return InferTy::Error;
         }
 
-        // Constrain field types
+        // Instantiate generic parameters with fresh type variables
+        let mut subst: HashMap<Symbol<'db>, InferTy<'db>> = HashMap::new();
+        for type_param in &struct_def.type_params {
+            subst.insert(*type_param, self.fresh_ty_var());
+        }
+
+        // Constrain field types (with substitution for generic fields)
         for field_init in fields.iter() {
             let field_ty = self.infer_expr(&field_init.expr);
             if let Some((_, expected_ty)) = struct_def
@@ -703,11 +709,26 @@ impl<'db> TypeContext<'db> {
                 .iter()
                 .find(|(name, _)| *name == field_init.ident.name)
             {
-                self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
+                let expected = if subst.is_empty() {
+                    expected_ty.clone()
+                } else {
+                    self.substitute(expected_ty, &subst)
+                };
+                self.constrain_eq(field_ty, expected, field_init.span);
             }
         }
 
-        InferTy::Adt(struct_name)
+        if struct_def.type_params.is_empty() {
+            InferTy::Adt(struct_name)
+        } else {
+            let type_args: Vec<_> = struct_def
+                .type_params
+                .iter()
+                .map(|p| subst[p].clone())
+                .collect();
+            self.record_generic_instantiation(struct_name, path.segments[0].id, subst);
+            InferTy::App(struct_name, type_args)
+        }
     }
 
     /// Infer the type of a field access expression.
@@ -737,6 +758,41 @@ impl<'db> TypeContext<'db> {
                     .find(|(name, _)| *name == field_name)
                 {
                     field_ty.clone()
+                } else {
+                    self.emit_undefined_variable(
+                        &format!(
+                            "{}.{}",
+                            struct_name.text(self.db()),
+                            field_name.text(self.db())
+                        ),
+                        span,
+                    );
+                    InferTy::Error
+                }
+            }
+            InferTy::App(struct_name, type_args) => {
+                let struct_def = match self.lookup_struct(*struct_name) {
+                    Some(def) => def.clone(),
+                    None => {
+                        self.emit_type_mismatch("struct", &self.ty_to_string(&base_ty), span);
+                        return InferTy::Error;
+                    }
+                };
+
+                let subst: HashMap<Symbol<'db>, InferTy<'db>> = struct_def
+                    .type_params
+                    .iter()
+                    .zip(type_args.iter())
+                    .map(|(p, a)| (*p, a.clone()))
+                    .collect();
+
+                let field_name = field_ident.name;
+                if let Some((_, field_ty)) = struct_def
+                    .fields
+                    .iter()
+                    .find(|(name, _)| *name == field_name)
+                {
+                    self.substitute(field_ty, &subst)
                 } else {
                     self.emit_undefined_variable(
                         &format!(

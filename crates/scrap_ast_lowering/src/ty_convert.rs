@@ -37,7 +37,16 @@ pub fn resolved_to_ir<'db>(
             panic!("Cannot lower Error type to IR - type checking should have failed")
         }
         ResolvedTy::Param(_) => panic!("Generic type parameters not yet supported in IR"),
-        ResolvedTy::App(_, _) => panic!("Applied generic types not yet supported in IR"),
+        ResolvedTy::App(name, args) => {
+            let resolved_args: Vec<_> = args.to_vec();
+            let mangled = crate::lowering::module::mangle_generic_name_from_resolved(
+                db,
+                *name,
+                &resolved_args,
+            );
+            let type_id = ir::TypeId::new(db, mangled);
+            ir::Ty::Adt(type_id)
+        }
         ResolvedTy::Fn(_, _) => panic!("Function types not yet supported in IR"),
         ResolvedTy::Tuple(fields) => {
             ir::Ty::Tuple(fields.iter().map(|f| resolved_to_ir(db, f)).collect())

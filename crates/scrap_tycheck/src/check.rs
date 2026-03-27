@@ -184,6 +184,14 @@ impl<'db> TypeContext<'db> {
     fn collect_struct_definition(&mut self, struct_def: &StructDef<'db>) {
         let name = struct_def.ident.name;
 
+        let type_params: Vec<_> = struct_def
+            .generics
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
+        self.set_type_params(type_params.clone());
+
         if let VariantData::Struct { fields } = &struct_def.data {
             let field_defs: Vec<_> = fields
                 .iter()
@@ -195,17 +203,27 @@ impl<'db> TypeContext<'db> {
                 .collect();
 
             let def = crate::context::StructDef {
-                type_params: vec![],
+                type_params,
                 fields: field_defs,
             };
 
             self.register_struct(name, def);
         }
+
+        self.clear_type_params();
     }
 
     /// Collect an enum definition.
     fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef<'db>) {
         let name = enum_def.ident.name;
+
+        let type_params: Vec<_> = enum_def
+            .generics
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
+        self.set_type_params(type_params.clone());
 
         let variants: Vec<_> = enum_def
             .variants
@@ -237,8 +255,10 @@ impl<'db> TypeContext<'db> {
             })
             .collect();
 
+        self.clear_type_params();
+
         let def = crate::context::EnumDef {
-            type_params: vec![],
+            type_params,
             variants,
         };
 

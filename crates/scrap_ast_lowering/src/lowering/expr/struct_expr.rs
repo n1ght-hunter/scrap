@@ -64,7 +64,17 @@ impl<'db> ExprLowerer<'db> {
             .ident
             .name;
 
-        let type_id = ir::TypeId::new(self.db, struct_name.text(self.db).to_string());
+        // For generic structs, check if the type table has a monomorphized name
+        let type_name = self
+            .type_table
+            .generic_instantiations(self.db)
+            .iter()
+            .find(|(name, _, _)| *name == struct_name)
+            .map(|(name, _, subst)| {
+                super::super::module::mangle_generic_name(self.db, *name, subst)
+            })
+            .unwrap_or_else(|| struct_name.text(self.db).to_string());
+        let type_id = ir::TypeId::new(self.db, type_name);
 
         // Lower each field expression to an operand
         let mut operands = Vec::new();
@@ -109,13 +119,26 @@ impl<'db> ExprLowerer<'db> {
             .lookup_expr_type(base_node_id)
             .ok_or(BuilderError::LowerExpressionError)?;
 
-        if let scrap_tycheck::ResolvedTy::Adt(struct_sym) = base_resolved_ty {
-            let struct_name = struct_sym.text(self.db);
-            if let Some(field_map) = self.struct_fields.get(struct_name.as_str())
-                && let Some(&idx) = field_map.get(&field_name)
-            {
-                return Ok(idx);
+        let struct_key = match base_resolved_ty {
+            scrap_tycheck::ResolvedTy::Adt(struct_sym) => {
+                Some(struct_sym.text(self.db).to_string())
             }
+            scrap_tycheck::ResolvedTy::App(struct_sym, args) => {
+                let resolved_args: Vec<_> = args.to_vec();
+                Some(crate::lowering::module::mangle_generic_name_from_resolved(
+                    self.db,
+                    *struct_sym,
+                    &resolved_args,
+                ))
+            }
+            _ => None,
+        };
+
+        if let Some(key) = struct_key
+            && let Some(field_map) = self.struct_fields.get(&key)
+            && let Some(&idx) = field_map.get(&field_name)
+        {
+            return Ok(idx);
         }
 
         Err(BuilderError::LowerExpressionError)

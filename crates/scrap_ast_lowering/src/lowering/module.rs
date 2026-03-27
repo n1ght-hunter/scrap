@@ -43,6 +43,15 @@ pub fn lower_module<'db>(
         }
     }
 
+    // Pre-register generic struct field maps for monomorphized copies
+    for &(inst_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
+        let inst_str = inst_name.text(db).to_string();
+        if let Some(base_map) = struct_field_maps.get(&inst_str).cloned() {
+            let mangled = mangle_generic_name(db, inst_name, subst_pairs);
+            struct_field_maps.insert(mangled, base_map);
+        }
+    }
+
     // Collect enum variant maps for expression lowering
     let mut enum_info_maps: HashMap<String, crate::lowerer::EnumInfo<'db>> = HashMap::new();
     for item in ast_items {
@@ -82,6 +91,8 @@ pub fn lower_module<'db>(
     }
 
     let mut generic_fndefs: HashMap<Symbol<'db>, FnDef<'db>> = HashMap::new();
+    let mut generic_structdefs: HashMap<String, &scrap_ast::structdef::StructDef<'db>> =
+        HashMap::new();
 
     for item in ast_items {
         match &item.kind {
@@ -109,6 +120,11 @@ pub fn lower_module<'db>(
                 }
             }
             ItemKind::Struct(struct_def) => {
+                if !struct_def.generics.is_empty() {
+                    generic_structdefs
+                        .insert(struct_def.ident.name.text(db).to_string(), struct_def);
+                    continue;
+                }
                 if let VariantData::Struct { fields } = &struct_def.data {
                     let name = struct_def.ident.name;
                     let ir_fields: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
@@ -124,6 +140,9 @@ pub fn lower_module<'db>(
                 }
             }
             ItemKind::Enum(enum_def) => {
+                if !enum_def.generics.is_empty() {
+                    continue;
+                }
                 let name = enum_def.ident.name;
                 let ir_variants: Vec<ir::EnumVariant<'db>> = enum_def
                     .variants
@@ -174,39 +193,78 @@ pub fn lower_module<'db>(
         }
     }
 
-    // Monomorphize generic functions: generate concrete copies for each instantiation
+    // Monomorphize generics: generate concrete copies for each instantiation
     let mut seen_mono = std::collections::HashSet::new();
-    for &(fn_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
-        let Some(&fn_def) = generic_fndefs.get(&fn_name) else {
+    for &(inst_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
+        let mangled = mangle_generic_name(db, inst_name, subst_pairs);
+        if !seen_mono.insert(mangled.clone()) {
             continue;
-        };
+        }
 
         let type_subst: HashMap<Symbol<'db>, ir::Ty<'db>> = subst_pairs
             .iter()
             .map(|(param, resolved)| (*param, crate::ty_convert::resolved_to_ir(db, resolved)))
             .collect();
 
-        let mangled = mangle_generic_name(db, fn_name, subst_pairs);
-        if !seen_mono.insert(mangled.clone()) {
-            continue;
+        // Generic function
+        if let Some(&fn_def) = generic_fndefs.get(&inst_name) {
+            let mangled_sym = Symbol::new(db, mangled.clone());
+            let (mir_fn, extras) = lower_monomorphized_function(
+                db,
+                fn_def,
+                mangled_sym,
+                &type_subst,
+                source,
+                type_table,
+                &struct_field_maps,
+                &enum_info_maps,
+            )?;
+            items.push(ir::Items::Function(mir_fn));
+            items.extend(extras);
         }
-        let mangled_sym = Symbol::new(db, mangled);
 
-        let (mir_fn, extras) = lower_monomorphized_function(
-            db,
-            fn_def,
-            mangled_sym,
-            &type_subst,
-            source,
-            type_table,
-            &struct_field_maps,
-            &enum_info_maps,
-        )?;
-        items.push(ir::Items::Function(mir_fn));
-        items.extend(extras);
+        // Generic struct
+        let inst_name_str = inst_name.text(db).to_string();
+        if let Some(struct_def) = generic_structdefs.get(&inst_name_str)
+            && let VariantData::Struct { fields } = &struct_def.data
+        {
+            let mangled_sym = Symbol::new(db, mangled.clone());
+            let ir_fields: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+                .iter()
+                .filter_map(|field| {
+                    let field_name = field.ident.as_ref()?.name;
+                    let field_ty =
+                        lower_type_with_subst(db, &field.ty, &type_subst).unwrap_or(ir::Ty::Void);
+                    Some((field_name, field_ty))
+                })
+                .collect();
+            let ir_struct = ir::Struct::new(db, mangled_sym, ir_fields);
+            items.push(ir::Items::Struct(ir_struct));
+
+            // Register in struct_field_maps for field access lowering
+            let field_map = fields
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
+                .collect();
+            struct_field_maps.insert(mangled, field_map);
+        }
     }
 
     Ok(ir::Module::new(db, module_id, items))
+}
+
+pub(crate) fn mangle_generic_name_from_resolved<'db>(
+    db: &'db dyn scrap_shared::Db,
+    base_name: Symbol<'db>,
+    args: &[scrap_tycheck::ResolvedTy<'db>],
+) -> String {
+    let mut name = base_name.text(db).to_string();
+    for ty in args {
+        name.push_str("__");
+        name.push_str(&mangle_type(ty));
+    }
+    name
 }
 
 pub(crate) fn mangle_generic_name<'db>(
