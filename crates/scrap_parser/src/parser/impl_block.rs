@@ -59,6 +59,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             self.db,
             self.state.new_node_id(),
             ident,
+            scrap_ast::generics::Generics::default(),
             params,
             ret_type,
             body,

@@ -1,13 +1,16 @@
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{block::Block, node_id::NodeId, pat::Pat, typedef::Ty};
+use crate::{block::Block, generics::Generics, node_id::NodeId, pat::Pat, typedef::Ty};
 use scrap_shared::ident::Ident;
 
 #[salsa::tracked(debug, persist)]
 pub struct FnDef<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,
+    #[tracked]
+    #[returns(ref)]
+    pub generics: Generics<'db>,
     #[tracked]
     #[returns(ref)]
     pub args: ThinVec<Param<'db>>,
@@ -25,6 +28,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
         let res = salsa::with_attached_database(|db| {
             write!(f, "fn ")?;
             self.ident(db).pretty_print_indent(f, 0)?;
+            self.generics(db).pretty_print_indent(f, 0)?;
             write!(f, "(")?;
             for (i, param) in self.args(db).iter().enumerate() {
                 if i > 0 {

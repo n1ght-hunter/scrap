@@ -116,7 +116,7 @@ mod tests {
             id: node_id,
             span,
         };
-        let fn_def = FnDef::new(db, node_id, ident, ThinVec::new(), None, body, span);
+        let fn_def = FnDef::new(db, node_id, ident, Default::default(), ThinVec::new(), None, body, span);
 
         let result = lower_function(
             db,
@@ -218,7 +218,7 @@ mod tests {
             span,
         };
         let args = ThinVec::from([param_a, param_b]);
-        let fn_def = FnDef::new(db, node_id, ident, args, None, body, span);
+        let fn_def = FnDef::new(db, node_id, ident, Default::default(), args, None, body, span);
 
         let result = lower_function(
             db,
@@ -337,7 +337,7 @@ mod tests {
             id: node_id,
             span,
         };
-        let fn_def = FnDef::new(db, node_id, ident, ThinVec::new(), None, body, span);
+        let fn_def = FnDef::new(db, node_id, ident, Default::default(), ThinVec::new(), None, body, span);
 
         let item = Item {
             kind: scrap_ast::item::ItemKind::Fn(fn_def),

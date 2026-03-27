@@ -42,6 +42,7 @@ pub mod enumdef;
 pub mod expr;
 pub mod fndef;
 pub mod foreign;
+pub mod generics;
 pub mod ident;
 pub mod impl_block;
 pub mod item;

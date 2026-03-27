@@ -14,6 +14,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let start_span = self.token.span;
         self.expect(Token::Fn)?;
         let ident = self.parse_ident()?;
+        let generics = self.parse_generics()?;
         let params = self.parse_fn_params()?;
         let ret_type = if self.eat(Token::Arrow) {
             Some(self.parse_type()?)
@@ -27,6 +28,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             self.db,
             self.state.new_node_id(),
             ident,
+            generics,
             params,
             ret_type,
             body,
