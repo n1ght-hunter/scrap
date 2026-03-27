@@ -78,6 +78,14 @@ pub enum ExprKind<'db> {
     AddrOf(scrap_shared::types::Mutability, Box<Expr<'db>>),
     /// Spawn expression: `spawn func(args)` or `spawn { block }`
     Spawn(Box<Expr<'db>>),
+    /// `loop { body }`
+    Loop(Box<Block<'db>>),
+    /// `while condition { body }`
+    While(Box<Expr<'db>>, Box<Block<'db>>),
+    /// `break` or `break value`
+    Break(Option<Box<Expr<'db>>>),
+    /// `continue`
+    Continue,
     /// Error placeholder
     Err,
 }
@@ -248,6 +256,25 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                 write!(f, "spawn ")?;
                 expr.pretty_print_indent(f, indent)
             }
+            ExprKind::Loop(block) => {
+                write!(f, "loop ")?;
+                block.pretty_print_indent(f, indent)
+            }
+            ExprKind::While(cond, block) => {
+                write!(f, "while ")?;
+                cond.pretty_print_indent(f, indent)?;
+                write!(f, " ")?;
+                block.pretty_print_indent(f, indent)
+            }
+            ExprKind::Break(expr) => {
+                write!(f, "break")?;
+                if let Some(expr) = expr {
+                    write!(f, " ")?;
+                    expr.pretty_print_indent(f, indent)?;
+                }
+                Ok(())
+            }
+            ExprKind::Continue => write!(f, "continue"),
             ExprKind::Err => write!(f, "<error>"),
         }
     }

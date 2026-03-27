@@ -38,6 +38,14 @@ pub enum KeyWord {
     Impl,
     #[token("spawn")]
     Spawn,
+    #[token("loop")]
+    Loop,
+    #[token("while")]
+    While,
+    #[token("break")]
+    Break,
+    #[token("continue")]
+    Continue,
 }
 
 #[derive(Debug, PartialEq, Clone)]

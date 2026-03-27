@@ -109,6 +109,9 @@ pub struct TypeContext<'db> {
     /// Inferred function return types (function name -> InferTy)
     /// Populated during body checking when the inferred body type differs from the declared type.
     fn_return_types: HashMap<Symbol<'db>, InferTy<'db>>,
+
+    /// Nesting depth of loops (for validating break/continue)
+    pub loop_depth: usize,
 }
 
 impl<'db> TypeContext<'db> {
@@ -132,6 +135,7 @@ impl<'db> TypeContext<'db> {
             expr_types: HashMap::new(),
             local_types: HashMap::new(),
             fn_return_types: HashMap::new(),
+            loop_depth: 0,
         }
     }
 
@@ -468,6 +472,16 @@ impl<'db> TypeContext<'db> {
                             .span(span.to_range(self.db))
                             .label(format!("expected `{}`, found `{}`", expected, found)),
                     ),
+            ),
+        )
+    }
+
+    pub fn emit_error(&self, msg: &str, span: Span<'db>) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR.primary_title(msg).element(
+                Snippet::source(self.source)
+                    .path(self.file_name)
+                    .annotation(AnnotationKind::Primary.span(span.to_range(self.db))),
             ),
         )
     }
