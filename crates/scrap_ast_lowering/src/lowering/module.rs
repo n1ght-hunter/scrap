@@ -15,7 +15,7 @@ use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
 use scrap_shared::ident::Symbol;
 
-use crate::{MResult, lowerer::ExprLowerer, lowering::lower_type};
+use crate::{MResult, lowerer::ExprLowerer, lowering::lower_type, lowering::lower_type_with_subst};
 
 /// Lower a module with its items
 pub fn lower_module<'db>(
@@ -81,9 +81,15 @@ pub fn lower_module<'db>(
         }
     }
 
+    let mut generic_fndefs: HashMap<Symbol<'db>, FnDef<'db>> = HashMap::new();
+
     for item in ast_items {
         match &item.kind {
             ItemKind::Fn(fn_def) => {
+                if !fn_def.generics(db).is_empty() {
+                    generic_fndefs.insert(fn_def.ident(db).name, *fn_def);
+                    continue;
+                }
                 let (mir_function, extras) = lower_function(
                     db,
                     *fn_def,
@@ -168,7 +174,134 @@ pub fn lower_module<'db>(
         }
     }
 
+    // Monomorphize generic functions: generate concrete copies for each instantiation
+    let mut seen_mono = std::collections::HashSet::new();
+    for &(fn_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
+        let Some(&fn_def) = generic_fndefs.get(&fn_name) else {
+            continue;
+        };
+
+        let type_subst: HashMap<Symbol<'db>, ir::Ty<'db>> = subst_pairs
+            .iter()
+            .map(|(param, resolved)| (*param, crate::ty_convert::resolved_to_ir(db, resolved)))
+            .collect();
+
+        let mangled = mangle_generic_name(db, fn_name, subst_pairs);
+        if !seen_mono.insert(mangled.clone()) {
+            continue;
+        }
+        let mangled_sym = Symbol::new(db, mangled);
+
+        let (mir_fn, extras) = lower_monomorphized_function(
+            db,
+            fn_def,
+            mangled_sym,
+            &type_subst,
+            source,
+            type_table,
+            &struct_field_maps,
+            &enum_info_maps,
+        )?;
+        items.push(ir::Items::Function(mir_fn));
+        items.extend(extras);
+    }
+
     Ok(ir::Module::new(db, module_id, items))
+}
+
+pub(crate) fn mangle_generic_name<'db>(
+    db: &'db dyn scrap_shared::Db,
+    fn_name: Symbol<'db>,
+    subst: &[(Symbol<'db>, scrap_tycheck::ResolvedTy<'db>)],
+) -> String {
+    let mut name = fn_name.text(db).to_string();
+    for (_, ty) in subst {
+        name.push_str("__");
+        name.push_str(&mangle_type(ty));
+    }
+    name
+}
+
+fn mangle_type(ty: &scrap_tycheck::ResolvedTy) -> String {
+    use scrap_shared::types::*;
+    match ty {
+        scrap_tycheck::ResolvedTy::Void => "void".into(),
+        scrap_tycheck::ResolvedTy::Bool => "bool".into(),
+        scrap_tycheck::ResolvedTy::Int(k) => match k {
+            IntTy::I8 => "i8",
+            IntTy::I16 => "i16",
+            IntTy::I32 => "i32",
+            IntTy::I64 => "i64",
+            IntTy::I128 => "i128",
+            IntTy::Isize => "isize",
+        }
+        .into(),
+        scrap_tycheck::ResolvedTy::Uint(k) => match k {
+            UintTy::U8 => "u8",
+            UintTy::U16 => "u16",
+            UintTy::U32 => "u32",
+            UintTy::U64 => "u64",
+            UintTy::U128 => "u128",
+            UintTy::Usize => "usize",
+        }
+        .into(),
+        scrap_tycheck::ResolvedTy::Float(k) => match k {
+            FloatTy::F16 => "f16",
+            FloatTy::F32 => "f32",
+            FloatTy::F64 => "f64",
+            FloatTy::F128 => "f128",
+        }
+        .into(),
+        scrap_tycheck::ResolvedTy::Str => "String".into(),
+        scrap_tycheck::ResolvedTy::Never => "never".into(),
+        scrap_tycheck::ResolvedTy::Ref(inner, m) => {
+            let prefix = if *m == Mutability::Mut {
+                "ref_mut_"
+            } else {
+                "ref_"
+            };
+            format!("{}{}", prefix, mangle_type(inner))
+        }
+        scrap_tycheck::ResolvedTy::Ptr(inner) => format!("ptr_{}", mangle_type(inner)),
+        _ => format!("{:?}", ty),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_monomorphized_function<'db>(
+    db: &'db dyn scrap_shared::Db,
+    ast_function: FnDef<'db>,
+    mangled_name: Symbol<'db>,
+    type_subst: &HashMap<Symbol<'db>, ir::Ty<'db>>,
+    source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
+) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
+    let mut params = Vec::new();
+    for arg in ast_function.args(db).iter() {
+        let param_ty = lower_type_with_subst(db, &arg.ty, type_subst)?;
+        params.push(param_ty);
+    }
+
+    let return_ty = match ast_function.ret_type(db).as_ref() {
+        Some(ty) => lower_type_with_subst(db, ty, type_subst)?,
+        None => ir::Ty::Void,
+    };
+
+    let signature = ir::Signature::new(db, mangled_name, params, return_ty.clone());
+    let (body, extras) = lower_body_with_subst(
+        db,
+        ast_function,
+        source,
+        type_table,
+        return_ty,
+        struct_field_maps,
+        enum_info_maps,
+        type_subst,
+    )?;
+
+    Ok((ir::Function::new(db, signature, body), extras))
 }
 
 /// Lower a function definition, returning the function and any extra functions
@@ -310,6 +443,29 @@ pub fn lower_body<'db>(
     struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Body<'db>, Vec<ir::Items<'db>>)> {
+    lower_body_with_subst(
+        db,
+        ast_function,
+        source,
+        type_table,
+        return_ty,
+        struct_field_maps,
+        enum_info_maps,
+        &HashMap::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_body_with_subst<'db>(
+    db: &'db dyn scrap_shared::Db,
+    ast_function: FnDef<'db>,
+    source: &'db str,
+    type_table: scrap_tycheck::TypeTable<'db>,
+    return_ty: ir::Ty<'db>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
+    type_subst: &HashMap<Symbol<'db>, ir::Ty<'db>>,
+) -> MResult<(ir::Body<'db>, Vec<ir::Items<'db>>)> {
     let mut lowerer = ExprLowerer::new(db, source, type_table);
     lowerer.struct_fields = struct_field_maps.clone();
     lowerer.enum_info = enum_info_maps.clone();
@@ -321,7 +477,7 @@ pub fn lower_body<'db>(
     // _1, _2, ... are function parameters
     let param_count = ast_function.args(db).len();
     for param in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &param.ty)?;
+        let param_ty = lower_type_with_subst(db, &param.ty, type_subst)?;
         let local_id = lowerer.allocate_named_local(param.ident.name, param_ty);
         lowerer.insert_binding(param.ident.name, local_id);
     }

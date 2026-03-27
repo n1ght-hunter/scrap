@@ -115,6 +115,9 @@ Can(
                                                     end: 25,
                                                 },
                                             },
+                                            generics: Generics {
+                                                params: [],
+                                            },
                                             args: [],
                                             ret_type: None,
                                             body: Block {

@@ -338,7 +338,10 @@ impl<'db> TypeContext<'db> {
                         );
                     }
 
-                    // Return the instantiated return type
+                    if !sig.type_params.is_empty() {
+                        self.record_generic_instantiation(name, callee.id, subst.clone());
+                    }
+
                     return self.substitute(&sig.return_ty, &subst);
                 }
 
@@ -786,12 +789,16 @@ impl<'db> TypeContext<'db> {
                         "bool" => InferTy::Bool,
                         "String" => InferTy::Str,
                         _ => {
-                            // Check if it's a type parameter
                             let sym = segment.ident.name;
                             if self.is_type_param(sym) {
                                 InferTy::Param(sym)
-                            } else {
+                            } else if self.lookup_struct(sym).is_some()
+                                || self.lookup_enum(sym).is_some()
+                            {
                                 InferTy::Adt(sym)
+                            } else {
+                                self.emit_undefined_type(name_str, ty.span);
+                                InferTy::Error
                             }
                         }
                     }

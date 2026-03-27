@@ -6,6 +6,39 @@ use scrap_ir as ir;
 use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
+    /// Resolve function operand and args, substituting mangled names for generic calls.
+    fn resolve_call_operands(
+        &mut self,
+        callee: &Expr<'db>,
+        args: &thin_vec::ThinVec<Box<Expr<'db>>>,
+        call_expr: &Expr<'db>,
+    ) -> MResult<(ir::Operand<'db>, Vec<ir::Operand<'db>>)> {
+        let callee_name = if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind {
+            path.single_segment().map(|s| s.ident.name)
+        } else {
+            None
+        };
+        let generic_inst = callee_name.and_then(|name| {
+            self.type_table
+                .generic_instantiations(self.db)
+                .iter()
+                .find(|(fn_name, _, _)| *fn_name == name)
+        });
+
+        if let Some((fn_name, _, subst_pairs)) = generic_inst {
+            let mangled = super::super::module::mangle_generic_name(self.db, *fn_name, subst_pairs);
+            let func_id = ir::FunctionId::new(self.db, mangled);
+            let func_op = ir::Operand::FunctionRef(func_id);
+            let mut arg_ops = Vec::new();
+            for arg in args {
+                arg_ops.push(self.lower_expr(arg)?);
+            }
+            Ok((func_op, arg_ops))
+        } else {
+            self.lower_call_parts(call_expr)
+        }
+    }
+
     /// Lower the common parts of a function call (func operand + args).
     fn lower_call_parts(
         &mut self,
@@ -146,7 +179,11 @@ impl<'db> ExprLowerer<'db> {
             return Ok(ir::Operand::Place(ir::Place::Local(temp)));
         }
 
-        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+        let scrap_ast::expr::ExprKind::Call(callee, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
+        };
+
+        let (func_operand, arg_operands) = self.resolve_call_operands(callee, args, call_expr)?;
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
         let never = matches!(result_ty, ir::Ty::Never);
@@ -268,7 +305,12 @@ impl<'db> ExprLowerer<'db> {
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
         let never = matches!(result_ty, ir::Ty::Never);
-        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+
+        let scrap_ast::expr::ExprKind::Call(callee, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
+        };
+
+        let (func_operand, arg_operands) = self.resolve_call_operands(callee, args, call_expr)?;
         self.emit_call(func_operand, arg_operands, dest, never);
         Ok(())
     }

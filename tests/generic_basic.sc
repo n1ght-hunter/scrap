@@ -1,7 +1,12 @@
+extern "C" {
+    fn ExitProcess(exit_code: usize) -> !;
+}
+
 fn identity<T>(x: T) -> T {
     x
 }
 
 fn main() {
-    let a: i64 = identity(42);
+    let a: usize = identity(42);
+    ExitProcess(a);
 }

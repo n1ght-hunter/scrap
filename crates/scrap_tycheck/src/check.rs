@@ -108,8 +108,12 @@ impl<'db> TypeContext<'db> {
         let ident = fn_def.ident(self.db());
         let name = ident.name;
 
-        // TODO: Collect type parameters from fn_def when added to AST
-        let type_params = vec![];
+        let type_params: Vec<_> = fn_def
+            .generics(self.db())
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
 
         // Set up type params context for parsing param types
         self.set_type_params(type_params.clone());
@@ -300,7 +304,12 @@ impl<'db> TypeContext<'db> {
                 ),
             );
 
-            let type_params = vec![];
+            let type_params: Vec<_> = method
+                .generics(self.db())
+                .params
+                .iter()
+                .map(|p| p.ident.name)
+                .collect();
             self.set_type_params(type_params.clone());
 
             let params: Vec<_> = method

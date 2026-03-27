@@ -60,6 +60,9 @@ Can(
                                 end: 7,
                             },
                         },
+                        generics: Generics {
+                            params: [],
+                        },
                         args: [],
                         ret_type: None,
                         body: Block {

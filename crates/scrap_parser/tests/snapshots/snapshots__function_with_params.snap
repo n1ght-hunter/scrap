@@ -60,6 +60,9 @@ Can(
                                 end: 6,
                             },
                         },
+                        generics: Generics {
+                            params: [],
+                        },
                         args: [
                             Param {
                                 id: NodeId {

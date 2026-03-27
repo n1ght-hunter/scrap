@@ -29,6 +29,11 @@ pub struct TypeTable<'db> {
     #[tracked]
     #[returns(ref)]
     pub fn_return_types: Vec<(Symbol<'db>, ResolvedTy<'db>)>,
+
+    /// Generic function instantiations: (fn_name, call_node_id, [(type_param, concrete_type)])
+    #[tracked]
+    #[returns(ref)]
+    pub generic_instantiations: Vec<(Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)>,
 }
 
 impl<'db> TypeTable<'db> {
@@ -66,6 +71,17 @@ impl<'db> TypeTable<'db> {
             .iter()
             .find(|(sym, _)| *sym == name)
             .map(|(_, ty)| ty)
+    }
+
+    /// Get the generic instantiation for a call site.
+    pub fn generic_instantiation(
+        self,
+        db: &'db dyn scrap_shared::Db,
+        call_site: NodeId,
+    ) -> Option<&'db (Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)> {
+        self.generic_instantiations(db)
+            .iter()
+            .find(|(_, node_id, _)| *node_id == call_site)
     }
 
     /// Check if the table is empty.

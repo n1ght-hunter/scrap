@@ -12,7 +12,9 @@ use scrap_shared::id::ModuleId;
 
 pub use cfg_builder::BasicBlockBuilder;
 pub use lowerer::ExprLowerer;
-pub use lowering::{lower_body, lower_function, lower_module, lower_signature, lower_type};
+pub use lowering::{
+    lower_body, lower_function, lower_module, lower_signature, lower_type, lower_type_with_subst,
+};
 pub use ty_convert::resolved_to_ir;
 
 #[derive(Debug, Clone, thiserror::Error, serde::Serialize, serde::Deserialize)]
@@ -116,7 +118,16 @@ mod tests {
             id: node_id,
             span,
         };
-        let fn_def = FnDef::new(db, node_id, ident, Default::default(), ThinVec::new(), None, body, span);
+        let fn_def = FnDef::new(
+            db,
+            node_id,
+            ident,
+            scrap_ast::generics::Generics::default(),
+            ThinVec::new(),
+            None,
+            body,
+            span,
+        );
 
         let result = lower_function(
             db,
@@ -218,7 +229,16 @@ mod tests {
             span,
         };
         let args = ThinVec::from([param_a, param_b]);
-        let fn_def = FnDef::new(db, node_id, ident, Default::default(), args, None, body, span);
+        let fn_def = FnDef::new(
+            db,
+            node_id,
+            ident,
+            scrap_ast::generics::Generics::default(),
+            args,
+            None,
+            body,
+            span,
+        );
 
         let result = lower_function(
             db,
@@ -337,7 +357,16 @@ mod tests {
             id: node_id,
             span,
         };
-        let fn_def = FnDef::new(db, node_id, ident, Default::default(), ThinVec::new(), None, body, span);
+        let fn_def = FnDef::new(
+            db,
+            node_id,
+            ident,
+            scrap_ast::generics::Generics::default(),
+            ThinVec::new(),
+            None,
+            body,
+            span,
+        );
 
         let item = Item {
             kind: scrap_ast::item::ItemKind::Fn(fn_def),

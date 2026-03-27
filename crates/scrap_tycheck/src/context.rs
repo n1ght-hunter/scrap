@@ -112,6 +112,9 @@ pub struct TypeContext<'db> {
 
     /// Nesting depth of loops (for validating break/continue)
     pub loop_depth: usize,
+
+    /// Generic function instantiations: (fn_name, call_node_id, type_param → concrete_type)
+    generic_instantiations: Vec<(Symbol<'db>, NodeId, HashMap<Symbol<'db>, InferTy<'db>>)>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -136,6 +139,7 @@ impl<'db> TypeContext<'db> {
             local_types: HashMap::new(),
             fn_return_types: HashMap::new(),
             loop_depth: 0,
+            generic_instantiations: Vec::new(),
         }
     }
 
@@ -398,12 +402,14 @@ impl<'db> TypeContext<'db> {
     /// Finalize all recorded types after unification.
     /// Converts InferTy to ResolvedTy by resolving all type variables.
     /// Returns (expr_types, local_types, fn_return_types) Vecs for creating a TypeTable.
+    #[allow(clippy::type_complexity)]
     pub fn finalize_types(
         &self,
     ) -> (
         Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
         Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
         Vec<(Symbol<'db>, ResolvedTy<'db>)>,
+        Vec<(Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)>,
     ) {
         let expr_types: Vec<_> = self
             .expr_types
@@ -423,7 +429,24 @@ impl<'db> TypeContext<'db> {
             .map(|(name, ty)| (*name, self.resolve_to_final(ty)))
             .collect();
 
-        (expr_types, local_types, fn_return_types)
+        let generic_instantiations: Vec<_> = self
+            .generic_instantiations
+            .iter()
+            .map(|(name, node_id, subst)| {
+                let resolved_subst: Vec<_> = subst
+                    .iter()
+                    .map(|(param, ty)| (*param, self.resolve_to_final(ty)))
+                    .collect();
+                (*name, *node_id, resolved_subst)
+            })
+            .collect();
+
+        (
+            expr_types,
+            local_types,
+            fn_return_types,
+            generic_instantiations,
+        )
     }
 
     /// Convert InferTy to ResolvedTy after solving constraints.
@@ -474,6 +497,51 @@ impl<'db> TypeContext<'db> {
                     ),
             ),
         )
+    }
+
+    pub fn record_generic_instantiation(
+        &mut self,
+        fn_name: Symbol<'db>,
+        call_site: NodeId,
+        subst: HashMap<Symbol<'db>, InferTy<'db>>,
+    ) {
+        self.generic_instantiations
+            .push((fn_name, call_site, subst));
+    }
+
+    pub fn emit_undefined_type(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+        let type_params = self.type_params();
+        let suggestion = type_params
+            .iter()
+            .find(|p| {
+                let p_text = p.text(self.db);
+                p_text.len() == 1 && name.len() == 1 || p_text.to_lowercase() == name.to_lowercase()
+            })
+            .map(|p| p.text(self.db).to_string());
+
+        let mut group = Level::ERROR
+            .primary_title(format!("undefined type `{}`", name))
+            .element(
+                Snippet::source(self.source)
+                    .path(self.file_name)
+                    .annotation(AnnotationKind::Primary.span(span.to_range(self.db))),
+            );
+
+        if let Some(suggested) = suggestion {
+            group = group.element(
+                Level::HELP.message(format!("did you mean the type parameter `{}`?", suggested)),
+            );
+        } else if !type_params.is_empty() {
+            let params: Vec<_> = type_params
+                .iter()
+                .map(|p| p.text(self.db).to_string())
+                .collect();
+            group = group.element(
+                Level::NOTE.message(format!("available type parameters: {}", params.join(", "))),
+            );
+        }
+
+        self.db.dcx().emit_err(group)
     }
 
     pub fn emit_error(&self, msg: &str, span: Span<'db>) -> ErrorGuaranteed {
