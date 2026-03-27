@@ -15,6 +15,7 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
+fnv = { version = "1" }
 hashbrown = { version = "0.16" }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -24,9 +25,9 @@ serde_core = { version = "1", default-features = false, features = ["alloc", "re
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 tracing = { version = "0.1" }
 tracing-core = { version = "0.1" }
-winnow = { version = "0.7" }
 
 [build-dependencies]
+fnv = { version = "1" }
 hashbrown = { version = "0.16" }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -39,12 +40,11 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 syn = { version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tracing = { version = "0.1" }
 tracing-core = { version = "0.1" }
-winnow = { version = "0.7" }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse"] }
 
 ### END HAKARI SECTION
