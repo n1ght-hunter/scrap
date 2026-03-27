@@ -67,9 +67,41 @@ impl<'db> TypeContext<'db> {
             }
 
             ExprKind::Spawn(inner) => {
-                // Type-check the inner expression (must be a call or block)
                 self.infer_expr(inner);
                 InferTy::Void
+            }
+
+            ExprKind::Loop(block) => {
+                self.loop_depth += 1;
+                self.infer_block(block);
+                self.loop_depth -= 1;
+                InferTy::Never
+            }
+
+            ExprKind::While(cond, block) => {
+                let cond_ty = self.infer_expr(cond);
+                self.constrain_eq(cond_ty, InferTy::Bool, cond.span);
+                self.loop_depth += 1;
+                self.infer_block(block);
+                self.loop_depth -= 1;
+                InferTy::Void
+            }
+
+            ExprKind::Break(value) => {
+                if self.loop_depth == 0 {
+                    self.emit_error("break outside of loop", expr.span);
+                }
+                if let Some(val) = value {
+                    self.infer_expr(val);
+                }
+                InferTy::Never
+            }
+
+            ExprKind::Continue => {
+                if self.loop_depth == 0 {
+                    self.emit_error("continue outside of loop", expr.span);
+                }
+                InferTy::Never
             }
 
             ExprKind::Err => InferTy::Error,

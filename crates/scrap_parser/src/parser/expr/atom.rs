@@ -124,6 +124,31 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
             return self.parse_if_expr();
         }
 
+        // Check for loop expression
+        if self.check(Token::Loop) {
+            return self.parse_loop_expr();
+        }
+
+        // Check for while expression
+        if self.check(Token::While) {
+            return self.parse_while_expr();
+        }
+
+        // Check for break
+        if self.eat(Token::Break) {
+            let expr = if !self.check(Token::Semicolon) && !self.check(Token::RBrace) {
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
+            return Ok(ExprKind::Break(expr));
+        }
+
+        // Check for continue
+        if self.eat(Token::Continue) {
+            return Ok(ExprKind::Continue);
+        }
+
         // Check for literal or path
         if self.token.node.is_literal() {
             if self.check(Token::Ident) {
@@ -261,6 +286,19 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         };
 
         Ok(ExprKind::If(condition, then_block, else_block))
+    }
+
+    fn parse_loop_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        self.expect(Token::Loop)?;
+        let block = Box::new(self.parse_block()?);
+        Ok(ExprKind::Loop(block))
+    }
+
+    fn parse_while_expr(&mut self) -> crate::PResult<'a, ExprKind<'db>> {
+        self.expect(Token::While)?;
+        let condition = Box::new(self.parse_expr()?);
+        let block = Box::new(self.parse_block()?);
+        Ok(ExprKind::While(condition, block))
     }
 
     /// Check if the current token starts a path followed by the terminator.

@@ -79,6 +79,81 @@ impl<'db> ExprLowerer<'db> {
         }
     }
 
+    pub(crate) fn lower_loop_expr(&mut self, block: &Block<'db>) -> MResult<ir::Operand<'db>> {
+        let loop_bb = self.cfg_builder.start_block();
+        let break_bb = self.cfg_builder.start_block();
+
+        self.cfg_builder
+            .finish_block(ir::Terminator::Goto { target: loop_bb });
+
+        self.cfg_builder.set_current_block(loop_bb);
+        self.loop_stack.push((break_bb, loop_bb));
+        self.lower_block(block)?;
+        self.loop_stack.pop();
+
+        if !self.cfg_builder.current_block_is_terminated() {
+            self.cfg_builder
+                .finish_block(ir::Terminator::Goto { target: loop_bb });
+        }
+
+        self.cfg_builder.set_current_block(break_bb);
+        Ok(ir::Operand::Constant(ir::Constant::Void))
+    }
+
+    pub(crate) fn lower_while_expr(
+        &mut self,
+        cond: &Expr<'db>,
+        block: &Block<'db>,
+    ) -> MResult<ir::Operand<'db>> {
+        let cond_bb = self.cfg_builder.start_block();
+        let body_bb = self.cfg_builder.start_block();
+        let break_bb = self.cfg_builder.start_block();
+
+        self.cfg_builder
+            .finish_block(ir::Terminator::Goto { target: cond_bb });
+
+        self.cfg_builder.set_current_block(cond_bb);
+        let cond_operand = self.lower_expr(cond)?;
+
+        self.cfg_builder.finish_block(ir::Terminator::SwitchInt {
+            discr: cond_operand,
+            targets: ir::SwitchTargets {
+                values: vec![(0, break_bb)],
+                otherwise: body_bb,
+            },
+        });
+
+        self.cfg_builder.set_current_block(body_bb);
+        self.loop_stack.push((break_bb, cond_bb));
+        self.lower_block(block)?;
+        self.loop_stack.pop();
+
+        if !self.cfg_builder.current_block_is_terminated() {
+            self.cfg_builder
+                .finish_block(ir::Terminator::Goto { target: cond_bb });
+        }
+
+        self.cfg_builder.set_current_block(break_bb);
+        Ok(ir::Operand::Constant(ir::Constant::Void))
+    }
+
+    pub(crate) fn lower_break(&mut self) -> MResult<ir::Operand<'db>> {
+        if let Some(&(break_bb, _)) = self.loop_stack.last() {
+            self.cfg_builder
+                .finish_block(ir::Terminator::Goto { target: break_bb });
+        }
+        Ok(ir::Operand::Constant(ir::Constant::Void))
+    }
+
+    pub(crate) fn lower_continue(&mut self) -> MResult<ir::Operand<'db>> {
+        if let Some(&(_, continue_bb)) = self.loop_stack.last() {
+            self.cfg_builder.finish_block(ir::Terminator::Goto {
+                target: continue_bb,
+            });
+        }
+        Ok(ir::Operand::Constant(ir::Constant::Void))
+    }
+
     /// Lower a return statement
     pub(crate) fn lower_return(&mut self, value: Option<&Expr<'db>>) -> MResult<ir::Operand<'db>> {
         // Assign return value directly to _0

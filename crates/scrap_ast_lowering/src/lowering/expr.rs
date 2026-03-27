@@ -51,6 +51,10 @@ impl<'db> ExprLowerer<'db> {
             }
             ExprKind::AddrOf(mutability, inner) => self.lower_addr_of(*mutability, inner, expr.id),
             ExprKind::Spawn(inner) => self.lower_spawn(inner),
+            ExprKind::Loop(block) => self.lower_loop_expr(block),
+            ExprKind::While(cond, block) => self.lower_while_expr(cond, block),
+            ExprKind::Break(_) => self.lower_break(),
+            ExprKind::Continue => self.lower_continue(),
             ExprKind::Err => Err(BuilderError::LowerExpressionError),
         }
     }

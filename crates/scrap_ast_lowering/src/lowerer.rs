@@ -55,6 +55,8 @@ pub struct ExprLowerer<'db> {
     pub extra_functions: Vec<ir::Items<'db>>,
     /// Counter for generating unique names for spawn block anonymous functions.
     pub(crate) spawn_block_counter: usize,
+    /// Stack of (break_target, continue_target) for nested loops
+    pub(crate) loop_stack: Vec<(ir::BasicBlockId, ir::BasicBlockId)>,
 }
 
 impl<'db> ExprLowerer<'db> {
@@ -75,6 +77,7 @@ impl<'db> ExprLowerer<'db> {
             enum_info: HashMap::new(),
             extra_functions: Vec::new(),
             spawn_block_counter: 0,
+            loop_stack: Vec::new(),
         }
     }
 

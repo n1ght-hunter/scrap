@@ -26,6 +26,10 @@ pub enum SyntaxKind {
     MATCH_KW,
     IMPL_KW,
     SPAWN_KW,
+    LOOP_KW,
+    WHILE_KW,
+    BREAK_KW,
+    CONTINUE_KW,
 
     // Literals
     STRING_LIT,
@@ -172,6 +176,10 @@ impl From<Token> for SyntaxKind {
             Token::Match => SyntaxKind::MATCH_KW,
             Token::Impl => SyntaxKind::IMPL_KW,
             Token::Spawn => SyntaxKind::SPAWN_KW,
+            Token::Loop => SyntaxKind::LOOP_KW,
+            Token::While => SyntaxKind::WHILE_KW,
+            Token::Break => SyntaxKind::BREAK_KW,
+            Token::Continue => SyntaxKind::CONTINUE_KW,
 
             // Literals
             Token::Str => SyntaxKind::STRING_LIT,
