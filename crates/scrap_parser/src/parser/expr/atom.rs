@@ -12,14 +12,14 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
     /// Atomic expressions include literals, paths, blocks, arrays, parenthesized
     /// expressions, if expressions, and return expressions.
     pub fn parse_atom(&mut self) -> crate::PResult<'a, Expr<'db>> {
-        let start_pos = self.token.span.start(self.db);
+        let start_pos = self.token.span.start;
         let kind = self.parse_atom_kind()?;
-        let end_pos = self.token.span.end(self.db);
+        let end_pos = self.token.span.end;
 
         Ok(Expr {
             id: self.state.new_node_id(),
             kind,
-            span: Span::new(self.db, start_pos, end_pos),
+            span: Span::new(start_pos, end_pos),
         })
     }
 
@@ -29,7 +29,7 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         if self.check(Token::BitAnd) {
             self.bump();
             let mutability = if self.check(Token::Ident) {
-                let text = &self.source[self.token.span.to_range(self.db)];
+                let text = &self.source[self.token.span.start..self.token.span.end];
                 if text == "mut" {
                     self.bump();
                     scrap_shared::Mutability::Mut
@@ -169,16 +169,16 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
         let mut fields = thin_vec::ThinVec::new();
         while !self.check(Token::RBrace) {
-            let field_start = self.token.span.start(self.db);
+            let field_start = self.token.span.start;
             let field_ident = self.parse_ident()?;
             self.expect(Token::Colon)?;
             let field_expr = self.parse_expr()?;
-            let field_end = field_expr.span.end(self.db);
+            let field_end = field_expr.span.end;
 
             fields.push(ExprField {
                 ident: field_ident,
                 expr: Box::new(field_expr),
-                span: Span::new(self.db, field_start, field_end),
+                span: Span::new(field_start, field_end),
             });
 
             if !self.eat(Token::Comma) {
@@ -235,16 +235,16 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
         let mut arms = Vec::new();
         while !self.check(Token::RBrace) {
-            let arm_start = self.token.span.start(self.db);
+            let arm_start = self.token.span.start;
             let pat = self.parse_match_pat()?;
             self.expect(Token::FatArrow)?;
             let body = Box::new(self.parse_expr()?);
-            let arm_end = body.span.end(self.db);
+            let arm_end = body.span.end;
 
             arms.push(Arm {
                 pat,
                 body,
-                span: Span::new(self.db, arm_start, arm_end),
+                span: Span::new(arm_start, arm_end),
             });
 
             if !self.eat(Token::Comma) {
@@ -262,23 +262,23 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         let then_block = Box::new(self.parse_block()?);
 
         let else_block = if self.eat(Token::Else) {
-            let else_start = self.token.span.start(self.db);
+            let else_start = self.token.span.start;
             if self.check(Token::If) {
                 // `else if` — parse as a nested if expression
                 let if_kind = self.parse_if_expr()?;
-                let else_end = self.token.span.end(self.db);
+                let else_end = self.token.span.end;
                 Some(Box::new(Expr {
                     id: self.state.new_node_id(),
                     kind: if_kind,
-                    span: Span::new(self.db, else_start, else_end),
+                    span: Span::new(else_start, else_end),
                 }))
             } else {
                 let block = self.parse_block()?;
-                let else_end = self.token.span.end(self.db);
+                let else_end = self.token.span.end;
                 Some(Box::new(Expr {
                     id: self.state.new_node_id(),
                     kind: ExprKind::Block(Box::new(block)),
-                    span: Span::new(self.db, else_start, else_end),
+                    span: Span::new(else_start, else_end),
                 }))
             }
         } else {
@@ -312,7 +312,7 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
     /// Parse a path (e.g., `foo`, `foo::bar::baz`).
     ///
     /// Continues parsing segments until the terminator token is reached.
-    pub fn parse_path(&mut self, term: Token) -> crate::PResult<'a, Path<'db>> {
+    pub fn parse_path(&mut self, term: Token) -> crate::PResult<'a, Path> {
         let mut segments = thin_vec::ThinVec::new();
 
         while !self.check(term) {
@@ -332,9 +332,8 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
         }
 
         let span = Span::new(
-            self.db,
-            segments.first().unwrap().ident.span.start(self.db),
-            segments.last().unwrap().ident.span.end(self.db),
+            segments.first().unwrap().ident.span.start,
+            segments.last().unwrap().ident.span.end,
         );
 
         Ok(Path { span, segments })

@@ -9,22 +9,22 @@ use std::collections::HashMap;
 use crate::MResult;
 
 /// Lower a type from AST to IR
-pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty<'db>) -> MResult<ir::Ty<'db>> {
+pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty) -> MResult<ir::Ty<'db>> {
     lower_type_with_subst(db, ast_type, &HashMap::new())
 }
 
 /// Lower a type from AST to IR, substituting generic type parameters.
 pub fn lower_type_with_subst<'db>(
     db: &'db dyn scrap_shared::Db,
-    ast_type: &Ty<'db>,
-    subst: &HashMap<scrap_shared::ident::Symbol<'db>, ir::Ty<'db>>,
+    ast_type: &Ty,
+    subst: &HashMap<scrap_shared::ident::Symbol, ir::Ty<'db>>,
 ) -> MResult<ir::Ty<'db>> {
     match &ast_type.kind {
         TyKind::Path(path) => {
             // Get the last segment as the type name
             let type_name = path
                 .single_segment()
-                .map(|e| e.ident.name.text(db).as_str())
+                .map(|e| e.ident.name.text())
                 .unwrap_or("");
 
             match type_name {

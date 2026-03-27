@@ -11,7 +11,7 @@ use crate::{
 impl<'db> TypeContext<'db> {
     /// Unify two types, binding type variables as needed.
     /// Returns true if unification succeeded.
-    pub fn unify(&mut self, t1: &InferTy<'db>, t2: &InferTy<'db>, span: Span<'db>) -> bool {
+    pub fn unify(&mut self, t1: &InferTy, t2: &InferTy, span: Span) -> bool {
         let t1 = self.resolve(t1);
         let t2 = self.resolve(t2);
 
@@ -142,7 +142,7 @@ impl<'db> TypeContext<'db> {
 
     /// Check if a type variable occurs in a type (for infinite type detection).
     /// Returns true if the type variable appears in the type.
-    fn occurs_check(&self, vid: TyVid, ty: &InferTy<'db>) -> bool {
+    fn occurs_check(&self, vid: TyVid, ty: &InferTy) -> bool {
         match ty {
             InferTy::Var(v) => {
                 if *v == vid {
@@ -204,7 +204,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_same_primitives(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         assert!(ctx.unify(&InferTy::Int(IntTy::I32), &InferTy::Int(IntTy::I32), span));
         assert!(ctx.unify(&InferTy::Bool, &InferTy::Bool, span));
@@ -214,7 +214,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_different_primitives(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         assert!(!ctx.unify(&InferTy::Int(IntTy::I32), &InferTy::Bool, span));
         assert!(db.dcx().has_errors());
@@ -223,7 +223,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_type_var_with_concrete(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         let var = ctx.fresh_ty_var();
         assert!(ctx.unify(&var, &InferTy::Int(IntTy::I32), span));
@@ -236,7 +236,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_two_type_vars(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         let var1 = ctx.fresh_ty_var();
         let var2 = ctx.fresh_ty_var();
@@ -255,7 +255,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_never_with_anything(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         assert!(ctx.unify(&InferTy::Never, &InferTy::Int(IntTy::I32), span));
         assert!(ctx.unify(&InferTy::Bool, &InferTy::Never, span));
@@ -264,7 +264,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_unify_tuples(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         let tuple1 = InferTy::Tuple(vec![InferTy::Int(IntTy::I32), InferTy::Bool]);
         let tuple2 = InferTy::Tuple(vec![InferTy::Int(IntTy::I32), InferTy::Bool]);
@@ -278,7 +278,7 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_occurs_check(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
 
         let var = ctx.fresh_ty_var();
         // Try to unify ?0 with Tuple(?0) - should fail with infinite type error

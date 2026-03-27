@@ -4,7 +4,7 @@ use scrap_lexer::Token;
 use scrap_span::Span;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
-    pub fn parse_pat_empty(&mut self) -> PResult<'a, Pat<'db>> {
+    pub fn parse_pat_empty(&mut self) -> PResult<'a, Pat> {
         Ok(Pat {
             id: self.state.new_node_id(),
             kind: PatKind::Missing,
@@ -12,14 +12,14 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         })
     }
 
-    pub fn parse_pat(&mut self) -> PResult<'a, Pat<'db>> {
+    pub fn parse_pat(&mut self) -> PResult<'a, Pat> {
         self.parse_pat_with_mutability(scrap_shared::Mutability::Not)
     }
 
     pub fn parse_pat_with_mutability(
         &mut self,
         mutability: scrap_shared::Mutability,
-    ) -> PResult<'a, Pat<'db>> {
+    ) -> PResult<'a, Pat> {
         let ident = self.parse_ident()?;
         Ok(Pat {
             id: self.state.new_node_id(),
@@ -41,24 +41,26 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     /// - `Ident::Ident { field_pats }` → Struct
     /// - literal → Lit
     /// - `ident` → Ident (binding)
-    pub fn parse_match_pat(&mut self) -> PResult<'a, Pat<'db>> {
-        let start = self.token.span.start(self.db);
+    pub fn parse_match_pat(&mut self) -> PResult<'a, Pat> {
+        let start = self.token.span.start;
 
         // Wildcard: `_`
-        if self.check(Token::Ident) && &self.source[self.token.span.to_range(self.db)] == "_" {
+        if self.check(Token::Ident)
+            && &self.source[self.token.span.start..self.token.span.end] == "_"
+        {
             self.bump();
-            let end = self.token.span.end(self.db);
+            let end = self.token.span.end;
             return Ok(Pat {
                 id: self.state.new_node_id(),
                 kind: PatKind::Wildcard,
-                span: Span::new(self.db, start, end),
+                span: Span::new(start, end),
             });
         }
 
         // Path-based patterns: `Ident::Ident`, `Ident::Ident(...)`, `Ident::Ident { ... }`
         if self.check(Token::Ident) && self.check_ahead(1, Token::DoubleColon) {
             let path = self.parse_pat_path()?;
-            let end = self.token.span.end(self.db);
+            let end = self.token.span.end;
 
             // TupleStruct: `Option::Some(x, y)`
             if self.eat(Token::LParen) {
@@ -70,11 +72,11 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                     }
                 }
                 self.expect(Token::RParen)?;
-                let end = self.token.span.end(self.db);
+                let end = self.token.span.end;
                 return Ok(Pat {
                     id: self.state.new_node_id(),
                     kind: PatKind::TupleStruct(path, pats),
-                    span: Span::new(self.db, start, end),
+                    span: Span::new(start, end),
                 });
             }
 
@@ -82,9 +84,9 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             if self.eat(Token::LBrace) {
                 let mut field_pats = Vec::new();
                 while !self.check(Token::RBrace) {
-                    let fp_start = self.token.span.start(self.db);
+                    let fp_start = self.token.span.start;
                     let ident = self.parse_ident()?;
-                    let fp_end = self.token.span.end(self.db);
+                    let fp_end = self.token.span.end;
                     // Shorthand: field name = binding name
                     let pat = Pat {
                         id: self.state.new_node_id(),
@@ -96,23 +98,23 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                             ident,
                             None,
                         ),
-                        span: Span::new(self.db, fp_start, fp_end),
+                        span: Span::new(fp_start, fp_end),
                     };
                     field_pats.push(FieldPat {
                         ident,
                         pat,
-                        span: Span::new(self.db, fp_start, fp_end),
+                        span: Span::new(fp_start, fp_end),
                     });
                     if !self.eat(Token::Comma) {
                         break;
                     }
                 }
                 self.expect(Token::RBrace)?;
-                let end = self.token.span.end(self.db);
+                let end = self.token.span.end;
                 return Ok(Pat {
                     id: self.state.new_node_id(),
                     kind: PatKind::Struct(path, field_pats),
-                    span: Span::new(self.db, start, end),
+                    span: Span::new(start, end),
                 });
             }
 
@@ -120,25 +122,25 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             return Ok(Pat {
                 id: self.state.new_node_id(),
                 kind: PatKind::Path(path),
-                span: Span::new(self.db, start, end),
+                span: Span::new(start, end),
             });
         }
 
         // Literal patterns: integers, bools, strings
         if self.token.node.is_literal() && !self.check(Token::Ident) {
             let lit = self.parse_lit()?;
-            let end = self.token.span.end(self.db);
+            let end = self.token.span.end;
             return Ok(Pat {
                 id: self.state.new_node_id(),
                 kind: PatKind::Lit(lit),
-                span: Span::new(self.db, start, end),
+                span: Span::new(start, end),
             });
         }
 
         // Simple ident binding
         if self.check(Token::Ident) {
             let ident = self.parse_ident()?;
-            let end = self.token.span.end(self.db);
+            let end = self.token.span.end;
             return Ok(Pat {
                 id: self.state.new_node_id(),
                 kind: PatKind::Ident(
@@ -149,7 +151,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                     ident,
                     None,
                 ),
-                span: Span::new(self.db, start, end),
+                span: Span::new(start, end),
             });
         }
 
@@ -157,7 +159,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     }
 
     /// Parse a path in a pattern context (uses `=>` / `(` / `{` as terminators).
-    fn parse_pat_path(&mut self) -> PResult<'a, scrap_shared::path::Path<'db>> {
+    fn parse_pat_path(&mut self) -> PResult<'a, scrap_shared::path::Path> {
         let mut segments = thin_vec::ThinVec::new();
 
         loop {
@@ -177,9 +179,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         }
 
         let span = Span::new(
-            self.db,
-            segments.first().unwrap().ident.span.start(self.db),
-            segments.last().unwrap().ident.span.end(self.db),
+            segments.first().unwrap().ident.span.start,
+            segments.last().unwrap().ident.span.end,
         );
 
         Ok(scrap_shared::path::Path { span, segments })

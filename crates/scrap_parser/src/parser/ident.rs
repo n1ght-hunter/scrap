@@ -7,11 +7,11 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         self.check(Token::Ident)
     }
 
-    pub fn parse_ident(&mut self) -> crate::PResult<'a, Ident<'db>> {
+    pub fn parse_ident(&mut self) -> crate::PResult<'a, Ident> {
         let span = self.token.span;
         if self.eat(Token::Ident) {
-            let name = &self.source[span.to_range(self.db)];
-            let key = Symbol::new(self.db, name);
+            let name = &self.source[span.start..span.end];
+            let key = Symbol::new(name);
             let id = self.state.new_node_id();
             Ok(Ident {
                 id,
@@ -38,7 +38,7 @@ mod tests {
                 panic!("Failed to parse ident: {:?}", e);
             }
         };
-        assert_eq!(ident.name.text(db), "my_variable");
-        assert_eq!(ident.span.to_range(db), 0..11);
+        assert_eq!(ident.name.text(), "my_variable");
+        assert_eq!(ident.span.range(), 0..11);
     }
 }

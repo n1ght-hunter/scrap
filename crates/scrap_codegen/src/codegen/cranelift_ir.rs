@@ -835,7 +835,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
     fn lower_constant(
         &self,
-        c: &ir::Constant<'db>,
+        c: &ir::Constant,
         builder: &mut FunctionBuilder,
         module: &mut ObjectModule,
     ) -> Option<Value> {
@@ -874,7 +874,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             },
             ir::Constant::Bool(b) => Some(builder.ins().iconst(types::I8, *b as i64)),
             ir::Constant::String(sym) => {
-                let s = sym.text(self.db);
+                let s = sym.text();
                 let bytes = s.as_bytes();
 
                 let id = self.next_data_id.get();

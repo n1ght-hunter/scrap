@@ -12,17 +12,17 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     }
 
     /// Parse an extern block: `extern "C" { fn foo(...) -> ...; ... }`
-    pub fn parse_extern_block(&mut self) -> PResult<'a, ForeignMod<'db>> {
+    pub fn parse_extern_block(&mut self) -> PResult<'a, ForeignMod> {
         let start_span = self.token.span;
         self.expect(Token::Extern)?;
 
         // Parse the ABI string literal (e.g. "C")
         let abi_span = self.token.span;
         self.expect(Token::Str)?;
-        let abi_text = &self.source[abi_span.to_range(self.db)];
+        let abi_text = &self.source[abi_span.start..abi_span.end];
         // Strip quotes from the string literal
         let abi_inner = &abi_text[1..abi_text.len() - 1];
-        let abi = scrap_shared::ident::Symbol::new(self.db, abi_inner.to_string());
+        let abi = scrap_shared::ident::Symbol::new(abi_inner);
 
         self.expect(Token::LBrace)?;
 
@@ -33,13 +33,13 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
         let end_span = self.token.span;
         self.expect(Token::RBrace)?;
-        let span = Span::new(self.db, start_span.start(self.db), end_span.end(self.db));
+        let span = Span::new(start_span.start, end_span.end);
 
         Ok(ForeignMod { abi, items, span })
     }
 
     /// Parse a single foreign function declaration: `fn foo(a: i32) -> !;`
-    fn parse_foreign_item(&mut self) -> PResult<'a, ForeignItem<'db>> {
+    fn parse_foreign_item(&mut self) -> PResult<'a, ForeignItem> {
         let start_span = self.token.span;
         self.expect(Token::Fn)?;
         let ident = self.parse_ident()?;
@@ -51,7 +51,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         };
         let end_span = self.token.span;
         self.expect(Token::Semicolon)?;
-        let span = Span::new(self.db, start_span.start(self.db), end_span.end(self.db));
+        let span = Span::new(start_span.start, end_span.end);
 
         Ok(ForeignItem {
             id: self.state.new_node_id(),

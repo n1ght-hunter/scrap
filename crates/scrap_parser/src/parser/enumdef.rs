@@ -9,7 +9,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         self.check(Token::Enum)
     }
 
-    pub fn parse_enum_def(&mut self) -> PResult<'a, EnumDef<'db>> {
+    pub fn parse_enum_def(&mut self) -> PResult<'a, EnumDef> {
         self.expect(Token::Enum)?;
         let ident = self.parse_ident()?;
         let generics = self.parse_generics()?;
@@ -18,13 +18,13 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let mut variants = Vec::new();
 
         while !self.check(Token::RBrace) {
-            let variant_start = self.token.span.start(self.db);
+            let variant_start = self.token.span.start;
             let variant_ident = self.parse_ident()?;
 
             let data = self.parse_variant_data(Token::Comma)?;
 
-            let variant_end = self.token.span.end(self.db);
-            let span = Span::new(self.db, variant_start, variant_end);
+            let variant_end = self.token.span.end;
+            let span = Span::new(variant_start, variant_end);
 
             variants.push(Variant {
                 id: self.state.new_node_id(),

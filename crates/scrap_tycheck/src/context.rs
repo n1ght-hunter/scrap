@@ -17,39 +17,39 @@ use crate::{
 
 /// Function signature for type checking.
 #[derive(Debug, Clone)]
-pub struct FnSig<'db> {
+pub struct FnSig {
     /// Generic type parameters (e.g., `T` in `fn foo<T>`)
-    pub type_params: Vec<Symbol<'db>>,
+    pub type_params: Vec<Symbol>,
     /// Parameter names and types
-    pub params: Vec<(Symbol<'db>, InferTy<'db>)>,
+    pub params: Vec<(Symbol, InferTy)>,
     /// Return type
-    pub return_ty: InferTy<'db>,
+    pub return_ty: InferTy,
 }
 
 /// Struct definition for type checking.
 #[derive(Debug, Clone)]
-pub struct StructDef<'db> {
+pub struct StructDef {
     /// Generic type parameters
-    pub type_params: Vec<Symbol<'db>>,
+    pub type_params: Vec<Symbol>,
     /// Field names and types
-    pub fields: Vec<(Symbol<'db>, InferTy<'db>)>,
+    pub fields: Vec<(Symbol, InferTy)>,
 }
 
 /// An enum variant's data for type checking.
 #[derive(Debug, Clone)]
-pub enum EnumVariantDef<'db> {
+pub enum EnumVariantDef {
     Unit,
-    Tuple(Vec<InferTy<'db>>),
-    Struct(Vec<(Symbol<'db>, InferTy<'db>)>),
+    Tuple(Vec<InferTy>),
+    Struct(Vec<(Symbol, InferTy)>),
 }
 
 /// Enum definition for type checking.
 #[derive(Debug, Clone)]
-pub struct EnumDef<'db> {
+pub struct EnumDef {
     /// Generic type parameters
-    pub type_params: Vec<Symbol<'db>>,
+    pub type_params: Vec<Symbol>,
     /// Variant names and their data
-    pub variants: Vec<(Symbol<'db>, EnumVariantDef<'db>)>,
+    pub variants: Vec<(Symbol, EnumVariantDef)>,
 }
 
 /// The type checking context.
@@ -66,55 +66,55 @@ pub struct TypeContext<'db> {
 
     /// Type variable storage: TyVid -> Option<InferTy>
     /// None = unsolved, Some = solved
-    ty_vars: Vec<Option<InferTy<'db>>>,
+    ty_vars: Vec<Option<InferTy>>,
 
     /// Next type variable ID
     next_ty_vid: u32,
 
     /// Variable environment: name -> type
     /// Scoped via a stack of scopes
-    scopes: Vec<HashMap<Symbol<'db>, InferTy<'db>>>,
+    scopes: Vec<HashMap<Symbol, InferTy>>,
 
     /// Variable mutability environment: name -> Mutability
     /// Scoped alongside the type scopes
-    mutability_scopes: Vec<HashMap<Symbol<'db>, Mutability>>,
+    mutability_scopes: Vec<HashMap<Symbol, Mutability>>,
 
     /// Active borrows: variable name -> list of (Mutability, span)
-    borrow_scopes: Vec<HashMap<Symbol<'db>, Vec<(Mutability, Span<'db>)>>>,
+    borrow_scopes: Vec<HashMap<Symbol, Vec<(Mutability, Span)>>>,
 
     /// Function signatures in scope
-    functions: HashMap<Symbol<'db>, FnSig<'db>>,
+    functions: HashMap<Symbol, FnSig>,
 
     /// Struct definitions in scope
-    structs: HashMap<Symbol<'db>, StructDef<'db>>,
+    structs: HashMap<Symbol, StructDef>,
 
     /// Enum definitions in scope
-    enums: HashMap<Symbol<'db>, EnumDef<'db>>,
+    enums: HashMap<Symbol, EnumDef>,
 
     /// Current function's return type (for checking return statements)
-    current_return_ty: Option<InferTy<'db>>,
+    current_return_ty: Option<InferTy>,
 
     /// Generic parameters in scope (for current function/struct)
-    type_params: Vec<Symbol<'db>>,
+    type_params: Vec<Symbol>,
 
     /// Collected constraints
-    constraints: Vec<Constraint<'db>>,
+    constraints: Vec<Constraint>,
 
     /// Recorded expression types during inference (NodeId -> InferTy)
-    expr_types: HashMap<NodeId, InferTy<'db>>,
+    expr_types: HashMap<NodeId, InferTy>,
 
     /// Recorded local variable types (NodeId -> InferTy)
-    local_types: HashMap<NodeId, InferTy<'db>>,
+    local_types: HashMap<NodeId, InferTy>,
 
     /// Inferred function return types (function name -> InferTy)
     /// Populated during body checking when the inferred body type differs from the declared type.
-    fn_return_types: HashMap<Symbol<'db>, InferTy<'db>>,
+    fn_return_types: HashMap<Symbol, InferTy>,
 
     /// Nesting depth of loops (for validating break/continue)
     pub loop_depth: usize,
 
     /// Generic function instantiations: (fn_name, call_node_id, type_param → concrete_type)
-    generic_instantiations: Vec<(Symbol<'db>, NodeId, HashMap<Symbol<'db>, InferTy<'db>>)>,
+    generic_instantiations: Vec<(Symbol, NodeId, HashMap<Symbol, InferTy>)>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -149,7 +149,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Create a fresh type variable.
-    pub fn fresh_ty_var(&mut self) -> InferTy<'db> {
+    pub fn fresh_ty_var(&mut self) -> InferTy {
         let vid = TyVid(self.next_ty_vid);
         self.next_ty_vid += 1;
         self.ty_vars.push(None);
@@ -157,21 +157,21 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Get the current binding of a type variable (if solved).
-    pub fn probe(&self, vid: TyVid) -> Option<&InferTy<'db>> {
+    pub fn probe(&self, vid: TyVid) -> Option<&InferTy> {
         self.ty_vars
             .get(vid.0 as usize)
             .and_then(|opt| opt.as_ref())
     }
 
     /// Bind a type variable to a type.
-    pub fn bind(&mut self, vid: TyVid, ty: InferTy<'db>) {
+    pub fn bind(&mut self, vid: TyVid, ty: InferTy) {
         if let Some(slot) = self.ty_vars.get_mut(vid.0 as usize) {
             *slot = Some(ty);
         }
     }
 
     /// Resolve a type, following type variable chains.
-    pub fn resolve(&self, ty: &InferTy<'db>) -> InferTy<'db> {
+    pub fn resolve(&self, ty: &InferTy) -> InferTy {
         match ty {
             InferTy::Var(vid) => {
                 if let Some(resolved) = self.probe(*vid) {
@@ -221,15 +221,15 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Define a variable in the current scope (immutable by default).
-    pub fn define_var(&mut self, name: Symbol<'db>, ty: InferTy<'db>) {
+    pub fn define_var(&mut self, name: Symbol, ty: InferTy) {
         self.define_var_with_mutability(name, ty, Mutability::Not);
     }
 
     /// Define a variable in the current scope with explicit mutability.
     pub fn define_var_with_mutability(
         &mut self,
-        name: Symbol<'db>,
-        ty: InferTy<'db>,
+        name: Symbol,
+        ty: InferTy,
         mutability: Mutability,
     ) {
         if let Some(scope) = self.scopes.last_mut() {
@@ -241,7 +241,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Look up a variable in all scopes (innermost first).
-    pub fn lookup_var(&self, name: Symbol<'db>) -> Option<InferTy<'db>> {
+    pub fn lookup_var(&self, name: Symbol) -> Option<InferTy> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(&name) {
                 return Some(ty.clone());
@@ -251,7 +251,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Look up a variable's mutability in all scopes (innermost first).
-    pub fn lookup_var_mutability(&self, name: Symbol<'db>) -> Option<Mutability> {
+    pub fn lookup_var_mutability(&self, name: Symbol) -> Option<Mutability> {
         for scope in self.mutability_scopes.iter().rev() {
             if let Some(m) = scope.get(&name) {
                 return Some(*m);
@@ -261,9 +261,9 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Record a borrow of a variable and check borrow rules.
-    pub fn record_borrow(&mut self, name: Symbol<'db>, mutability: Mutability, span: Span<'db>) {
+    pub fn record_borrow(&mut self, name: Symbol, mutability: Mutability, span: Span) {
         // Collect existing borrows across all scopes
-        let existing: Vec<(Mutability, Span<'db>)> = self
+        let existing: Vec<(Mutability, Span)> = self
             .borrow_scopes
             .iter()
             .filter_map(|scope| scope.get(&name))
@@ -273,10 +273,10 @@ impl<'db> TypeContext<'db> {
         if mutability.is_mut() {
             // &mut: no other borrows allowed
             if !existing.is_empty() {
-                self.emit_borrow_conflict(name.text(self.db), span);
+                self.emit_borrow_conflict(name.text(), span);
             }
         } else if existing.iter().any(|(m, _)| m.is_mut()) {
-            self.emit_borrow_conflict(name.text(self.db), span);
+            self.emit_borrow_conflict(name.text(), span);
         }
 
         // Record the borrow in the current scope
@@ -289,7 +289,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Look up the recorded InferTy for a given expression NodeId.
-    pub fn lookup_expr_type_infer(&self, node_id: NodeId) -> InferTy<'db> {
+    pub fn lookup_expr_type_infer(&self, node_id: NodeId) -> InferTy {
         self.expr_types
             .get(&node_id)
             .cloned()
@@ -297,7 +297,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Set the type parameters for the current context.
-    pub fn set_type_params(&mut self, params: Vec<Symbol<'db>>) {
+    pub fn set_type_params(&mut self, params: Vec<Symbol>) {
         self.type_params = params;
     }
 
@@ -307,17 +307,17 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Check if a symbol is a type parameter.
-    pub fn is_type_param(&self, name: Symbol<'db>) -> bool {
+    pub fn is_type_param(&self, name: Symbol) -> bool {
         self.type_params.contains(&name)
     }
 
     /// Get the type parameters.
-    pub fn type_params(&self) -> &[Symbol<'db>] {
+    pub fn type_params(&self) -> &[Symbol] {
         &self.type_params
     }
 
     /// Set the current function's return type.
-    pub fn set_return_ty(&mut self, ty: InferTy<'db>) {
+    pub fn set_return_ty(&mut self, ty: InferTy) {
         self.current_return_ty = Some(ty);
     }
 
@@ -327,42 +327,42 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Get the current function's return type.
-    pub fn return_ty(&self) -> Option<&InferTy<'db>> {
+    pub fn return_ty(&self) -> Option<&InferTy> {
         self.current_return_ty.as_ref()
     }
 
     /// Register a function signature.
-    pub fn register_function(&mut self, name: Symbol<'db>, sig: FnSig<'db>) {
+    pub fn register_function(&mut self, name: Symbol, sig: FnSig) {
         self.functions.insert(name, sig);
     }
 
     /// Look up a function signature.
-    pub fn lookup_function(&self, name: Symbol<'db>) -> Option<&FnSig<'db>> {
+    pub fn lookup_function(&self, name: Symbol) -> Option<&FnSig> {
         self.functions.get(&name)
     }
 
     /// Register a struct definition.
-    pub fn register_struct(&mut self, name: Symbol<'db>, def: StructDef<'db>) {
+    pub fn register_struct(&mut self, name: Symbol, def: StructDef) {
         self.structs.insert(name, def);
     }
 
     /// Look up a struct definition.
-    pub fn lookup_struct(&self, name: Symbol<'db>) -> Option<&StructDef<'db>> {
+    pub fn lookup_struct(&self, name: Symbol) -> Option<&StructDef> {
         self.structs.get(&name)
     }
 
     /// Register an enum definition.
-    pub fn register_enum(&mut self, name: Symbol<'db>, def: EnumDef<'db>) {
+    pub fn register_enum(&mut self, name: Symbol, def: EnumDef) {
         self.enums.insert(name, def);
     }
 
     /// Look up an enum definition.
-    pub fn lookup_enum(&self, name: Symbol<'db>) -> Option<&EnumDef<'db>> {
+    pub fn lookup_enum(&self, name: Symbol) -> Option<&EnumDef> {
         self.enums.get(&name)
     }
 
     /// Add an equality constraint between two types.
-    pub fn constrain_eq(&mut self, t1: InferTy<'db>, t2: InferTy<'db>, span: Span<'db>) {
+    pub fn constrain_eq(&mut self, t1: InferTy, t2: InferTy, span: Span) {
         let origin = ConstraintOrigin::new(span, ConstraintKind::Assignment);
         self.constraints.push(Constraint::Eq(t1, t2, origin));
     }
@@ -370,9 +370,9 @@ impl<'db> TypeContext<'db> {
     /// Add an equality constraint with a specific origin kind.
     pub fn constrain_eq_with_kind(
         &mut self,
-        t1: InferTy<'db>,
-        t2: InferTy<'db>,
-        span: Span<'db>,
+        t1: InferTy,
+        t2: InferTy,
+        span: Span,
         kind: ConstraintKind,
     ) {
         let origin = ConstraintOrigin::new(span, kind);
@@ -380,22 +380,22 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Take all collected constraints (draining them).
-    pub fn take_constraints(&mut self) -> Vec<Constraint<'db>> {
+    pub fn take_constraints(&mut self) -> Vec<Constraint> {
         std::mem::take(&mut self.constraints)
     }
 
     /// Record the type of an expression.
-    pub fn record_expr_type(&mut self, node_id: NodeId, ty: InferTy<'db>) {
+    pub fn record_expr_type(&mut self, node_id: NodeId, ty: InferTy) {
         self.expr_types.insert(node_id, ty);
     }
 
     /// Record the type of a local variable.
-    pub fn record_local_type(&mut self, node_id: NodeId, ty: InferTy<'db>) {
+    pub fn record_local_type(&mut self, node_id: NodeId, ty: InferTy) {
         self.local_types.insert(node_id, ty);
     }
 
     /// Record the inferred return type of a function.
-    pub fn record_fn_return_type(&mut self, name: Symbol<'db>, ty: InferTy<'db>) {
+    pub fn record_fn_return_type(&mut self, name: Symbol, ty: InferTy) {
         self.fn_return_types.insert(name, ty);
     }
 
@@ -406,10 +406,10 @@ impl<'db> TypeContext<'db> {
     pub fn finalize_types(
         &self,
     ) -> (
-        Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
-        Vec<(scrap_shared::NodeId, ResolvedTy<'db>)>,
-        Vec<(Symbol<'db>, ResolvedTy<'db>)>,
-        Vec<(Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)>,
+        Vec<(scrap_shared::NodeId, ResolvedTy)>,
+        Vec<(scrap_shared::NodeId, ResolvedTy)>,
+        Vec<(Symbol, ResolvedTy)>,
+        Vec<(Symbol, NodeId, Vec<(Symbol, ResolvedTy)>)>,
     ) {
         let expr_types: Vec<_> = self
             .expr_types
@@ -450,7 +450,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Convert InferTy to ResolvedTy after solving constraints.
-    fn resolve_to_final(&self, ty: &InferTy<'db>) -> ResolvedTy<'db> {
+    fn resolve_to_final(&self, ty: &InferTy) -> ResolvedTy {
         let resolved = self.resolve(ty);
         match resolved {
             InferTy::Var(_) => ResolvedTy::Int(IntTy::I32), // Unsolved variable defaults to i32
@@ -480,19 +480,14 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit a type mismatch error.
-    pub fn emit_type_mismatch(
-        &self,
-        expected: &str,
-        found: &str,
-        span: Span<'db>,
-    ) -> ErrorGuaranteed {
+    pub fn emit_type_mismatch(&self, expected: &str, found: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR.primary_title("type mismatch").element(
                 Snippet::source(self.source)
                     .path(self.file_name)
                     .annotation(
                         AnnotationKind::Primary
-                            .span(span.to_range(self.db))
+                            .span(span.range())
                             .label(format!("expected `{}`, found `{}`", expected, found)),
                     ),
             ),
@@ -501,30 +496,30 @@ impl<'db> TypeContext<'db> {
 
     pub fn record_generic_instantiation(
         &mut self,
-        fn_name: Symbol<'db>,
+        fn_name: Symbol,
         call_site: NodeId,
-        subst: HashMap<Symbol<'db>, InferTy<'db>>,
+        subst: HashMap<Symbol, InferTy>,
     ) {
         self.generic_instantiations
             .push((fn_name, call_site, subst));
     }
 
-    pub fn emit_undefined_type(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_undefined_type(&self, name: &str, span: Span) -> ErrorGuaranteed {
         let type_params = self.type_params();
         let suggestion = type_params
             .iter()
             .find(|p| {
-                let p_text = p.text(self.db);
+                let p_text = p.text();
                 p_text.len() == 1 && name.len() == 1 || p_text.to_lowercase() == name.to_lowercase()
             })
-            .map(|p| p.text(self.db).to_string());
+            .map(|p| p.text().to_string());
 
         let mut group = Level::ERROR
             .primary_title(format!("undefined type `{}`", name))
             .element(
                 Snippet::source(self.source)
                     .path(self.file_name)
-                    .annotation(AnnotationKind::Primary.span(span.to_range(self.db))),
+                    .annotation(AnnotationKind::Primary.span(span.range())),
             );
 
         if let Some(suggested) = suggestion {
@@ -532,10 +527,7 @@ impl<'db> TypeContext<'db> {
                 Level::HELP.message(format!("did you mean the type parameter `{}`?", suggested)),
             );
         } else if !type_params.is_empty() {
-            let params: Vec<_> = type_params
-                .iter()
-                .map(|p| p.text(self.db).to_string())
-                .collect();
+            let params: Vec<_> = type_params.iter().map(|p| p.text().to_string()).collect();
             group = group.element(
                 Level::NOTE.message(format!("available type parameters: {}", params.join(", "))),
             );
@@ -544,18 +536,18 @@ impl<'db> TypeContext<'db> {
         self.db.dcx().emit_err(group)
     }
 
-    pub fn emit_error(&self, msg: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_error(&self, msg: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR.primary_title(msg).element(
                 Snippet::source(self.source)
                     .path(self.file_name)
-                    .annotation(AnnotationKind::Primary.span(span.to_range(self.db))),
+                    .annotation(AnnotationKind::Primary.span(span.range())),
             ),
         )
     }
 
     /// Emit an error for assignment to an immutable variable.
-    pub fn emit_immutable_assign_error(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_immutable_assign_error(&self, name: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!("cannot assign to immutable variable `{}`", name))
@@ -564,7 +556,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("cannot assign"),
                         ),
                 )
@@ -576,7 +568,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an error for borrowing an immutable variable as mutable.
-    pub fn emit_cannot_borrow_as_mutable(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_cannot_borrow_as_mutable(&self, name: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
@@ -588,7 +580,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("cannot borrow as mutable"),
                         ),
                 )
@@ -600,7 +592,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit a borrow conflict error.
-    pub fn emit_borrow_conflict(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_borrow_conflict(&self, name: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!(
@@ -612,7 +604,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("conflicting borrow"),
                         ),
                 ),
@@ -620,7 +612,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an error for writing through an immutable reference.
-    pub fn emit_immutable_ref_deref_error(&self, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_immutable_ref_deref_error(&self, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title("cannot assign to data behind a `&` reference")
@@ -629,7 +621,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("cannot assign through `&` reference"),
                         ),
                 ),
@@ -637,7 +629,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an undefined variable error.
-    pub fn emit_undefined_variable(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_undefined_variable(&self, name: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!("undefined variable `{}`", name))
@@ -646,7 +638,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("not found in this scope"),
                         ),
                 ),
@@ -654,7 +646,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an undefined function error.
-    pub fn emit_undefined_function(&self, name: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_undefined_function(&self, name: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
                 .primary_title(format!("undefined function `{}`", name))
@@ -663,7 +655,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label("not found in this scope"),
                         ),
                 ),
@@ -675,7 +667,7 @@ impl<'db> TypeContext<'db> {
         &self,
         expected: usize,
         found: usize,
-        span: Span<'db>,
+        span: Span,
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
@@ -685,7 +677,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label(format!("expected {} arguments, found {}", expected, found)),
                         ),
                 ),
@@ -697,7 +689,7 @@ impl<'db> TypeContext<'db> {
         &self,
         struct_name: &str,
         field_name: &str,
-        field_span: Span<'db>,
+        field_span: Span,
         note: String,
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
@@ -710,7 +702,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(field_span.to_range(self.db))
+                                .span(field_span.range())
                                 .label(format!("`{struct_name}` does not have this field")),
                         ),
                 )
@@ -723,7 +715,7 @@ impl<'db> TypeContext<'db> {
         &self,
         struct_name: &str,
         field_name: &str,
-        span: Span<'db>,
+        span: Span,
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
@@ -735,7 +727,7 @@ impl<'db> TypeContext<'db> {
                         .path(self.file_name)
                         .annotation(
                             AnnotationKind::Primary
-                                .span(span.to_range(self.db))
+                                .span(span.range())
                                 .label(format!("field `{field_name}` is missing")),
                         ),
                 ),
@@ -743,14 +735,14 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an infinite type error (occurs check failure).
-    pub fn emit_infinite_type(&self, var_name: &str, ty: &str, span: Span<'db>) -> ErrorGuaranteed {
+    pub fn emit_infinite_type(&self, var_name: &str, ty: &str, span: Span) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR.primary_title("infinite type").element(
                 Snippet::source(self.source)
                     .path(self.file_name)
                     .annotation(
                         AnnotationKind::Primary
-                            .span(span.to_range(self.db))
+                            .span(span.range())
                             .label(format!("`{}` occurs in `{}`", var_name, ty)),
                     ),
             ),
@@ -762,7 +754,7 @@ impl<'db> TypeContext<'db> {
         &self,
         expected: usize,
         found: usize,
-        span: Span<'db>,
+        span: Span,
     ) -> ErrorGuaranteed {
         self.db.dcx().emit_err(
             Level::ERROR
@@ -770,20 +762,21 @@ impl<'db> TypeContext<'db> {
                 .element(
                     Snippet::source(self.source)
                         .path(self.file_name)
-                        .annotation(AnnotationKind::Primary.span(span.to_range(self.db)).label(
-                            format!("expected {} type arguments, found {}", expected, found),
-                        )),
+                        .annotation(AnnotationKind::Primary.span(span.range()).label(format!(
+                            "expected {} type arguments, found {}",
+                            expected, found
+                        ))),
                 ),
         )
     }
 
     /// Convert a type to a human-readable string.
-    pub fn ty_to_string(&self, ty: &InferTy<'db>) -> String {
+    pub fn ty_to_string(&self, ty: &InferTy) -> String {
         let resolved = self.resolve(ty);
         self.ty_to_string_inner(&resolved)
     }
 
-    fn ty_to_string_inner(&self, ty: &InferTy<'db>) -> String {
+    fn ty_to_string_inner(&self, ty: &InferTy) -> String {
         match ty {
             InferTy::Var(vid) => format!("?{}", vid.0),
             InferTy::Void => "void".to_string(),
@@ -793,11 +786,11 @@ impl<'db> TypeContext<'db> {
             InferTy::Float(k) => k.name_str().to_string(),
             InferTy::Str => "String".to_string(),
             InferTy::Never => "!".to_string(),
-            InferTy::Adt(name) => name.text(self.db).to_string(),
-            InferTy::Param(name) => name.text(self.db).to_string(),
+            InferTy::Adt(name) => name.text().to_string(),
+            InferTy::Param(name) => name.text().to_string(),
             InferTy::App(name, args) => {
                 let args_str: Vec<_> = args.iter().map(|a| self.ty_to_string_inner(a)).collect();
-                format!("{}<{}>", name.text(self.db), args_str.join(", "))
+                format!("{}<{}>", name.text(), args_str.join(", "))
             }
             InferTy::Fn(params, ret) => {
                 let params_str: Vec<_> =

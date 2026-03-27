@@ -1,56 +1,100 @@
 use scrap_span::Span;
 
-use crate::{Db, NodeId, pretty_print::PrettyPrint};
+use crate::{NodeId, pretty_print::PrettyPrint};
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Ident<'db> {
+pub struct Ident {
     pub id: NodeId,
-    pub name: Symbol<'db>,
-    pub span: Span<'db>,
+    pub name: Symbol,
+    pub span: Span,
 }
 
-impl<'db> PrettyPrint for Ident<'db> {
+impl PrettyPrint for Ident {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
-        let name = salsa::with_attached_database(|db| self.name.text(db).to_owned())
-            .unwrap_or("<invalid>".to_string());
-        write!(f, "{}", name)
+        write!(f, "{}", self.name.text())
     }
 }
 
-impl<'db> Ident<'db> {
-    pub fn dummy(db: &'db dyn Db) -> Self {
+impl Ident {
+    pub fn dummy() -> Self {
         Self {
             id: NodeId::dummy(),
-            name: Symbol::dummy(db),
-            span: Span::new_default(db),
+            name: Symbol::new("<dummy>"),
+            span: Span::default(),
         }
     }
 
-    pub fn dummy_with_name(db: &'db dyn Db, name: &str) -> Self {
+    pub fn dummy_with_name(name: &str) -> Self {
         Self {
             id: NodeId::dummy(),
-            name: Symbol::new(db, name),
-            span: Span::new_default(db),
+            name: Symbol::new(name),
+            span: Span::default(),
         }
     }
 }
 
-/// A symbol represents an interned string.
-#[salsa::interned(debug, persist)]
-pub struct Symbol<'db> {
-    #[returns(ref)]
-    pub text: String,
+use lasso::{Spur, ThreadedRodeo};
+use std::sync::LazyLock;
+
+static INTERNER: LazyLock<ThreadedRodeo> = LazyLock::new(ThreadedRodeo::default);
+
+/// Interned string key. Backed by a global thread-safe interner (lasso).
+/// `Copy`, 4 bytes (`Spur` is a `NonZeroU32`), O(1) resolution.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Symbol(Spur);
+
+impl serde::Serialize for Symbol {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.text().serialize(serializer)
+    }
 }
 
-impl<'db> Symbol<'db> {
-    /// Get the string slice for this symbol.
-    pub fn dummy(db: &'db dyn Db) -> Self {
-        Symbol::new(db, "<dummy>")
+impl<'de> serde::Deserialize<'de> for Symbol {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Ok(Symbol::new(text))
+    }
+}
+
+impl Symbol {
+    #[inline]
+    pub fn new(text: impl AsRef<str>) -> Self {
+        Self(INTERNER.get_or_intern(text.as_ref()))
     }
 
-    pub fn as_bits(&self) -> u64 {
-        self.0.as_bits()
+    #[inline]
+    pub fn text(&self) -> &str {
+        INTERNER.resolve(&self.0)
+    }
+}
+
+impl std::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Symbol({:?})", self.text())
+    }
+}
+
+impl std::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.text())
+    }
+}
+
+/// SAFETY: Symbol is Copy and contains only a Spur (NonZeroU32).
+/// maybe_update is equivalent to comparing two u32s and overwriting —
+/// no allocations, no pointers, no drop glue. Same safety guarantees
+/// as the blanket Update impl for primitive integer types in salsa.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for Symbol {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        let old = unsafe { *old_pointer };
+        if old != new_value {
+            unsafe { *old_pointer = new_value };
+            true
+        } else {
+            false
+        }
     }
 }

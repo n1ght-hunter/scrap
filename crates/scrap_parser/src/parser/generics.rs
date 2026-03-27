@@ -5,7 +5,7 @@ use scrap_span::Span;
 use thin_vec::ThinVec;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
-    pub fn parse_generics(&mut self) -> PResult<'a, Generics<'db>> {
+    pub fn parse_generics(&mut self) -> PResult<'a, Generics> {
         if !self.eat(Token::Lt) {
             return Ok(Generics::default());
         }
@@ -14,7 +14,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         while !self.check(Token::Gt) {
             let param_start = self.token.span;
             let ident = self.parse_ident()?;
-            let span = Span::new(self.db, param_start.start(self.db), ident.span.end(self.db));
+            let span = Span::new(param_start.start, ident.span.end);
 
             params.push(GenericParam {
                 id: self.state.new_node_id(),

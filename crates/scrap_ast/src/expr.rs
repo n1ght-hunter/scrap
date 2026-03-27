@@ -19,7 +19,7 @@ use scrap_shared::path::Path;
 pub struct Expr<'db> {
     pub id: NodeId,
     pub kind: ExprKind<'db>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Expr<'db> {
@@ -49,19 +49,19 @@ pub enum ExprKind<'db> {
     /// A binary operation (e.g., `a + b`, `a * b`)
     Binary(BinOp<'db>, Box<Expr<'db>>, Box<Expr<'db>>),
     /// A literal value (e.g., `1`, `"foo"`)
-    Lit(Lit<'db>),
+    Lit(Lit),
     /// An `if` block, with an optional `else` block
     If(Box<Expr<'db>>, Box<Block<'db>>, Option<Box<Expr<'db>>>),
     /// A block (`{ ... }`)
     Block(Box<Block<'db>>),
     /// Variable reference
-    Path(Path<'db>),
+    Path(Path),
     /// A parenthesized expression
     Paren(Box<Expr<'db>>),
     /// A `return` expression
     Return(Option<Box<Expr<'db>>>),
     /// An assignment (`place = expr`)
-    Assign(Box<Expr<'db>>, Box<Expr<'db>>, Span<'db>),
+    Assign(Box<Expr<'db>>, Box<Expr<'db>>, Span),
     /// An assignment with an operator (`place += expr`)
     AssignOp(AssignOp<'db>, Box<Expr<'db>>, Box<Expr<'db>>),
     /// A unary operation (e.g., `*x`, `-x`, `!x`)
@@ -69,11 +69,11 @@ pub enum ExprKind<'db> {
     /// A struct literal expression (e.g., `Point { x: 5, y: 10 }`)
     Struct(Box<StructExpr<'db>>),
     /// Field access (e.g., `p.x`)
-    Field(Box<Expr<'db>>, Ident<'db>),
+    Field(Box<Expr<'db>>, Ident),
     /// Match expression: `match expr { pat => expr, ... }`
     Match(Box<Expr<'db>>, Vec<Arm<'db>>),
     /// Method call: `receiver.method(args)`
-    MethodCall(Box<Expr<'db>>, Ident<'db>, ThinVec<Box<Expr<'db>>>),
+    MethodCall(Box<Expr<'db>>, Ident, ThinVec<Box<Expr<'db>>>),
     /// Address-of expression: `&expr` or `&mut expr`
     AddrOf(scrap_shared::types::Mutability, Box<Expr<'db>>),
     /// Spawn expression: `spawn func(args)` or `spawn { block }`
@@ -95,9 +95,9 @@ pub enum ExprKind<'db> {
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub struct Arm<'db> {
-    pub pat: Pat<'db>,
+    pub pat: Pat,
     pub body: Box<Expr<'db>>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 /// A struct literal expression (e.g., `Point { x: 5, y: 10 }`).
@@ -105,7 +105,7 @@ pub struct Arm<'db> {
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub struct StructExpr<'db> {
-    pub path: Path<'db>,
+    pub path: Path,
     pub fields: ThinVec<ExprField<'db>>,
 }
 
@@ -114,9 +114,9 @@ pub struct StructExpr<'db> {
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub struct ExprField<'db> {
-    pub ident: Ident<'db>,
+    pub ident: Ident,
     pub expr: Box<Expr<'db>>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {

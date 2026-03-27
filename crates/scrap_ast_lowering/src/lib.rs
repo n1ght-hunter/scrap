@@ -104,9 +104,9 @@ mod tests {
     /// Test helper that wraps the logic in a Salsa tracked function
     #[salsa::tracked]
     fn test_lower_simple_function_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
-        let name = Symbol::new(db, "test_fn".to_string());
+        let name = Symbol::new("test_fn");
         let ident = Ident {
             id: node_id,
             name,
@@ -142,7 +142,7 @@ mod tests {
         }
 
         let (function, _extras) = result.unwrap();
-        function.signature(db).name(db).text(db) == "test_fn"
+        function.signature(db).name(db).text() == "test_fn"
             && function.signature(db).params(db).is_empty()
             && function.signature(db).return_ty(db) == ir::Ty::Void
     }
@@ -155,10 +155,10 @@ mod tests {
 
     #[salsa::tracked]
     fn test_lower_function_with_params_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
 
-        let name = Symbol::new(db, "add".to_string());
+        let name = Symbol::new("add");
         let ident = Ident {
             id: node_id,
             name,
@@ -166,13 +166,13 @@ mod tests {
         };
 
         // Create parameter 'a: int'
-        let a_name = Symbol::new(db, "a".to_string());
+        let a_name = Symbol::new("a");
         let a_ident = Ident {
             id: node_id,
             name: a_name,
             span,
         };
-        let int_sym = Symbol::new(db, "int".to_string());
+        let int_sym = Symbol::new("int");
         let int_path = Path {
             span,
             segments: ThinVec::from([scrap_shared::path::PathSegment {
@@ -201,7 +201,7 @@ mod tests {
         };
 
         // Create parameter 'b: int'
-        let b_name = Symbol::new(db, "b".to_string());
+        let b_name = Symbol::new("b");
         let b_ident = Ident {
             id: node_id,
             name: b_name,
@@ -254,7 +254,7 @@ mod tests {
 
         let (function, _extras) = result.unwrap();
         let signature = function.signature(db);
-        signature.name(db).text(db) == "add"
+        signature.name(db).text() == "add"
             && signature.params(db).len() == 2
             && signature.params(db)[0] == ir::Ty::Int(scrap_shared::types::IntTy::I32)
             && signature.params(db)[1] == ir::Ty::Int(scrap_shared::types::IntTy::I32)
@@ -268,11 +268,11 @@ mod tests {
 
     #[salsa::tracked]
     fn test_lower_type_primitives_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
 
         // Test int type
-        let int_name = Symbol::new(db, "int".to_string());
+        let int_name = Symbol::new("int");
         let int_path = Path {
             span,
             segments: ThinVec::from([scrap_shared::path::PathSegment {
@@ -294,7 +294,7 @@ mod tests {
         }
 
         // Test bool type
-        let bool_name = Symbol::new(db, "bool".to_string());
+        let bool_name = Symbol::new("bool");
         let bool_path = Path {
             span,
             segments: ThinVec::from([scrap_shared::path::PathSegment {
@@ -316,7 +316,7 @@ mod tests {
         }
 
         // Test String type
-        let string_name = Symbol::new(db, "String".to_string());
+        let string_name = Symbol::new("String");
         let string_path = Path {
             span,
             segments: ThinVec::from([scrap_shared::path::PathSegment {
@@ -343,10 +343,10 @@ mod tests {
     }
     #[scrap_macros::salsa_test]
     fn test_lower_module(db: &dyn scrap_shared::Db) {
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
 
-        let name = Symbol::new(db, "module_fn".to_string());
+        let name = Symbol::new("module_fn");
         let ident = Ident {
             id: node_id,
             name,
@@ -377,7 +377,7 @@ mod tests {
                 span,
             },
         };
-        let path = scrap_shared::path::Path::from_segment(db, "test_module");
+        let path = scrap_shared::path::Path::from_segment("test_module");
         let module_id = ModuleId::from_path(db, &path);
 
         let module = lower_module(db, module_id, &[item], "", create_empty_type_table(db)).unwrap();
@@ -388,7 +388,7 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
-        let path = scrap_shared::path::Path::from_segment(db, "empty_module");
+        let path = scrap_shared::path::Path::from_segment("empty_module");
         let module_id = ModuleId::from_path(db, &path);
         let module = lower_module(db, module_id, &[], "", create_empty_type_table(db)).unwrap();
 

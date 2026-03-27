@@ -22,9 +22,7 @@ Can(
                                     id: -2,
                                     file_hash: 0,
                                 },
-                                name: Symbol {
-                                    text: "test",
-                                },
+                                name: Symbol("test"),
                                 span: Span {
                                     start: 0,
                                     end: 4,
@@ -52,9 +50,7 @@ Can(
                                 id: 1,
                                 file_hash: 16101345102062212073,
                             },
-                            name: Symbol {
-                                text: "Point",
-                            },
+                            name: Symbol("Point"),
                             span: Span {
                                 start: 7,
                                 end: 12,
@@ -87,9 +83,7 @@ Can(
                                                 id: 2,
                                                 file_hash: 16101345102062212073,
                                             },
-                                            name: Symbol {
-                                                text: "x",
-                                            },
+                                            name: Symbol("x"),
                                             span: Span {
                                                 start: 19,
                                                 end: 20,
@@ -114,9 +108,7 @@ Can(
                                                                 id: 3,
                                                                 file_hash: 16101345102062212073,
                                                             },
-                                                            name: Symbol {
-                                                                text: "int",
-                                                            },
+                                                            name: Symbol("int"),
                                                             span: Span {
                                                                 start: 22,
                                                                 end: 25,
@@ -158,9 +150,7 @@ Can(
                                                 id: 6,
                                                 file_hash: 16101345102062212073,
                                             },
-                                            name: Symbol {
-                                                text: "y",
-                                            },
+                                            name: Symbol("y"),
                                             span: Span {
                                                 start: 31,
                                                 end: 32,
@@ -185,9 +175,7 @@ Can(
                                                                 id: 7,
                                                                 file_hash: 16101345102062212073,
                                                             },
-                                                            name: Symbol {
-                                                                text: "int",
-                                                            },
+                                                            name: Symbol("int"),
                                                             span: Span {
                                                                 start: 34,
                                                                 end: 37,

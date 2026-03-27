@@ -36,9 +36,6 @@ impl TokenTypeSet {
     }
 }
 
-// The `TokenTypeSet` is a copy of the set being iterated. It initially holds
-// the entire set. Each bit is cleared as it is returned. We have finished once
-// it is all zeroes.
 pub struct TokenTypeSetIter(TokenTypeSet);
 
 impl Iterator for TokenTypeSetIter {
@@ -51,7 +48,7 @@ impl Iterator for TokenTypeSetIter {
         if z == num_bits {
             None
         } else {
-            self.0.0 &= !(1 << z); // clear the trailing 1 bit
+            self.0.0 &= !(1 << z);
             Some(Token::from_u32(z))
         }
     }
@@ -60,9 +57,9 @@ impl Iterator for TokenTypeSetIter {
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct TokenStream<'db> {
+pub struct TokenStream {
     #[serde(with = "arc_serde")]
-    inner: Arc<Vec<Spanned<'db, Token>>>,
+    inner: Arc<Vec<Spanned<Token>>>,
 }
 
 mod arc_serde {
@@ -86,16 +83,16 @@ mod arc_serde {
     }
 }
 
-impl<'db> Deref for TokenStream<'db> {
-    type Target = Vec<Spanned<'db, Token>>;
+impl Deref for TokenStream {
+    type Target = Vec<Spanned<Token>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<'db> TokenStream<'db> {
-    pub fn new(mut inner: Vec<Spanned<'db, Token>>) -> Self {
+impl TokenStream {
+    pub fn new(mut inner: Vec<Spanned<Token>>) -> Self {
         if let Some(last) = inner.last()
             && last.node != Token::Eof
         {
@@ -108,21 +105,19 @@ impl<'db> TokenStream<'db> {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokenStreamCursor<'db> {
-    stream: TokenStream<'db>,
+pub struct TokenStreamCursor {
+    stream: TokenStream,
     index: usize,
 }
 
-impl<'db> TokenStreamCursor<'db> {
+impl TokenStreamCursor {
     #[inline]
-    pub fn new(stream: TokenStream<'db>) -> Self {
+    pub fn new(stream: TokenStream) -> Self {
         let mut cursor = TokenStreamCursor { stream, index: 0 };
-        // Skip initial trivia tokens
         cursor.skip_trivia();
         cursor
     }
 
-    /// Skip trivia tokens (whitespace and comments)
     fn skip_trivia(&mut self) {
         while let Some(token) = self.stream.get(self.index) {
             if token.node.is_trivia() {
@@ -134,18 +129,15 @@ impl<'db> TokenStreamCursor<'db> {
     }
 
     #[inline]
-    /// Get the current token (skips trivia).
-    pub fn curr(&self) -> Option<Spanned<'db, Token>> {
+    pub fn curr(&self) -> Option<Spanned<Token>> {
         self.stream.get(self.index).copied()
     }
 
-    /// Get the current token including trivia (for Rowan parser).
-    pub fn curr_with_trivia(&self) -> Option<Spanned<'db, Token>> {
+    pub fn curr_with_trivia(&self) -> Option<Spanned<Token>> {
         self.stream.get(self.index).copied()
     }
 
-    pub fn look_ahead(&self, n: usize) -> Option<&Spanned<'db, Token>> {
-        // Look ahead skipping trivia
+    pub fn look_ahead(&self, n: usize) -> Option<&Spanned<Token>> {
         let mut count = 0;
         let mut idx = self.index;
         while count <= n {
@@ -167,7 +159,6 @@ impl<'db> TokenStreamCursor<'db> {
     #[inline]
     pub fn bump(&mut self) {
         self.index += 1;
-        // Skip trivia after bumping
         self.skip_trivia();
     }
 
@@ -175,7 +166,6 @@ impl<'db> TokenStreamCursor<'db> {
         self.index >= self.stream.len()
     }
 
-    // For skipping ahead in rare circumstances.
     #[inline]
     pub fn bump_to_end(&mut self) {
         self.index = self.stream.len();
@@ -190,16 +180,16 @@ impl<'db> TokenStreamCursor<'db> {
     }
 }
 
-impl<'a> std::ops::Index<usize> for TokenStream<'a> {
-    type Output = Spanned<'a, Token>;
+impl std::ops::Index<usize> for TokenStream {
+    type Output = Spanned<Token>;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.inner[index]
     }
 }
 
-impl<'a> std::ops::Index<std::ops::Range<usize>> for TokenStream<'a> {
-    type Output = [Spanned<'a, Token>];
+impl std::ops::Index<std::ops::Range<usize>> for TokenStream {
+    type Output = [Spanned<Token>];
 
     fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
         &self.inner[index]

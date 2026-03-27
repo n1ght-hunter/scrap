@@ -19,7 +19,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         Ok(Block {
             id: self.state.new_node_id(),
             stmts,
-            span: Span::new(self.db, start_span.start(self.db), end_span.end(self.db)),
+            span: Span::new(start_span.start, end_span.end),
         })
     }
 }

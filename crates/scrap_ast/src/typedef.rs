@@ -7,13 +7,13 @@ use thin_vec::ThinVec;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Ty<'db> {
+pub struct Ty {
     pub id: NodeId,
-    pub kind: TyKind<'db>,
-    pub span: Span<'db>,
+    pub kind: TyKind,
+    pub span: Span,
 }
 
-impl<'db> PrettyPrint for Ty<'db> {
+impl PrettyPrint for Ty {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.kind.pretty_print(f)
     }
@@ -22,19 +22,19 @@ impl<'db> PrettyPrint for Ty<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum TyKind<'db> {
-    Path(Path<'db>),
-    Tup(ThinVec<Box<Ty<'db>>>),
+pub enum TyKind {
+    Path(Path),
+    Tup(ThinVec<Box<Ty>>),
     /// A reference type: `&T` or `&mut T`
-    Ref(Box<Ty<'db>>, Mutability),
+    Ref(Box<Ty>, Mutability),
     /// A GC-managed pointer type: `*T`
-    Ptr(Box<Ty<'db>>),
+    Ptr(Box<Ty>),
     Dummy,
     Never,
     Err(ErrorGuaranteed),
 }
 
-impl<'db> PrettyPrint for TyKind<'db> {
+impl PrettyPrint for TyKind {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self {
             TyKind::Path(path) => path.pretty_print(f),

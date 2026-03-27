@@ -27,14 +27,12 @@ use thin_vec::ThinVec;
 pub const TEST_SOURCE: &str = "0";
 
 /// Create a simple span for testing (zero-length, used for non-literal nodes)
-pub fn test_span(db: &dyn scrap_shared::Db) -> Span<'_> {
-    Span::new(db, 0, 0)
+pub fn test_span() -> Span {
+    Span::new(0, 0)
 }
 
-/// Create a span that covers one character for literal parsing in tests.
-/// Points to position 0..1 in the source, which should contain a valid literal.
-pub fn test_literal_span(db: &dyn scrap_shared::Db) -> Span<'_> {
-    Span::new(db, 0, 1)
+pub fn test_literal_span() -> Span {
+    Span::new(0, 1)
 }
 
 /// Create a simple node ID for testing
@@ -45,8 +43,8 @@ pub fn test_node_id() -> NodeId {
 /// Create an integer literal expression.
 /// Uses `test_literal_span` so that `build_constant` can parse the source text.
 /// The test source (TEST_SOURCE = "0") must be passed to `ExprLowerer::new`.
-pub fn create_int_lit<'db>(db: &'db dyn scrap_shared::Db, _value: i64) -> Expr<'db> {
-    let span = test_literal_span(db);
+pub fn create_int_lit<'db>(_db: &'db dyn scrap_shared::Db, _value: i64) -> Expr<'db> {
+    let span = test_literal_span();
     let node_id = test_node_id();
 
     let lit = Lit {
@@ -63,8 +61,8 @@ pub fn create_int_lit<'db>(db: &'db dyn scrap_shared::Db, _value: i64) -> Expr<'
 }
 
 /// Create a boolean literal expression
-pub fn create_bool_lit<'db>(db: &'db dyn scrap_shared::Db, _value: bool) -> Expr<'db> {
-    let span = test_span(db);
+pub fn create_bool_lit<'db>(_db: &'db dyn scrap_shared::Db, _value: bool) -> Expr<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     let lit = Lit {
@@ -81,8 +79,8 @@ pub fn create_bool_lit<'db>(db: &'db dyn scrap_shared::Db, _value: bool) -> Expr
 }
 
 /// Create a string literal expression
-pub fn create_string_lit<'db>(db: &'db dyn scrap_shared::Db, _value: &str) -> Expr<'db> {
-    let span = test_span(db);
+pub fn create_string_lit<'db>(_db: &'db dyn scrap_shared::Db, _value: &str) -> Expr<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     let lit = Lit {
@@ -99,11 +97,11 @@ pub fn create_string_lit<'db>(db: &'db dyn scrap_shared::Db, _value: &str) -> Ex
 }
 
 /// Create an identifier expression (variable reference)
-pub fn create_ident_expr<'db>(db: &'db dyn scrap_shared::Db, name: &str) -> Expr<'db> {
-    let span = test_span(db);
+pub fn create_ident_expr<'db>(_db: &'db dyn scrap_shared::Db, name: &str) -> Expr<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
-    let symbol = Symbol::new(db, name.to_string());
+    let symbol = Symbol::new(name);
     let ident = Ident {
         id: node_id,
         name: symbol,
@@ -124,12 +122,12 @@ pub fn create_ident_expr<'db>(db: &'db dyn scrap_shared::Db, name: &str) -> Expr
 
 /// Create a binary operation expression
 pub fn create_binary_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     op_kind: BinOpKind,
     lhs: Expr<'db>,
     rhs: Expr<'db>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     let op = BinOp {
@@ -145,8 +143,8 @@ pub fn create_binary_expr<'db>(
 }
 
 /// Create a parenthesized expression
-pub fn create_paren_expr<'db>(db: &'db dyn scrap_shared::Db, inner: Expr<'db>) -> Expr<'db> {
-    let span = test_span(db);
+pub fn create_paren_expr<'db>(_db: &'db dyn scrap_shared::Db, inner: Expr<'db>) -> Expr<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -157,8 +155,8 @@ pub fn create_paren_expr<'db>(db: &'db dyn scrap_shared::Db, inner: Expr<'db>) -
 }
 
 /// Create an empty block
-pub fn create_empty_block<'db>(db: &'db dyn scrap_shared::Db) -> Block<'db> {
-    let span = test_span(db);
+pub fn create_empty_block<'db>(_db: &'db dyn scrap_shared::Db) -> Block<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     Block {
@@ -170,11 +168,11 @@ pub fn create_empty_block<'db>(db: &'db dyn scrap_shared::Db) -> Block<'db> {
 
 /// Create an assignment expression: lhs = rhs
 pub fn create_assign_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     lhs: Expr<'db>,
     rhs: Expr<'db>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -186,12 +184,12 @@ pub fn create_assign_expr<'db>(
 
 /// Create a compound assignment expression: lhs op= rhs
 pub fn create_assign_op_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     op_kind: AssignOpKind,
     lhs: Expr<'db>,
     rhs: Expr<'db>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     let op = AssignOp {
@@ -208,10 +206,10 @@ pub fn create_assign_op_expr<'db>(
 
 /// Create a return expression
 pub fn create_return_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     value: Option<Expr<'db>>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -223,11 +221,11 @@ pub fn create_return_expr<'db>(
 
 /// Create an if expression without else
 pub fn create_if_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     cond: Expr<'db>,
     then_block: Block<'db>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -239,12 +237,12 @@ pub fn create_if_expr<'db>(
 
 /// Create an if-else expression
 pub fn create_if_else_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     cond: Expr<'db>,
     then_block: Block<'db>,
     else_expr: Expr<'db>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -259,8 +257,8 @@ pub fn create_if_else_expr<'db>(
 }
 
 /// Create a block with statements
-pub fn create_block<'db>(db: &'db dyn scrap_shared::Db, stmts: Vec<Stmt<'db>>) -> Block<'db> {
-    let span = test_span(db);
+pub fn create_block<'db>(_db: &'db dyn scrap_shared::Db, stmts: Vec<Stmt<'db>>) -> Block<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     Block {
@@ -271,8 +269,8 @@ pub fn create_block<'db>(db: &'db dyn scrap_shared::Db, stmts: Vec<Stmt<'db>>) -
 }
 
 /// Create a statement with semicolon
-pub fn create_semi_stmt<'db>(db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> Stmt<'db> {
-    let span = test_span(db);
+pub fn create_semi_stmt<'db>(_db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> Stmt<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     Stmt {
@@ -283,8 +281,8 @@ pub fn create_semi_stmt<'db>(db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> 
 }
 
 /// Create an expression statement (without semicolon)
-pub fn create_expr_stmt<'db>(db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> Stmt<'db> {
-    let span = test_span(db);
+pub fn create_expr_stmt<'db>(_db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> Stmt<'db> {
+    let span = test_span();
     let node_id = test_node_id();
 
     Stmt {
@@ -296,10 +294,10 @@ pub fn create_expr_stmt<'db>(db: &'db dyn scrap_shared::Db, expr: Expr<'db>) -> 
 
 /// Create an array literal expression
 pub fn create_array_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     elements: Vec<Expr<'db>>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {
@@ -313,11 +311,11 @@ pub fn create_array_expr<'db>(
 
 /// Create a function call expression
 pub fn create_call_expr<'db>(
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     func: Expr<'db>,
     args: Vec<Expr<'db>>,
 ) -> Expr<'db> {
-    let span = test_span(db);
+    let span = test_span();
     let node_id = test_node_id();
 
     Expr {

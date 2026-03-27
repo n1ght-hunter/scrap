@@ -4,14 +4,14 @@ use scrap_shared::ident::Ident;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct StructDef<'db> {
+pub struct StructDef {
     pub id: NodeId,
-    pub ident: Ident<'db>,
-    pub generics: Generics<'db>,
-    pub data: VariantData<'db>,
+    pub ident: Ident,
+    pub generics: Generics,
+    pub data: VariantData,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for StructDef<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for StructDef {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "struct {}", self.ident.pretty_to_string())?;
         self.generics.pretty_print(f)?;

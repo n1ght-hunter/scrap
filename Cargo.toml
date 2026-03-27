@@ -47,6 +47,7 @@ rtmalloc = { git = "https://github.com/n1ght-hunter/rtmalloc.git", features = [
 ] }
 
 cfg-if = "1"
+lasso = { version = "0.7", features = ["multi-threaded", "serialize"] }
 either = "1"
 wyhash = "0.6.0"
 inflections = "1.1.1"

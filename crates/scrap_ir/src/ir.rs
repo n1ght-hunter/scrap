@@ -58,18 +58,18 @@ pub enum Items<'db> {
 /// The MIR for a struct
 pub struct Struct<'db> {
     /// The name of the struct.
-    pub name: Symbol<'db>,
+    pub name: Symbol,
     /// The fields of the struct.
     #[tracked]
     #[returns(ref)]
-    pub fields: Vec<(Symbol<'db>, Ty<'db>)>,
+    pub fields: Vec<(Symbol, Ty<'db>)>,
 }
 
 #[salsa::tracked(debug, persist)]
 /// The MIR for an enum
 pub struct Enum<'db> {
     /// The name of the enum.
-    pub name: Symbol<'db>,
+    pub name: Symbol,
     /// The variants of the enum.
     #[tracked]
     #[returns(ref)]
@@ -82,18 +82,18 @@ pub struct Enum<'db> {
 )]
 pub enum EnumVariant<'db> {
     /// A unit variant with no fields.
-    Unit(Symbol<'db>),
+    Unit(Symbol),
     /// A tuple variant with unnamed fields.
-    Tuple(Symbol<'db>, Vec<Ty<'db>>),
+    Tuple(Symbol, Vec<Ty<'db>>),
     /// A struct variant with named fields.
-    Struct(Symbol<'db>, Vec<(Symbol<'db>, Ty<'db>)>),
+    Struct(Symbol, Vec<(Symbol, Ty<'db>)>),
 }
 
 #[salsa::tracked(debug, persist)]
 /// An extern function declaration with its ABI and signature but no body.
 pub struct ExternFn<'db> {
     /// The ABI of the extern function (e.g. "C").
-    pub abi: Symbol<'db>,
+    pub abi: Symbol,
     /// The signature of the extern function.
     pub signature: Signature<'db>,
 }
@@ -110,7 +110,7 @@ pub struct Function<'db> {
 #[salsa::tracked(debug, persist)]
 pub struct Signature<'db> {
     /// The name of the function.
-    pub name: Symbol<'db>,
+    pub name: Symbol,
     /// The parameter types of the function.
     #[tracked]
     #[returns(ref)]
@@ -173,7 +173,7 @@ pub struct BasicBlock<'db> {
 #[salsa::tracked(debug, persist)]
 /// Declaration for a local variable, argument, or temporary.
 pub struct LocalDecl<'db> {
-    pub name: Option<Symbol<'db>>,
+    pub name: Option<Symbol>,
     pub ty: Ty<'db>,
 }
 
@@ -258,7 +258,7 @@ pub enum Rvalue<'db> {
     /// A compiler-builtin intrinsic function call.
     /// Replaces the old BinaryOp/UnaryOp — all operations are intrinsic calls.
     Intrinsic(IntrinsicOp, Vec<Operand<'db>>),
-    Constant(Constant<'db>),
+    Constant(Constant),
     /// Constructs a struct or enum variant.
     /// Example: `MyStruct { field1: op1, field2: op2 }`
     Aggregate(AggregateKind<'db>, Vec<Operand<'db>>),
@@ -282,7 +282,7 @@ pub enum Rvalue<'db> {
 )]
 pub enum Operand<'db> {
     Place(Place<'db>),
-    Constant(Constant<'db>),
+    Constant(Constant),
     FunctionRef(FunctionId<'db>),
 }
 
@@ -296,12 +296,12 @@ pub enum Place<'db> {
     Local(LocalId),
     /// A projection into a field of a struct or enum variant.
     /// Example: `my_struct.field2` would be `Place::Field(Box::new(Place::Local(my_struct_id)), 1, Some(sym))`
-    Field(Box<Place<'db>>, usize, Option<Symbol<'db>>),
+    Field(Box<Place<'db>>, usize, Option<Symbol>),
     /// Dereference a GC reference: `*place`.
     Deref(Box<Place<'db>>),
     /// Project an enum place to a specific variant.
     /// `(_1 as Some)` = `Place::Downcast(Local(1), 1, Some("Some"))`
-    Downcast(Box<Place<'db>>, usize, Option<Symbol<'db>>),
+    Downcast(Box<Place<'db>>, usize, Option<Symbol>),
     #[doc(hidden)]
     __Phantom(PhantomData<&'db ()>),
 }
@@ -312,7 +312,7 @@ pub enum Place<'db> {
 )]
 pub enum AggregateKind<'db> {
     /// Constructing a struct, identified by its `TypeId` and field names.
-    Struct(TypeId<'db>, Vec<Symbol<'db>>),
+    Struct(TypeId<'db>, Vec<Symbol>),
     /// Constructing an enum variant. We need the `TypeId` of the whole enum
     /// and the `variant_idx` of the specific variant being constructed.
     EnumVariant(TypeId<'db>, usize),
@@ -321,13 +321,13 @@ pub enum AggregateKind<'db> {
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum Constant<'db> {
+pub enum Constant {
     Void,
     Int(IntVal),
     Uint(UintVal),
     Float(FloatVal),
     Bool(bool),
-    String(Symbol<'db>),
+    String(Symbol),
 }
 
 /// A compiler-builtin operation represented as an inline function call.

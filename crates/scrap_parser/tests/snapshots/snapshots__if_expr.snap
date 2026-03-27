@@ -22,9 +22,7 @@ Can(
                                     id: -2,
                                     file_hash: 0,
                                 },
-                                name: Symbol {
-                                    text: "test",
-                                },
+                                name: Symbol("test"),
                                 span: Span {
                                     start: 0,
                                     end: 4,
@@ -52,9 +50,7 @@ Can(
                                 id: 1,
                                 file_hash: 16101345102062212073,
                             },
-                            name: Symbol {
-                                text: "test",
-                            },
+                            name: Symbol("test"),
                             span: Span {
                                 start: 3,
                                 end: 7,
@@ -83,9 +79,7 @@ Can(
                                                         id: 2,
                                                         file_hash: 16101345102062212073,
                                                     },
-                                                    name: Symbol {
-                                                        text: "int",
-                                                    },
+                                                    name: Symbol("int"),
                                                     span: Span {
                                                         start: 13,
                                                         end: 16,
@@ -150,9 +144,7 @@ Can(
                                                                                     id: 4,
                                                                                     file_hash: 16101345102062212073,
                                                                                 },
-                                                                                name: Symbol {
-                                                                                    text: "x",
-                                                                                },
+                                                                                name: Symbol("x"),
                                                                                 span: Span {
                                                                                     start: 26,
                                                                                     end: 27,

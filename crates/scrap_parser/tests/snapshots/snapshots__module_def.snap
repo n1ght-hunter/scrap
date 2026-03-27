@@ -22,9 +22,7 @@ Can(
                                     id: -2,
                                     file_hash: 0,
                                 },
-                                name: Symbol {
-                                    text: "test",
-                                },
+                                name: Symbol("test"),
                                 span: Span {
                                     start: 0,
                                     end: 4,
@@ -57,9 +55,7 @@ Can(
                                                     id: -2,
                                                     file_hash: 0,
                                                 },
-                                                name: Symbol {
-                                                    text: "test",
-                                                },
+                                                name: Symbol("test"),
                                                 span: Span {
                                                     start: 0,
                                                     end: 4,
@@ -76,9 +72,7 @@ Can(
                                                     id: 1,
                                                     file_hash: 16101345102062212073,
                                                 },
-                                                name: Symbol {
-                                                    text: "inner",
-                                                },
+                                                name: Symbol("inner"),
                                                 span: Span {
                                                     start: 4,
                                                     end: 9,
@@ -107,9 +101,7 @@ Can(
                                                     id: 2,
                                                     file_hash: 16101345102062212073,
                                                 },
-                                                name: Symbol {
-                                                    text: "helper",
-                                                },
+                                                name: Symbol("helper"),
                                                 span: Span {
                                                     start: 19,
                                                     end: 25,
@@ -152,9 +144,7 @@ Can(
                                                                                                 id: 3,
                                                                                                 file_hash: 16101345102062212073,
                                                                                             },
-                                                                                            name: Symbol {
-                                                                                                text: "print",
-                                                                                            },
+                                                                                            name: Symbol("print"),
                                                                                             span: Span {
                                                                                                 start: 38,
                                                                                                 end: 43,

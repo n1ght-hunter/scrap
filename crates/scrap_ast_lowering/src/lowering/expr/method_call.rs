@@ -15,7 +15,7 @@ impl<'db> ExprLowerer<'db> {
     pub(crate) fn lower_method_call(
         &mut self,
         receiver: &Expr<'db>,
-        method: &scrap_shared::ident::Ident<'db>,
+        method: &scrap_shared::ident::Ident,
         args: &ThinVec<Box<Expr<'db>>>,
         node_id: NodeId,
     ) -> MResult<ir::Operand<'db>> {
@@ -34,12 +34,12 @@ impl<'db> ExprLowerer<'db> {
     fn lower_method_call_parts(
         &mut self,
         receiver: &Expr<'db>,
-        method: &scrap_shared::ident::Ident<'db>,
+        method: &scrap_shared::ident::Ident,
         args: &ThinVec<Box<Expr<'db>>>,
     ) -> MResult<(ir::Operand<'db>, Vec<ir::Operand<'db>>)> {
         // Get receiver's type to construct the mangled name
         let type_name = self.lookup_method_type_name(receiver)?;
-        let mangled = format!("{}::{}", type_name, method.name.text(self.db));
+        let mangled = format!("{}::{}", type_name, method.name.text());
         let func_id = ir::FunctionId::new(self.db, mangled);
         let func_operand = ir::Operand::FunctionRef(func_id);
 
@@ -57,7 +57,7 @@ impl<'db> ExprLowerer<'db> {
     fn lookup_method_type_name(&self, receiver: &Expr<'db>) -> MResult<String> {
         if let Some(resolved) = self.lookup_expr_type(receiver.id) {
             match resolved {
-                scrap_tycheck::ResolvedTy::Adt(sym) => Ok(sym.text(self.db).to_string()),
+                scrap_tycheck::ResolvedTy::Adt(sym) => Ok(sym.text().to_string()),
                 _ => Err(crate::BuilderError::LowerExpressionError),
             }
         } else {

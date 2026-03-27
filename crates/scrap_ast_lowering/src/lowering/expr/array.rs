@@ -79,11 +79,11 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
         // Create bindings for x and y
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -149,7 +149,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create binding for arr
-        let arr_sym = Symbol::new(db, "arr".to_string());
+        let arr_sym = Symbol::new("arr");
         let arr_local = lowerer.allocate_named_local(arr_sym, ir::Ty::Never);
         lowerer.insert_binding(arr_sym, arr_local);
 

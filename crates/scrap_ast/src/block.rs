@@ -10,7 +10,7 @@ use crate::{node_id::NodeId, stmt::Stmt};
 pub struct Block<'db> {
     pub stmts: ThinVec<Stmt<'db>>,
     pub id: NodeId,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Block<'db> {

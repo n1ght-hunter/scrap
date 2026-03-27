@@ -32,7 +32,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Module<'db> {
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub enum ModuleKind<'db> {
-    Loaded(ThinVec<Box<Item<'db>>>, Inline, Span<'db>),
+    Loaded(ThinVec<Box<Item<'db>>>, Inline, Span),
     Unloaded,
 }
 

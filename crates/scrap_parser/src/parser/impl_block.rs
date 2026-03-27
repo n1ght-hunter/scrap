@@ -32,7 +32,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             id: self.state.new_node_id(),
             type_name,
             methods,
-            span: Span::new(self.db, start_span.start(self.db), end_span.end(self.db)),
+            span: Span::new(start_span.start, end_span.end),
         })
     }
 
@@ -41,7 +41,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     /// `self`, `&self`, or `&mut self`.
     fn parse_method_def(
         &mut self,
-        type_name: &scrap_shared::ident::Ident<'db>,
+        type_name: &scrap_shared::ident::Ident,
     ) -> PResult<'a, FnDef<'db>> {
         let start_span = self.token.span;
         self.expect(Token::Fn)?;
@@ -53,7 +53,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             None
         };
         let body = self.parse_block()?;
-        let span = Span::new(self.db, start_span.start(self.db), body.span.end(self.db));
+        let span = Span::new(start_span.start, body.span.end);
 
         Ok(FnDef::new(
             self.db,
@@ -71,8 +71,8 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     /// All three forms desugar to a parameter of the bare struct type (pass-by-value).
     fn parse_method_params(
         &mut self,
-        type_name: &scrap_shared::ident::Ident<'db>,
-    ) -> PResult<'a, ThinVec<Param<'db>>> {
+        type_name: &scrap_shared::ident::Ident,
+    ) -> PResult<'a, ThinVec<Param>> {
         self.expect(Token::LParen)?;
         let mut params = ThinVec::new();
 
@@ -91,11 +91,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             let param_type = self.parse_type()?;
 
             params.push(Param {
-                span: Span::new(
-                    self.db,
-                    param_ident.span.start(self.db),
-                    param_type.span.end(self.db),
-                ),
+                span: Span::new(param_ident.span.start, param_type.span.end),
                 id: self.state.new_node_id(),
                 ident: param_ident,
                 ty: Box::new(param_type),
@@ -116,13 +112,13 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     /// All forms produce a Param with type = TypeName (by-value).
     fn try_parse_self_param(
         &mut self,
-        type_name: &scrap_shared::ident::Ident<'db>,
-    ) -> PResult<'a, Option<Param<'db>>> {
+        type_name: &scrap_shared::ident::Ident,
+    ) -> PResult<'a, Option<Param>> {
         let start_pos = self.position();
 
         // Case 1: `self` (bare identifier)
         if self.check(Token::Ident) {
-            let text = &self.source[self.token.span.to_range(self.db)];
+            let text = &self.source[self.token.span.start..self.token.span.end];
             if text == "self" {
                 // Check next is `,` or `)` (confirming this is a self param, not `self: Type`)
                 if self.check_ahead(1, Token::Comma) || self.check_ahead(1, Token::RParen) {
@@ -137,7 +133,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             // Copy lookahead info to avoid borrow conflicts
             let ahead1_info = self.look_ahead(1).map(|t| (t.node, t.span));
             if let Some((ahead1_tok, ahead1_span)) = ahead1_info {
-                let ahead1_text = &self.source[ahead1_span.to_range(self.db)];
+                let ahead1_text = &self.source[ahead1_span.start..ahead1_span.end];
 
                 if ahead1_tok == Token::Ident && ahead1_text == "self" {
                     // `&self` — consume & and self
@@ -150,7 +146,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                     // Check if it's `&mut self`
                     let ahead2_info = self.look_ahead(2).map(|t| (t.node, t.span));
                     if let Some((ahead2_tok, ahead2_span)) = ahead2_info {
-                        let ahead2_text = &self.source[ahead2_span.to_range(self.db)];
+                        let ahead2_text = &self.source[ahead2_span.start..ahead2_span.end];
                         if ahead2_tok == Token::Ident && ahead2_text == "self" {
                             // `&mut self` — consume &, mut, self
                             self.bump(); // consume &
@@ -171,9 +167,9 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     /// Create a self parameter with the bare struct type.
     fn make_self_param(
         &mut self,
-        self_ident: scrap_shared::ident::Ident<'db>,
-        type_name: &scrap_shared::ident::Ident<'db>,
-    ) -> Param<'db> {
+        self_ident: scrap_shared::ident::Ident,
+        type_name: &scrap_shared::ident::Ident,
+    ) -> Param {
         let ty = Ty {
             id: self.state.new_node_id(),
             span: type_name.span,

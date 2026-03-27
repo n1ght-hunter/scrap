@@ -9,10 +9,10 @@ use crate::{expr::Expr, node_id::NodeId, pat::Pat, typedef::Ty};
 )]
 pub struct Local<'db> {
     pub id: NodeId,
-    pub pat: Box<Pat<'db>>,
-    pub ty: Option<Ty<'db>>,
+    pub pat: Box<Pat>,
+    pub ty: Option<Ty>,
     pub kind: LocalKind<'db>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> PrettyPrint for Local<'db> {

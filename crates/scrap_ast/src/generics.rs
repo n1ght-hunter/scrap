@@ -7,11 +7,11 @@ use crate::node_id::NodeId;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, Default, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Generics<'db> {
-    pub params: ThinVec<GenericParam<'db>>,
+pub struct Generics {
+    pub params: ThinVec<GenericParam>,
 }
 
-impl<'db> Generics<'db> {
+impl Generics {
     pub fn is_empty(&self) -> bool {
         self.params.is_empty()
     }
@@ -20,12 +20,12 @@ impl<'db> Generics<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct GenericParam<'db> {
+pub struct GenericParam {
     pub id: NodeId,
-    pub ident: Ident<'db>,
+    pub ident: Ident,
     pub kind: GenericParamKind,
-    pub bounds: ThinVec<GenericBound<'db>>,
-    pub span: Span<'db>,
+    pub bounds: ThinVec<GenericBound>,
+    pub span: Span,
 }
 
 #[derive(
@@ -38,11 +38,11 @@ pub enum GenericParamKind {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum GenericBound<'db> {
-    Trait(Path<'db>),
+pub enum GenericBound {
+    Trait(Path),
 }
 
-impl<'db> PrettyPrint for Generics<'db> {
+impl PrettyPrint for Generics {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         if self.params.is_empty() {
             return Ok(());

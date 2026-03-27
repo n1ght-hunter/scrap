@@ -185,7 +185,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create variable x
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -212,7 +212,7 @@ mod tests {
         // if x > 0 { } else { }
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -227,7 +227,7 @@ mod tests {
         let else_expr = Expr {
             id: test_node_id(),
             kind: ExprKind::Block(Box::new(else_block)),
-            span: test_span(db),
+            span: test_span(),
         };
 
         let if_expr = create_if_else_expr(db, cond, then_block, else_expr);
@@ -244,11 +244,11 @@ mod tests {
         // if x > 0 { if y > 0 { } }
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -318,7 +318,7 @@ mod tests {
         // if x > 0 { return 1; }
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -365,11 +365,11 @@ mod tests {
         // if x > 0 && y < 10 { }
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -401,7 +401,7 @@ mod tests {
         // Test that we can build a complete CFG
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -423,7 +423,7 @@ mod tests {
                 db,
                 vec![create_expr_stmt(db, return_zero)],
             ))),
-            span: test_span(db),
+            span: test_span(),
         };
 
         let if_expr = create_if_else_expr(db, cond, then_block, else_block_expr);

@@ -24,46 +24,46 @@ pub struct BindingMode(pub ByRef, pub Mutability);
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum PatKind<'db> {
+pub enum PatKind {
     /// A missing pattern, e.g. for an anonymous param in a bare fn like `fn f(u32)`.
     Missing,
     /// A `PatKind::Ident` may either be a new bound variable (`ref mut binding @ OPT_SUBPATTERN`),
     /// or a unit struct/variant pattern, or a const pattern (in the last two cases the third
     /// field must be `None`). Disambiguation cannot be done with parser alone, so it happens
     /// during name resolution.
-    Ident(BindingMode, Ident<'db>, Option<Box<Pat<'db>>>),
+    Ident(BindingMode, Ident, Option<Box<Pat>>),
     /// Wildcard pattern `_`
     Wildcard,
     /// Path pattern for unit variants: `Option::None`
-    Path(Path<'db>),
+    Path(Path),
     /// Tuple struct/variant pattern: `Option::Some(x)`
-    TupleStruct(Path<'db>, Vec<Pat<'db>>),
+    TupleStruct(Path, Vec<Pat>),
     /// Struct variant pattern: `Msg::Move { x, y }`
-    Struct(Path<'db>, Vec<FieldPat<'db>>),
+    Struct(Path, Vec<FieldPat>),
     /// Literal pattern: `42`, `true`
-    Lit(Lit<'db>),
+    Lit(Lit),
 }
 
 /// A field pattern in a struct pattern (e.g., `x` in `Point { x, y }`).
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct FieldPat<'db> {
-    pub ident: Ident<'db>,
-    pub pat: Pat<'db>,
-    pub span: Span<'db>,
+pub struct FieldPat {
+    pub ident: Ident,
+    pub pat: Pat,
+    pub span: Span,
 }
 
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Pat<'db> {
+pub struct Pat {
     pub id: NodeId,
-    pub kind: PatKind<'db>,
-    pub span: Span<'db>,
+    pub kind: PatKind,
+    pub span: Span,
 }
 
-impl<'db> PrettyPrint for Pat<'db> {
+impl PrettyPrint for Pat {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
         match &self.kind {
             PatKind::Missing => write!(f, "_"),

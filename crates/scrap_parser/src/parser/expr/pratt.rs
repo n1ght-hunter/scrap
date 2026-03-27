@@ -23,7 +23,7 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
             if self.check(Token::Dot) {
                 self.bump();
                 let field_ident = self.parse_ident()?;
-                let start = lhs.span.start(self.db);
+                let start = lhs.span.start;
 
                 if self.check(Token::LParen) {
                     // Method call: receiver.method(args)
@@ -35,20 +35,20 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                             break;
                         }
                     }
-                    let end = self.token.span.end(self.db);
+                    let end = self.token.span.end;
                     self.expect(Token::RParen)?;
                     lhs = Expr {
                         id: self.state.new_node_id(),
                         kind: ExprKind::MethodCall(Box::new(lhs), field_ident, args),
-                        span: Span::new(self.db, start, end),
+                        span: Span::new(start, end),
                     };
                 } else {
                     // Field access: receiver.field
-                    let end = field_ident.span.end(self.db);
+                    let end = field_ident.span.end;
                     lhs = Expr {
                         id: self.state.new_node_id(),
                         kind: ExprKind::Field(Box::new(lhs), field_ident),
-                        span: Span::new(self.db, start, end),
+                        span: Span::new(start, end),
                     };
                 }
                 continue;
@@ -69,9 +69,9 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
 
             let rhs = self.parse_expr_with_min_precedence(right_prec)?;
 
-            let start_pos = lhs.span.start(self.db);
-            let end_pos = rhs.span.end(self.db);
-            let span = Span::new(self.db, start_pos, end_pos);
+            let start_pos = lhs.span.start;
+            let end_pos = rhs.span.end;
+            let span = Span::new(start_pos, end_pos);
 
             lhs = match op {
                 AssocOp::Binary(bin_op) => Expr {

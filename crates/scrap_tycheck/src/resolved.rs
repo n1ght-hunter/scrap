@@ -11,7 +11,7 @@ use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum ResolvedTy<'db> {
+pub enum ResolvedTy {
     /// Void type (no value)
     Void,
     /// Boolean type
@@ -27,24 +27,24 @@ pub enum ResolvedTy<'db> {
     /// Never type (diverging)
     Never,
     /// User-defined type (struct/enum)
-    Adt(Symbol<'db>),
+    Adt(Symbol),
     /// Generic type parameter (e.g., T in fn foo<T>)
-    Param(Symbol<'db>),
+    Param(Symbol),
     /// Applied generic type (e.g., Vec<int>, Option<T>)
-    App(Symbol<'db>, Vec<ResolvedTy<'db>>),
+    App(Symbol, Vec<ResolvedTy>),
     /// Function type
-    Fn(Vec<ResolvedTy<'db>>, Box<ResolvedTy<'db>>),
+    Fn(Vec<ResolvedTy>, Box<ResolvedTy>),
     /// Tuple type
-    Tuple(Vec<ResolvedTy<'db>>),
+    Tuple(Vec<ResolvedTy>),
     /// GC-managed reference type: `&T` or `&mut T`
-    Ref(Box<ResolvedTy<'db>>, Mutability),
+    Ref(Box<ResolvedTy>, Mutability),
     /// GC-managed pointer type: `*T`
-    Ptr(Box<ResolvedTy<'db>>),
+    Ptr(Box<ResolvedTy>),
     /// Error type (for unresolved inference variables or type errors)
     Error,
 }
 
-impl<'db> ResolvedTy<'db> {
+impl ResolvedTy {
     /// Check if this is an error type.
     pub fn is_error(&self) -> bool {
         matches!(self, ResolvedTy::Error)

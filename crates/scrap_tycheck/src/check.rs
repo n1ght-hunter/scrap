@@ -71,7 +71,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Collect a foreign function signature.
-    fn collect_foreign_fn_signature(&mut self, item: &ForeignItem<'db>) {
+    fn collect_foreign_fn_signature(&mut self, item: &ForeignItem) {
         let name = item.ident.name;
 
         let type_params = vec![];
@@ -181,7 +181,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Collect a struct definition.
-    fn collect_struct_definition(&mut self, struct_def: &StructDef<'db>) {
+    fn collect_struct_definition(&mut self, struct_def: &StructDef) {
         let name = struct_def.ident.name;
 
         let type_params: Vec<_> = struct_def
@@ -214,7 +214,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Collect an enum definition.
-    fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef<'db>) {
+    fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef) {
         let name = enum_def.ident.name;
 
         let type_params: Vec<_> = enum_def
@@ -315,14 +315,11 @@ impl<'db> TypeContext<'db> {
 
         for method in &impl_block.methods {
             let method_ident = method.ident(self.db());
-            let mangled = Symbol::new(
-                self.db(),
-                format!(
-                    "{}::{}",
-                    type_name.text(self.db()),
-                    method_ident.name.text(self.db())
-                ),
-            );
+            let mangled = Symbol::new(format!(
+                "{}::{}",
+                type_name.text(),
+                method_ident.name.text()
+            ));
 
             let type_params: Vec<_> = method
                 .generics(self.db())
@@ -360,16 +357,13 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Type check a method body (same as check_function but uses mangled name).
-    fn check_method(&mut self, fn_def: FnDef<'db>, type_name: Symbol<'db>) {
+    fn check_method(&mut self, fn_def: FnDef<'db>, type_name: Symbol) {
         let method_ident = fn_def.ident(self.db());
-        let mangled = Symbol::new(
-            self.db(),
-            format!(
-                "{}::{}",
-                type_name.text(self.db()),
-                method_ident.name.text(self.db())
-            ),
-        );
+        let mangled = Symbol::new(format!(
+            "{}::{}",
+            type_name.text(),
+            method_ident.name.text()
+        ));
 
         let sig = match self.lookup_function(mangled) {
             Some(sig) => sig.clone(),

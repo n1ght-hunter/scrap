@@ -7,14 +7,14 @@ use scrap_shared::ident::Ident;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct EnumDef<'db> {
+pub struct EnumDef {
     pub id: NodeId,
-    pub ident: Ident<'db>,
-    pub generics: Generics<'db>,
-    pub variants: Vec<Variant<'db>>,
+    pub ident: Ident,
+    pub generics: Generics,
+    pub variants: Vec<Variant>,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for EnumDef {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "enum {}", {
             let mut s = String::new();
@@ -35,15 +35,15 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Variant<'db> {
+pub struct Variant {
     pub id: NodeId,
-    pub span: Span<'db>,
+    pub span: Span,
     // pub vis: Visibility,
-    pub ident: Ident<'db>,
-    pub data: VariantData<'db>,
+    pub ident: Ident,
+    pub data: VariantData,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for Variant<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for Variant {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.ident.pretty_print(f)?;
         match &self.data {
@@ -75,18 +75,18 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Variant<'db> {
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum VariantData<'db> {
-    Struct { fields: ThinVec<FieldDef<'db>> },
-    Tuple(ThinVec<FieldDef<'db>>, NodeId),
+pub enum VariantData {
+    Struct { fields: ThinVec<FieldDef> },
+    Tuple(ThinVec<FieldDef>, NodeId),
     Unit(NodeId),
 }
 
-impl<'db> VariantData<'db> {
+impl VariantData {
     pub fn is_struct(&self) -> bool {
         matches!(self, VariantData::Struct { .. })
     }
 
-    pub fn unwrap_struct(&self) -> &ThinVec<FieldDef<'db>> {
+    pub fn unwrap_struct(&self) -> &ThinVec<FieldDef> {
         if let VariantData::Struct { fields } = self {
             fields
         } else {
@@ -98,7 +98,7 @@ impl<'db> VariantData<'db> {
         matches!(self, VariantData::Tuple(_, _))
     }
 
-    pub fn unwrap_tuple(&self) -> &ThinVec<FieldDef<'db>> {
+    pub fn unwrap_tuple(&self) -> &ThinVec<FieldDef> {
         if let VariantData::Tuple(fields, _) = self {
             fields
         } else {

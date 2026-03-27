@@ -28,12 +28,12 @@ pub fn lower_module<'db>(
     let mut items = Vec::new();
 
     // Collect struct field maps for expression lowering (field name → index)
-    let mut struct_field_maps: HashMap<String, HashMap<Symbol<'db>, usize>> = HashMap::new();
+    let mut struct_field_maps: HashMap<String, HashMap<Symbol, usize>> = HashMap::new();
     for item in ast_items {
         if let ItemKind::Struct(struct_def) = &item.kind
             && let VariantData::Struct { fields } = &struct_def.data
         {
-            let name = struct_def.ident.name.text(db).to_string();
+            let name = struct_def.ident.name.text().to_string();
             let field_map = fields
                 .iter()
                 .enumerate()
@@ -45,7 +45,7 @@ pub fn lower_module<'db>(
 
     // Pre-register generic struct field maps for monomorphized copies
     for &(inst_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
-        let inst_str = inst_name.text(db).to_string();
+        let inst_str = inst_name.text().to_string();
         if let Some(base_map) = struct_field_maps.get(&inst_str).cloned() {
             let mangled = mangle_generic_name(db, inst_name, subst_pairs);
             struct_field_maps.insert(mangled, base_map);
@@ -56,7 +56,7 @@ pub fn lower_module<'db>(
     let mut enum_info_maps: HashMap<String, crate::lowerer::EnumInfo<'db>> = HashMap::new();
     for item in ast_items {
         if let ItemKind::Enum(enum_def) = &item.kind {
-            let name = enum_def.ident.name.text(db).to_string();
+            let name = enum_def.ident.name.text().to_string();
             let variants: Vec<_> = enum_def
                 .variants
                 .iter()
@@ -90,9 +90,8 @@ pub fn lower_module<'db>(
         }
     }
 
-    let mut generic_fndefs: HashMap<Symbol<'db>, FnDef<'db>> = HashMap::new();
-    let mut generic_structdefs: HashMap<String, &scrap_ast::structdef::StructDef<'db>> =
-        HashMap::new();
+    let mut generic_fndefs: HashMap<Symbol, FnDef<'db>> = HashMap::new();
+    let mut generic_structdefs: HashMap<String, &scrap_ast::structdef::StructDef> = HashMap::new();
 
     for item in ast_items {
         match &item.kind {
@@ -121,13 +120,12 @@ pub fn lower_module<'db>(
             }
             ItemKind::Struct(struct_def) => {
                 if !struct_def.generics.is_empty() {
-                    generic_structdefs
-                        .insert(struct_def.ident.name.text(db).to_string(), struct_def);
+                    generic_structdefs.insert(struct_def.ident.name.text().to_string(), struct_def);
                     continue;
                 }
                 if let VariantData::Struct { fields } = &struct_def.data {
                     let name = struct_def.ident.name;
-                    let ir_fields: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+                    let ir_fields: Vec<(Symbol, ir::Ty<'db>)> = fields
                         .iter()
                         .filter_map(|field| {
                             let field_name = field.ident.as_ref()?.name;
@@ -157,7 +155,7 @@ pub fn lower_module<'db>(
                             ir::EnumVariant::Tuple(variant.ident.name, field_tys)
                         }
                         VariantData::Struct { fields } => {
-                            let field_defs: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+                            let field_defs: Vec<(Symbol, ir::Ty<'db>)> = fields
                                 .iter()
                                 .filter_map(|f| {
                                     let n = f.ident.as_ref()?.name;
@@ -201,14 +199,14 @@ pub fn lower_module<'db>(
             continue;
         }
 
-        let type_subst: HashMap<Symbol<'db>, ir::Ty<'db>> = subst_pairs
+        let type_subst: HashMap<Symbol, ir::Ty<'db>> = subst_pairs
             .iter()
             .map(|(param, resolved)| (*param, crate::ty_convert::resolved_to_ir(db, resolved)))
             .collect();
 
         // Generic function
         if let Some(&fn_def) = generic_fndefs.get(&inst_name) {
-            let mangled_sym = Symbol::new(db, mangled.clone());
+            let mangled_sym = Symbol::new(mangled.clone());
             let (mir_fn, extras) = lower_monomorphized_function(
                 db,
                 fn_def,
@@ -224,12 +222,12 @@ pub fn lower_module<'db>(
         }
 
         // Generic struct
-        let inst_name_str = inst_name.text(db).to_string();
+        let inst_name_str = inst_name.text().to_string();
         if let Some(struct_def) = generic_structdefs.get(&inst_name_str)
             && let VariantData::Struct { fields } = &struct_def.data
         {
-            let mangled_sym = Symbol::new(db, mangled.clone());
-            let ir_fields: Vec<(Symbol<'db>, ir::Ty<'db>)> = fields
+            let mangled_sym = Symbol::new(mangled.clone());
+            let ir_fields: Vec<(Symbol, ir::Ty<'db>)> = fields
                 .iter()
                 .filter_map(|field| {
                     let field_name = field.ident.as_ref()?.name;
@@ -254,12 +252,12 @@ pub fn lower_module<'db>(
     Ok(ir::Module::new(db, module_id, items))
 }
 
-pub(crate) fn mangle_generic_name_from_resolved<'db>(
-    db: &'db dyn scrap_shared::Db,
-    base_name: Symbol<'db>,
-    args: &[scrap_tycheck::ResolvedTy<'db>],
+pub(crate) fn mangle_generic_name_from_resolved(
+    _db: &dyn scrap_shared::Db,
+    base_name: Symbol,
+    args: &[scrap_tycheck::ResolvedTy],
 ) -> String {
-    let mut name = base_name.text(db).to_string();
+    let mut name = base_name.text().to_string();
     for ty in args {
         name.push_str("__");
         name.push_str(&mangle_type(ty));
@@ -267,12 +265,12 @@ pub(crate) fn mangle_generic_name_from_resolved<'db>(
     name
 }
 
-pub(crate) fn mangle_generic_name<'db>(
-    db: &'db dyn scrap_shared::Db,
-    fn_name: Symbol<'db>,
-    subst: &[(Symbol<'db>, scrap_tycheck::ResolvedTy<'db>)],
+pub(crate) fn mangle_generic_name(
+    _db: &dyn scrap_shared::Db,
+    fn_name: Symbol,
+    subst: &[(Symbol, scrap_tycheck::ResolvedTy)],
 ) -> String {
-    let mut name = fn_name.text(db).to_string();
+    let mut name = fn_name.text().to_string();
     for (_, ty) in subst {
         name.push_str("__");
         name.push_str(&mangle_type(ty));
@@ -329,11 +327,11 @@ fn mangle_type(ty: &scrap_tycheck::ResolvedTy) -> String {
 fn lower_monomorphized_function<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
-    mangled_name: Symbol<'db>,
-    type_subst: &HashMap<Symbol<'db>, ir::Ty<'db>>,
+    mangled_name: Symbol,
+    type_subst: &HashMap<Symbol, ir::Ty<'db>>,
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
-    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let mut params = Vec::new();
@@ -369,7 +367,7 @@ pub fn lower_function<'db>(
     ast_function: FnDef<'db>,
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
-    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let signature = lower_signature(db, ast_function, type_table)?;
@@ -418,7 +416,7 @@ pub fn lower_signature<'db>(
 /// Lower a foreign (extern) function signature
 pub fn lower_foreign_signature<'db>(
     db: &'db dyn scrap_shared::Db,
-    item: &ForeignItem<'db>,
+    item: &ForeignItem,
 ) -> MResult<ir::Signature<'db>> {
     let name = item.ident.name;
 
@@ -439,18 +437,15 @@ pub fn lower_foreign_signature<'db>(
 /// Lower a method definition (same as a function but with a mangled name).
 pub fn lower_method<'db>(
     db: &'db dyn scrap_shared::Db,
-    type_name: scrap_shared::ident::Symbol<'db>,
+    type_name: scrap_shared::ident::Symbol,
     ast_function: FnDef<'db>,
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
-    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let method_name = ast_function.ident(db).name;
-    let mangled = Symbol::new(
-        db,
-        format!("{}::{}", type_name.text(db), method_name.text(db)),
-    );
+    let mangled = Symbol::new(format!("{}::{}", type_name.text(), method_name.text()));
     let signature = lower_signature_with_name(db, mangled, ast_function, type_table)?;
     let return_ty = signature.return_ty(db);
     let (body, extras) = lower_body(
@@ -469,7 +464,7 @@ pub fn lower_method<'db>(
 /// Lower a function signature using an explicit name (for methods with mangled names).
 pub fn lower_signature_with_name<'db>(
     db: &'db dyn scrap_shared::Db,
-    name: Symbol<'db>,
+    name: Symbol,
     ast_function: FnDef<'db>,
     type_table: scrap_tycheck::TypeTable<'db>,
 ) -> MResult<ir::Signature<'db>> {
@@ -498,7 +493,7 @@ pub fn lower_body<'db>(
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
     return_ty: ir::Ty<'db>,
-    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Body<'db>, Vec<ir::Items<'db>>)> {
     lower_body_with_subst(
@@ -520,9 +515,9 @@ fn lower_body_with_subst<'db>(
     source: &'db str,
     type_table: scrap_tycheck::TypeTable<'db>,
     return_ty: ir::Ty<'db>,
-    struct_field_maps: &HashMap<String, HashMap<Symbol<'db>, usize>>,
+    struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
-    type_subst: &HashMap<Symbol<'db>, ir::Ty<'db>>,
+    type_subst: &HashMap<Symbol, ir::Ty<'db>>,
 ) -> MResult<(ir::Body<'db>, Vec<ir::Items<'db>>)> {
     let mut lowerer = ExprLowerer::new(db, source, type_table);
     lowerer.struct_fields = struct_field_maps.clone();

@@ -49,7 +49,7 @@ mod tests {
         // { x = 5; }
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -62,7 +62,7 @@ mod tests {
         let block_expr = Expr {
             id: test_node_id(),
             kind: ExprKind::Block(Box::new(block)),
-            span: test_span(db),
+            span: test_span(),
         };
 
         let result = lowerer.lower_expr(&block_expr);

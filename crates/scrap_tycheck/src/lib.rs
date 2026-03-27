@@ -102,7 +102,7 @@ mod tests {
     fn test_scope_management(db: &dyn scrap_shared::Db) {
         let mut ctx = TypeContext::new(db, "", "test.sc");
 
-        let sym = scrap_shared::ident::Symbol::new(db, "x".to_string());
+        let sym = scrap_shared::ident::Symbol::new("x");
 
         // Define in outer scope
         ctx.define_var(sym, InferTy::Int(IntTy::I32));
@@ -173,7 +173,7 @@ mod tests {
         ctx.record_expr_type(expr_id, var.clone());
 
         // Unify the type variable with Int
-        let span = Span::new(db, 0, 0);
+        let span = Span::new(0, 0);
         ctx.unify(&var, &InferTy::Int(IntTy::I32), span);
 
         // Finalize - should resolve the type variable to Int

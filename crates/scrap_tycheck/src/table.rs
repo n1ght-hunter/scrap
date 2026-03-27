@@ -16,33 +16,29 @@ pub struct TypeTable<'db> {
     /// Expression types as (NodeId, ResolvedTy) pairs
     #[tracked]
     #[returns(ref)]
-    pub expr_types: Vec<(NodeId, ResolvedTy<'db>)>,
+    pub expr_types: Vec<(NodeId, ResolvedTy)>,
 
     /// Local variable types as (NodeId, ResolvedTy) pairs
     #[tracked]
     #[returns(ref)]
-    pub local_types: Vec<(NodeId, ResolvedTy<'db>)>,
+    pub local_types: Vec<(NodeId, ResolvedTy)>,
 
     /// Inferred function return types as (Symbol, ResolvedTy) pairs.
     /// Only populated when the inferred return type differs from the declared one
     /// (e.g., a function with no return annotation whose body diverges).
     #[tracked]
     #[returns(ref)]
-    pub fn_return_types: Vec<(Symbol<'db>, ResolvedTy<'db>)>,
+    pub fn_return_types: Vec<(Symbol, ResolvedTy)>,
 
     /// Generic function instantiations: (fn_name, call_node_id, [(type_param, concrete_type)])
     #[tracked]
     #[returns(ref)]
-    pub generic_instantiations: Vec<(Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)>,
+    pub generic_instantiations: Vec<(Symbol, NodeId, Vec<(Symbol, ResolvedTy)>)>,
 }
 
 impl<'db> TypeTable<'db> {
     /// Get the type of an expression by its NodeId.
-    pub fn expr_type(
-        self,
-        db: &'db dyn scrap_shared::Db,
-        id: NodeId,
-    ) -> Option<&'db ResolvedTy<'db>> {
+    pub fn expr_type(self, db: &'db dyn scrap_shared::Db, id: NodeId) -> Option<&'db ResolvedTy> {
         self.expr_types(db)
             .iter()
             .find(|(node_id, _)| *node_id == id)
@@ -50,11 +46,7 @@ impl<'db> TypeTable<'db> {
     }
 
     /// Get the type of a local variable by its NodeId.
-    pub fn local_type(
-        self,
-        db: &'db dyn scrap_shared::Db,
-        id: NodeId,
-    ) -> Option<&'db ResolvedTy<'db>> {
+    pub fn local_type(self, db: &'db dyn scrap_shared::Db, id: NodeId) -> Option<&'db ResolvedTy> {
         self.local_types(db)
             .iter()
             .find(|(node_id, _)| *node_id == id)
@@ -65,8 +57,8 @@ impl<'db> TypeTable<'db> {
     pub fn fn_return_type(
         self,
         db: &'db dyn scrap_shared::Db,
-        name: Symbol<'db>,
-    ) -> Option<&'db ResolvedTy<'db>> {
+        name: Symbol,
+    ) -> Option<&'db ResolvedTy> {
         self.fn_return_types(db)
             .iter()
             .find(|(sym, _)| *sym == name)
@@ -78,7 +70,7 @@ impl<'db> TypeTable<'db> {
         self,
         db: &'db dyn scrap_shared::Db,
         call_site: NodeId,
-    ) -> Option<&'db (Symbol<'db>, NodeId, Vec<(Symbol<'db>, ResolvedTy<'db>)>)> {
+    ) -> Option<&'db (Symbol, NodeId, Vec<(Symbol, ResolvedTy)>)> {
         self.generic_instantiations(db)
             .iter()
             .find(|(_, node_id, _)| *node_id == call_site)

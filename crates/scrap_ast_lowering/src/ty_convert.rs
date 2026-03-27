@@ -8,10 +8,7 @@ use scrap_tycheck::ResolvedTy;
 /// This function handles the conversion of types that have been resolved
 /// during type checking into the type representation used in the IR.
 /// Panics if the resolved type is not yet supported in IR.
-pub fn resolved_to_ir<'db>(
-    db: &'db dyn scrap_shared::Db,
-    resolved: &ResolvedTy<'db>,
-) -> ir::Ty<'db> {
+pub fn resolved_to_ir<'db>(db: &'db dyn scrap_shared::Db, resolved: &ResolvedTy) -> ir::Ty<'db> {
     match resolved {
         ResolvedTy::Void => ir::Ty::Void,
         ResolvedTy::Bool => ir::Ty::Bool,
@@ -22,7 +19,7 @@ pub fn resolved_to_ir<'db>(
         ResolvedTy::Never => ir::Ty::Never,
 
         ResolvedTy::Adt(name) => {
-            let type_id = ir::TypeId::new(db, name.text(db).to_string());
+            let type_id = ir::TypeId::new(db, name.text().to_string());
             ir::Ty::Adt(type_id)
         }
 

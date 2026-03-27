@@ -3,8 +3,8 @@ use scrap_span::Spanned;
 
 /// A binary operator with its source location span.
 /// This matches the Rust AST pattern of wrapping operator kinds with span information.
-pub type BinOp<'db> = Spanned<'db, BinOpKind>;
-pub type AssignOp<'db> = Spanned<'db, AssignOpKind>;
+pub type BinOp<'db> = Spanned<BinOpKind>;
+pub type AssignOp<'db> = Spanned<AssignOpKind>;
 
 /// Unary operator kinds.
 #[derive(

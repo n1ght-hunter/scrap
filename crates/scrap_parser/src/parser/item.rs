@@ -24,11 +24,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let start_span = self.token.span;
         let vis = self.parse_visibility()?;
         let item = self.parse_item_kind()?;
-        let span = Span::new(
-            self.db,
-            start_span.start(self.db),
-            self.token.span.end(self.db),
-        );
+        let span = Span::new(start_span.start, self.token.span.end);
         let id = self.state.new_node_id();
         Ok(Box::new(Item {
             kind: item,
@@ -70,23 +66,21 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 .element(
                     Snippet::source(self.source)
                         .path(self.state.file_name)
-                        .annotation(
-                            AnnotationKind::Primary
-                                .span(self.token.span.to_range(self.db))
-                                .label(format!(
+                        .annotation(AnnotationKind::Primary.span(self.token.span.range()).label(
+                            format!(
                                     "expected one of {} found {}",
                                     ItemKindDiscriminants::iter()
                                         .map(|d| format!("{:?}", d))
                                         .collect::<Vec<_>>()
                                         .join(", "),
                                     self.token.node
-                                )),
-                        ),
+                                ),
+                        )),
                 ),
         ))
     }
 
-    pub fn parse_use_item(&mut self) -> crate::PResult<'a, UseTree<'db>> {
+    pub fn parse_use_item(&mut self) -> crate::PResult<'a, UseTree> {
         let use_span = self.token.span;
         self.expect(Token::Use)?;
         let mut segments = thin_vec::ThinVec::new();
@@ -104,20 +98,12 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         }
         let path = Path {
             segments,
-            span: Span::new(
-                self.db,
-                use_span.start(self.db),
-                self.token.span.end(self.db),
-            ),
+            span: Span::new(use_span.start, self.token.span.end),
         };
         Ok(UseTree {
             prefix: path,
             kind: UseTreeKind::Simple(None),
-            span: Span::new(
-                self.db,
-                use_span.start(self.db),
-                self.token.span.end(self.db),
-            ),
+            span: Span::new(use_span.start, self.token.span.end),
         })
     }
 }
@@ -136,8 +122,8 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Fn(fndef) => {
-                assert_eq!(fndef.ident(db).name.text(db), "my_function");
-                assert_eq!(fndef.span(db).to_range(db), 0..19);
+                assert_eq!(fndef.ident(db).name.text(), "my_function");
+                assert_eq!(fndef.span(db).range(), 0..19);
             }
             _ => panic!("Expected function item"),
         }
@@ -160,7 +146,7 @@ mod tests {
         let item = parser.parse_item().unwrap_or_render();
         match item.kind {
             ItemKind::Struct(struct_def) => {
-                assert_eq!(struct_def.ident.name.text(db), "MyStruct");
+                assert_eq!(struct_def.ident.name.text(), "MyStruct");
             }
             _ => panic!("Expected struct item"),
         }
@@ -180,7 +166,7 @@ mod tests {
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Loaded(_, inline, span) => {
                         assert_eq!(*inline, Inline::Yes);
-                        assert_eq!(span.to_range(db), 0..17);
+                        assert_eq!(span.range(), 0..17);
                     }
                     scrap_ast::module::ModuleKind::Unloaded => panic!("Expected loaded module"),
                 }

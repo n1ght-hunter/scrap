@@ -2,7 +2,7 @@ use scrap_ast::lit::LitKind;
 use scrap_diagnostics::{AnnotationKind, Level, Snippet};
 
 impl<'a, 'db> super::Parser<'a, 'db> {
-    pub fn parse_lit(&mut self) -> crate::PResult<'a, scrap_ast::lit::Lit<'db>> {
+    pub fn parse_lit(&mut self) -> crate::PResult<'a, scrap_ast::lit::Lit> {
         let lit_span = self.token.span;
         let lit: scrap_lexer::Literal = self.token.node.try_into().unwrap();
 
@@ -12,7 +12,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             scrap_lexer::Literal::Int => LitKind::Integer,
             scrap_lexer::Literal::Bool => LitKind::Bool,
             scrap_lexer::Literal::Ident => {
-                let ident_str = &self.source[self.token.span.to_range(self.db)];
+                let ident_str = &self.source[self.token.span.start..self.token.span.end];
                 return Err(self.db.dcx().emit_err(
                     Level::ERROR
                         .primary_title(format!(
@@ -23,7 +23,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                             Snippet::source(self.source)
                                 .annotation(
                                     AnnotationKind::Primary
-                                        .span(self.token.span.to_range(self.db))
+                                        .span(self.token.span.range())
                                         .label("expected a literal here"),
                                 )
                                 .path(self.state.file_name),

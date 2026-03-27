@@ -14,7 +14,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     }
 
     pub fn parse_module(&mut self) -> crate::PResult<'a, ItemKind<'db>> {
-        let start_span = self.token.span.start(self.db);
+        let start_span = self.token.span.start;
         self.expect(Token::Mod)?;
         let ident = self.parse_ident()?;
         let _guard = self.guard_current_module_path(ident);
@@ -33,7 +33,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 ModuleKind::Loaded(
                     items,
                     Inline::Yes,
-                    Span::new(self.db, start_span, self.token.span.end(self.db)),
+                    Span::new(start_span, self.token.span.end),
                 ),
             );
             self.modules.push(module);
@@ -48,7 +48,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                             .path(self.state.file_name)
                             .annotation(
                                 AnnotationKind::Primary
-                                    .span(self.token.span.to_range(self.db))
+                                    .span(self.token.span.range())
                                     .label("expected `{` or `;`".to_string()),
                             ),
                     ),
@@ -93,12 +93,12 @@ mod tests {
                 match module.kind(db) {
                     scrap_ast::module::ModuleKind::Loaded(items, inline, span) => {
                         assert_eq!(*inline, Inline::Yes);
-                        assert_eq!(span.to_range(db), 0..37);
+                        assert_eq!(span.range(), 0..37);
                         assert_eq!(items.len(), 1);
                         match &items[0].kind {
                             ItemKind::Fn(fndef) => {
-                                assert_eq!(fndef.ident(db).name.text(db), "my_function");
-                                assert_eq!(fndef.span(db).to_range(db), 16..35);
+                                assert_eq!(fndef.ident(db).name.text(), "my_function");
+                                assert_eq!(fndef.span(db).range(), 16..35);
                             }
                             _ => panic!("Expected function item inside module"),
                         }

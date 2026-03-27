@@ -174,7 +174,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // First, create a binding for "x"
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -209,7 +209,7 @@ mod tests {
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
         // Create a binding for "x"
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -230,7 +230,7 @@ mod tests {
         // x -= 3
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -247,7 +247,7 @@ mod tests {
         // x *= 2
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -264,7 +264,7 @@ mod tests {
         // x <<= 1
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -281,7 +281,7 @@ mod tests {
         // x = 5 + 3
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -303,7 +303,7 @@ mod tests {
         // x += 5; then x *= 2 (two separate operations)
         let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -417,7 +417,7 @@ mod tests {
     fn test_lower_place_from_path(db: &dyn scrap_shared::Db) {
         let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
