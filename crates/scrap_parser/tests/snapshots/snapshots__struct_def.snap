@@ -60,6 +60,9 @@ Can(
                                 end: 12,
                             },
                         },
+                        generics: Generics {
+                            params: [],
+                        },
                         data: Struct {
                             fields: [
                                 FieldDef {

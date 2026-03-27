@@ -12,6 +12,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_enum_def(&mut self) -> PResult<'a, EnumDef<'db>> {
         self.expect(Token::Enum)?;
         let ident = self.parse_ident()?;
+        let generics = self.parse_generics()?;
 
         self.expect(Token::LBrace)?;
         let mut variants = Vec::new();
@@ -42,6 +43,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         Ok(EnumDef {
             id: self.state.new_node_id(),
             ident,
+            generics,
             variants,
         })
     }

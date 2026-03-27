@@ -1,7 +1,7 @@
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{field::FieldDef, node_id::NodeId};
+use crate::{field::FieldDef, generics::Generics, node_id::NodeId};
 use scrap_shared::ident::Ident;
 
 #[derive(
@@ -10,16 +10,19 @@ use scrap_shared::ident::Ident;
 pub struct EnumDef<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,
+    pub generics: Generics<'db>,
     pub variants: Vec<Variant<'db>>,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for EnumDef<'db> {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
-        writeln!(f, "enum {} {{", {
+        write!(f, "enum {}", {
             let mut s = String::new();
             self.ident.pretty_print(&mut s).unwrap();
             s
         })?;
+        self.generics.pretty_print(f)?;
+        writeln!(f, " {{")?;
         for variant in &self.variants {
             write!(f, "    ")?;
             variant.pretty_print(f)?;

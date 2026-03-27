@@ -1,4 +1,4 @@
-use crate::{enumdef::VariantData, node_id::NodeId};
+use crate::{enumdef::VariantData, generics::Generics, node_id::NodeId};
 use scrap_shared::ident::Ident;
 
 #[derive(
@@ -7,12 +7,15 @@ use scrap_shared::ident::Ident;
 pub struct StructDef<'db> {
     pub id: NodeId,
     pub ident: Ident<'db>,
+    pub generics: Generics<'db>,
     pub data: VariantData<'db>,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for StructDef<'db> {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
-        write!(f, "struct {} ", self.ident.pretty_to_string())?;
+        write!(f, "struct {}", self.ident.pretty_to_string())?;
+        self.generics.pretty_print(f)?;
+        write!(f, " ")?;
         match &self.data {
             VariantData::Struct { fields } => {
                 write!(f, "{{ ")?;

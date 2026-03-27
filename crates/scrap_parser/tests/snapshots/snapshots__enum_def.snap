@@ -60,6 +60,9 @@ Can(
                                 end: 10,
                             },
                         },
+                        generics: Generics {
+                            params: [],
+                        },
                         variants: [
                             Variant {
                                 id: NodeId {

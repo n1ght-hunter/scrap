@@ -12,12 +12,14 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_struct_def(&mut self) -> PResult<'a, StructDef<'db>> {
         self.expect(Token::Struct)?;
         let ident = self.parse_ident()?;
+        let generics = self.parse_generics()?;
 
         let var_data = self.parse_variant_data(Token::Semicolon)?;
 
         Ok(scrap_ast::structdef::StructDef {
             id: self.state.new_node_id(),
             ident,
+            generics,
             data: var_data,
         })
     }
