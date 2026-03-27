@@ -54,10 +54,10 @@ heck = "0.5.0"
 target-lexicon = "0.13"
 clap = { version = "4", features = ["derive"] }
 salsa = { version = "0.26", features = ["persistence"] }
-strum = "0.27.2"
-strum_macros = "0.27.2"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 pathdiff = "0.2.3"
-toml = "0.9"
+toml = "1.1"
 
 # diagnostics and error reporting
 tracing = "0.1"
@@ -66,8 +66,8 @@ thiserror = "2"
 anyhow = "1"
 annotate-snippets = "0.12"
 ariadne = "0.6.0"
-anstyle = "1.0.13"
-anstream = "0.6.21"
+anstyle = "1.0.14"
+anstream = "1.0.0"
 
 # extended std like
 rayon = "1"
@@ -93,11 +93,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # backend
-cranelift = "0.128"
-cranelift-module = "0.128"
-cranelift-jit = "0.128"
-cranelift-native = "0.128"
-cranelift-object = "0.128"
+cranelift = "0.130"
+cranelift-module = "0.130"
+cranelift-jit = "0.130"
+cranelift-native = "0.130"
+cranelift-object = "0.130"
 # Lexer
 logos = "0.16"
 

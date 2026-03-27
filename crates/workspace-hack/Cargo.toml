@@ -24,7 +24,7 @@ serde_core = { version = "1", default-features = false, features = ["alloc", "re
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 tracing = { version = "0.1" }
 tracing-core = { version = "0.1" }
-winnow = { version = "0.7" }
+winnow = { version = "1.0" }
 
 [build-dependencies]
 hashbrown = { version = "0.16" }
@@ -39,7 +39,7 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 syn = { version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tracing = { version = "0.1" }
 tracing-core = { version = "0.1" }
-winnow = { version = "0.7" }
+winnow = { version = "1.0" }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading"] }
