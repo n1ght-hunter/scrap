@@ -39,7 +39,7 @@ pub struct ExprLowerer<'db> {
     /// Source text for extracting literal values
     pub(crate) source: &'db str,
     /// Type table from type checking
-    pub(crate) type_table: scrap_tycheck::TypeTable<'db>,
+    pub(crate) type_table: &'db scrap_tycheck::TypeTable,
     /// All local variable declarations (params + named locals + temps)
     pub local_decls: Vec<ir::LocalDecl<'db>>,
     /// CFG builder for managing basic blocks
@@ -64,7 +64,7 @@ impl<'db> ExprLowerer<'db> {
     pub fn new(
         db: &'db dyn scrap_shared::Db,
         source: &'db str,
-        type_table: scrap_tycheck::TypeTable<'db>,
+        type_table: &'db scrap_tycheck::TypeTable,
     ) -> Self {
         Self {
             db,
@@ -86,7 +86,7 @@ impl<'db> ExprLowerer<'db> {
         &self,
         node_id: scrap_shared::NodeId,
     ) -> Option<&scrap_tycheck::ResolvedTy> {
-        self.type_table.expr_type(self.db, node_id)
+        self.type_table.expr_type(node_id)
     }
 
     /// Look up the type of a local variable by its NodeId from the type table
@@ -94,7 +94,7 @@ impl<'db> ExprLowerer<'db> {
         &self,
         node_id: scrap_shared::NodeId,
     ) -> Option<&scrap_tycheck::ResolvedTy> {
-        self.type_table.local_type(self.db, node_id)
+        self.type_table.local_type(node_id)
     }
 
     /// Look up the type of an expression from type table and convert to IR type.

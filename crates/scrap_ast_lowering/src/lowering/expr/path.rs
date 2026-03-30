@@ -58,7 +58,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_variable_reference(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "x");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // First, create a binding for "x"
         let x_sym = Symbol::new("x");
@@ -79,7 +80,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_unknown_path_as_function_ref(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "some_function");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Unknown paths are treated as function references (for function calls)
         let result = lowerer.lower_expr(&expr);

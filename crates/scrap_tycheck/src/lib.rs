@@ -45,12 +45,12 @@ use scrap_ast::Can;
 /// 3. Solves type constraints
 /// 4. Reports any type errors via the diagnostic context
 /// 5. Returns a type table mapping expressions to their resolved types
-#[salsa::tracked(persist)]
+#[salsa::tracked(returns(ref), persist)]
 pub fn check_types<'db>(
     db: &'db dyn scrap_shared::Db,
     can: Can<'db>,
     file: InputFile<'db>,
-) -> TypeTable<'db> {
+) -> TypeTable {
     let mut ctx = TypeContext::new(
         db,
         file.content(db),
@@ -59,11 +59,9 @@ pub fn check_types<'db>(
 
     ctx.check_can(can);
 
-    // Finalize types after solving constraints
     let (expr_types, local_types, fn_return_types, generic_instantiations) = ctx.finalize_types();
 
     TypeTable::new(
-        db,
         expr_types,
         local_types,
         fn_return_types,
@@ -143,7 +141,6 @@ mod tests {
         let (expr_types, local_types, fn_return_types, generic_instantiations) =
             ctx.finalize_types();
         let table = TypeTable::new(
-            db,
             expr_types,
             local_types,
             fn_return_types,
@@ -151,11 +148,8 @@ mod tests {
         );
 
         // Verify types are recorded
-        assert_eq!(
-            table.expr_type(db, expr_id),
-            Some(&ResolvedTy::Int(IntTy::I32))
-        );
-        assert_eq!(table.local_type(db, local_id), Some(&ResolvedTy::Bool));
+        assert_eq!(table.expr_type(expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
+        assert_eq!(table.local_type(local_id), Some(&ResolvedTy::Bool));
     }
 
     #[scrap_macros::salsa_test]
@@ -180,7 +174,6 @@ mod tests {
         let (expr_types, local_types, fn_return_types, generic_instantiations) =
             ctx.finalize_types();
         let table = TypeTable::new(
-            db,
             expr_types,
             local_types,
             fn_return_types,
@@ -188,9 +181,6 @@ mod tests {
         );
 
         // The type should be resolved to Int, not a type variable
-        assert_eq!(
-            table.expr_type(db, expr_id),
-            Some(&ResolvedTy::Int(IntTy::I32))
-        );
+        assert_eq!(table.expr_type(expr_id), Some(&ResolvedTy::Int(IntTy::I32)));
     }
 }

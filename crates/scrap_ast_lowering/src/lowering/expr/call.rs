@@ -20,13 +20,13 @@ impl<'db> ExprLowerer<'db> {
         };
         let generic_inst = callee_name.and_then(|name| {
             self.type_table
-                .generic_instantiations(self.db)
-                .iter()
-                .find(|(fn_name, _, _)| *fn_name == name)
+                .generic_instantiations_for(name)
+                .and_then(|insts| insts.first())
+                .map(|(_, subst)| (name, subst))
         });
 
-        if let Some((fn_name, _, subst_pairs)) = generic_inst {
-            let mangled = super::super::module::mangle_generic_name(self.db, *fn_name, subst_pairs);
+        if let Some((fn_name, subst_pairs)) = generic_inst {
+            let mangled = super::super::module::mangle_generic_name(self.db, fn_name, subst_pairs);
             let func_id = ir::FunctionId::new(self.db, mangled);
             let func_op = ir::Operand::FunctionRef(func_id);
             let mut arg_ops = Vec::new();
@@ -327,7 +327,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_simple_call(db: &dyn scrap_shared::Db) {
         // foo()
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Create binding for foo
         let foo_sym = Symbol::new("foo");
@@ -350,7 +351,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_args(db: &dyn scrap_shared::Db) {
         // add(1, 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create binding for add
         let add_sym = Symbol::new("add");
@@ -372,7 +374,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_expression_args(db: &dyn scrap_shared::Db) {
         // max(x + 1, y * 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
         let max_sym = Symbol::new("max");
@@ -409,7 +412,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_calls(db: &dyn scrap_shared::Db) {
         // outer(inner(1))
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
         let outer_sym = Symbol::new("outer");
@@ -442,7 +446,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_result_assignment(db: &dyn scrap_shared::Db) {
         // result = foo(1, 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
         let result_sym = Symbol::new("result");
@@ -473,7 +478,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_in_if_condition(db: &dyn scrap_shared::Db) {
         // if is_valid(x) { }
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Create bindings
         let is_valid_sym = Symbol::new("is_valid");

@@ -23,7 +23,7 @@ pub fn lower_module<'db>(
     module_id: ModuleId<'db>,
     ast_items: &[Item<'db>],
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
 ) -> MResult<ir::Module<'db>> {
     let mut items = Vec::new();
 
@@ -44,11 +44,13 @@ pub fn lower_module<'db>(
     }
 
     // Pre-register generic struct field maps for monomorphized copies
-    for &(inst_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
+    for (&inst_name, instantiations) in type_table.all_generic_instantiations() {
         let inst_str = inst_name.text().to_string();
-        if let Some(base_map) = struct_field_maps.get(&inst_str).cloned() {
-            let mangled = mangle_generic_name(db, inst_name, subst_pairs);
-            struct_field_maps.insert(mangled, base_map);
+        for (_, subst_pairs) in instantiations {
+            if let Some(base_map) = struct_field_maps.get(&inst_str).cloned() {
+                let mangled = mangle_generic_name(db, inst_name, subst_pairs);
+                struct_field_maps.insert(mangled, base_map);
+            }
         }
     }
 
@@ -193,59 +195,61 @@ pub fn lower_module<'db>(
 
     // Monomorphize generics: generate concrete copies for each instantiation
     let mut seen_mono = std::collections::HashSet::new();
-    for &(inst_name, _, ref subst_pairs) in type_table.generic_instantiations(db) {
-        let mangled = mangle_generic_name(db, inst_name, subst_pairs);
-        if !seen_mono.insert(mangled.clone()) {
-            continue;
-        }
+    for (&inst_name, instantiations) in type_table.all_generic_instantiations() {
+        for (_, subst_pairs) in instantiations {
+            let mangled = mangle_generic_name(db, inst_name, subst_pairs);
+            if !seen_mono.insert(mangled.clone()) {
+                continue;
+            }
 
-        let type_subst: HashMap<Symbol, ir::Ty<'db>> = subst_pairs
-            .iter()
-            .map(|(param, resolved)| (*param, crate::ty_convert::resolved_to_ir(db, resolved)))
-            .collect();
-
-        // Generic function
-        if let Some(&fn_def) = generic_fndefs.get(&inst_name) {
-            let mangled_sym = Symbol::new(mangled.clone());
-            let (mir_fn, extras) = lower_monomorphized_function(
-                db,
-                fn_def,
-                mangled_sym,
-                &type_subst,
-                source,
-                type_table,
-                &struct_field_maps,
-                &enum_info_maps,
-            )?;
-            items.push(ir::Items::Function(mir_fn));
-            items.extend(extras);
-        }
-
-        // Generic struct
-        let inst_name_str = inst_name.text().to_string();
-        if let Some(struct_def) = generic_structdefs.get(&inst_name_str)
-            && let VariantData::Struct { fields } = &struct_def.data
-        {
-            let mangled_sym = Symbol::new(mangled.clone());
-            let ir_fields: Vec<(Symbol, ir::Ty<'db>)> = fields
+            let type_subst: HashMap<Symbol, ir::Ty<'db>> = subst_pairs
                 .iter()
-                .filter_map(|field| {
-                    let field_name = field.ident.as_ref()?.name;
-                    let field_ty =
-                        lower_type_with_subst(db, &field.ty, &type_subst).unwrap_or(ir::Ty::Void);
-                    Some((field_name, field_ty))
-                })
+                .map(|(param, resolved)| (*param, crate::ty_convert::resolved_to_ir(db, resolved)))
                 .collect();
-            let ir_struct = ir::Struct::new(db, mangled_sym, ir_fields);
-            items.push(ir::Items::Struct(ir_struct));
 
-            // Register in struct_field_maps for field access lowering
-            let field_map = fields
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
-                .collect();
-            struct_field_maps.insert(mangled, field_map);
+            // Generic function
+            if let Some(&fn_def) = generic_fndefs.get(&inst_name) {
+                let mangled_sym = Symbol::new(mangled.clone());
+                let (mir_fn, extras) = lower_monomorphized_function(
+                    db,
+                    fn_def,
+                    mangled_sym,
+                    &type_subst,
+                    source,
+                    type_table,
+                    &struct_field_maps,
+                    &enum_info_maps,
+                )?;
+                items.push(ir::Items::Function(mir_fn));
+                items.extend(extras);
+            }
+
+            // Generic struct
+            let inst_name_str = inst_name.text().to_string();
+            if let Some(struct_def) = generic_structdefs.get(&inst_name_str)
+                && let VariantData::Struct { fields } = &struct_def.data
+            {
+                let mangled_sym = Symbol::new(mangled.clone());
+                let ir_fields: Vec<(Symbol, ir::Ty<'db>)> = fields
+                    .iter()
+                    .filter_map(|field| {
+                        let field_name = field.ident.as_ref()?.name;
+                        let field_ty = lower_type_with_subst(db, &field.ty, &type_subst)
+                            .unwrap_or(ir::Ty::Void);
+                        Some((field_name, field_ty))
+                    })
+                    .collect();
+                let ir_struct = ir::Struct::new(db, mangled_sym, ir_fields);
+                items.push(ir::Items::Struct(ir_struct));
+
+                // Register in struct_field_maps for field access lowering
+                let field_map = fields
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, f)| f.ident.as_ref().map(|id| (id.name, idx)))
+                    .collect();
+                struct_field_maps.insert(mangled, field_map);
+            }
         }
     }
 
@@ -330,7 +334,7 @@ fn lower_monomorphized_function<'db>(
     mangled_name: Symbol,
     type_subst: &HashMap<Symbol, ir::Ty<'db>>,
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
     struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
@@ -366,7 +370,7 @@ pub fn lower_function<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
     struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
@@ -389,7 +393,7 @@ pub fn lower_function<'db>(
 pub fn lower_signature<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
 ) -> MResult<ir::Signature<'db>> {
     let name = ast_function.ident(db).name;
 
@@ -404,7 +408,7 @@ pub fn lower_signature<'db>(
         None => {
             // No explicit return type — check if the type checker inferred one
             type_table
-                .fn_return_type(db, name)
+                .fn_return_type(name)
                 .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
                 .unwrap_or(ir::Ty::Void)
         }
@@ -440,7 +444,7 @@ pub fn lower_method<'db>(
     type_name: scrap_shared::ident::Symbol,
     ast_function: FnDef<'db>,
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
     struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
@@ -466,7 +470,7 @@ pub fn lower_signature_with_name<'db>(
     db: &'db dyn scrap_shared::Db,
     name: Symbol,
     ast_function: FnDef<'db>,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
 ) -> MResult<ir::Signature<'db>> {
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
@@ -477,7 +481,7 @@ pub fn lower_signature_with_name<'db>(
     let return_ty = match ast_function.ret_type(db).as_ref() {
         Some(ty) => lower_type(db, ty)?,
         None => type_table
-            .fn_return_type(db, name)
+            .fn_return_type(name)
             .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
             .unwrap_or(ir::Ty::Void),
     };
@@ -491,7 +495,7 @@ pub fn lower_body<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
     return_ty: ir::Ty<'db>,
     struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
@@ -513,7 +517,7 @@ fn lower_body_with_subst<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     source: &'db str,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
     return_ty: ir::Ty<'db>,
     struct_field_maps: &HashMap<String, HashMap<Symbol, usize>>,
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,

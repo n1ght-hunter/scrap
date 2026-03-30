@@ -63,11 +63,10 @@ impl<'db> ExprLowerer<'db> {
         // For generic structs, check if the type table has a monomorphized name
         let type_name = self
             .type_table
-            .generic_instantiations(self.db)
-            .iter()
-            .find(|(name, _, _)| *name == struct_name)
-            .map(|(name, _, subst)| {
-                super::super::module::mangle_generic_name(self.db, *name, subst)
+            .generic_instantiations_for(struct_name)
+            .and_then(|insts| insts.first())
+            .map(|(_, subst)| {
+                super::super::module::mangle_generic_name(self.db, struct_name, subst)
             })
             .unwrap_or_else(|| struct_name.text().to_string());
         let type_id = ir::TypeId::new(self.db, type_name);

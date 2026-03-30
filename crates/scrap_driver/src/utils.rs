@@ -146,21 +146,21 @@ pub fn collect_modules<'db>(
 //         .collect()
 // }
 
-/// Lower all input files to IR in parallel with type information
 #[salsa::tracked(persist)]
 pub fn lower_input_files_to_ir<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_file: scrap_parser::ParsedFile<'db>,
     other_files: Vec<scrap_parser::ParsedFile<'db>>,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    can: scrap_ast::Can<'db>,
+    input_file: scrap_shared::salsa::InputFile<'db>,
 ) -> (Option<scrap_ir::Module<'db>>, Vec<scrap_ir::Module<'db>>) {
-    // Lower entry file
+    let type_table = scrap_tycheck::check_types(db, can, input_file);
+
     let entry_module = entry_file.ast(db).to_module(db);
     let entry_module_id = entry_module.id(db);
     let entry_ir =
         scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id, type_table);
 
-    // Lower other files in parallel
     let other_ir: Vec<_> = other_files
         .into_par_iter()
         .filter_map(|file| {

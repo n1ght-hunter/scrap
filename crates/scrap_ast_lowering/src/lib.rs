@@ -46,13 +46,12 @@ pub struct LoweredIr<'db> {
     pub can: ir::Can<'db>,
 }
 
-/// Lower a single parsed file to an IR module (tracked function for parallelization)
-#[salsa::tracked(persist)]
+/// Lower a single parsed file to an IR module.
 pub fn lower_parsed_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_parser::ParsedFile<'db>,
     module_id: ModuleId<'db>,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    type_table: &'db scrap_tycheck::TypeTable,
 ) -> Option<ir::Module<'db>> {
     let ast = file.ast(db);
     let source = file.file(db).content(db);
@@ -129,11 +128,12 @@ mod tests {
             span,
         );
 
+        let tt = create_empty_type_table();
         let result = lower_function(
             db,
             fn_def,
             "",
-            create_empty_type_table(db),
+            &tt,
             &std::collections::HashMap::new(),
             &std::collections::HashMap::new(),
         );
@@ -240,11 +240,12 @@ mod tests {
             span,
         );
 
+        let tt = create_empty_type_table();
         let result = lower_function(
             db,
             fn_def,
             "",
-            create_empty_type_table(db),
+            &tt,
             &std::collections::HashMap::new(),
             &std::collections::HashMap::new(),
         );
@@ -380,7 +381,8 @@ mod tests {
         let path = scrap_shared::path::Path::from_segment("test_module");
         let module_id = ModuleId::from_path(db, &path);
 
-        let module = lower_module(db, module_id, &[item], "", create_empty_type_table(db)).unwrap();
+        let tt = create_empty_type_table();
+        let module = lower_module(db, module_id, &[item], "", &tt).unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert_eq!(module.items(db).len(), 1);
@@ -390,7 +392,8 @@ mod tests {
     fn test_lower_empty_module(db: &dyn scrap_shared::Db) {
         let path = scrap_shared::path::Path::from_segment("empty_module");
         let module_id = ModuleId::from_path(db, &path);
-        let module = lower_module(db, module_id, &[], "", create_empty_type_table(db)).unwrap();
+        let tt = create_empty_type_table();
+        let module = lower_module(db, module_id, &[], "", &tt).unwrap();
 
         assert_eq!(module.id(db), module_id);
         assert!(module.items(db).is_empty());

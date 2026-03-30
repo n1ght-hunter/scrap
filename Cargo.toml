@@ -77,7 +77,7 @@ parking_lot = "0.12.5"
 crossbeam = "0.8"
 rustc-hash = "2.1.1"
 crossbeam-channel = "0.5.15"
-hashbrown = "0.16"
+hashbrown = { version = "0.16", features = ["serde"] }
 indexmap = "2"
 
 # testing

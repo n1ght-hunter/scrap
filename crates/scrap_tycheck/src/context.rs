@@ -401,45 +401,45 @@ impl<'db> TypeContext<'db> {
 
     /// Finalize all recorded types after unification.
     /// Converts InferTy to ResolvedTy by resolving all type variables.
-    /// Returns (expr_types, local_types, fn_return_types) Vecs for creating a TypeTable.
     #[allow(clippy::type_complexity)]
     pub fn finalize_types(
         &self,
     ) -> (
-        Vec<(scrap_shared::NodeId, ResolvedTy)>,
-        Vec<(scrap_shared::NodeId, ResolvedTy)>,
-        Vec<(Symbol, ResolvedTy)>,
-        Vec<(Symbol, NodeId, Vec<(Symbol, ResolvedTy)>)>,
+        hashbrown::HashMap<scrap_shared::NodeId, ResolvedTy>,
+        hashbrown::HashMap<scrap_shared::NodeId, ResolvedTy>,
+        hashbrown::HashMap<Symbol, ResolvedTy>,
+        hashbrown::HashMap<Symbol, Vec<(NodeId, Vec<(Symbol, ResolvedTy)>)>>,
     ) {
-        let expr_types: Vec<_> = self
+        let expr_types = self
             .expr_types
             .iter()
             .map(|(id, ty)| (*id, self.resolve_to_final(ty)))
             .collect();
 
-        let local_types: Vec<_> = self
+        let local_types = self
             .local_types
             .iter()
             .map(|(id, ty)| (*id, self.resolve_to_final(ty)))
             .collect();
 
-        let fn_return_types: Vec<_> = self
+        let fn_return_types = self
             .fn_return_types
             .iter()
             .map(|(name, ty)| (*name, self.resolve_to_final(ty)))
             .collect();
 
-        let generic_instantiations: Vec<_> = self
-            .generic_instantiations
-            .iter()
-            .map(|(name, node_id, subst)| {
-                let resolved_subst: Vec<_> = subst
-                    .iter()
-                    .map(|(param, ty)| (*param, self.resolve_to_final(ty)))
-                    .collect();
-                (*name, *node_id, resolved_subst)
-            })
-            .collect();
+        let mut generic_instantiations: hashbrown::HashMap<Symbol, Vec<_>> =
+            hashbrown::HashMap::new();
+        for (name, node_id, subst) in &self.generic_instantiations {
+            let resolved_subst: Vec<_> = subst
+                .iter()
+                .map(|(param, ty)| (*param, self.resolve_to_final(ty)))
+                .collect();
+            generic_instantiations
+                .entry(*name)
+                .or_default()
+                .push((*node_id, resolved_subst));
+        }
 
         (
             expr_types,

@@ -71,12 +71,17 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     }
 
     // Phase 2: Type checking
-    let type_table = scrap_tycheck::check_types(db, resolved_can, entry_file.file(db));
+    let _type_table = scrap_tycheck::check_types(db, resolved_can, entry_file.file(db));
     handle_diagnostics(db)?;
 
     // Phase 3: Lower to IR with type information
-    let (entry_ir, other_ir) =
-        utils::lower_input_files_to_ir(db, entry_file, other_files.to_vec(), type_table);
+    let (entry_ir, other_ir) = utils::lower_input_files_to_ir(
+        db,
+        entry_file,
+        other_files.to_vec(),
+        resolved_can,
+        entry_file.file(db),
+    );
 
     handle_diagnostics(db)?;
 

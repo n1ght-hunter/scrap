@@ -203,7 +203,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_int_literal(db: &dyn scrap_shared::Db) {
         let expr = create_int_lit(db, 42);
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
@@ -221,7 +222,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_bool_literal(db: &dyn scrap_shared::Db) {
         let expr = create_bool_lit(db, true);
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
@@ -237,7 +239,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_string_literal(db: &dyn scrap_shared::Db) {
         let expr = create_string_lit(db, "hello");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());

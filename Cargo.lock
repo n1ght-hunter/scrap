@@ -675,6 +675,8 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1552,6 +1554,7 @@ dependencies = [
 name = "scrap_tycheck"
 version = "0.1.0"
 dependencies = [
+ "hashbrown 0.16.1",
  "salsa",
  "scrap_ast",
  "scrap_diagnostics",
