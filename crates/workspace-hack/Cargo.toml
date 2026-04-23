@@ -16,7 +16,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 fnv = { version = "1" }
-hashbrown = { version = "0.16" }
+hashbrown = { version = "0.17" }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 regex-automata = { version = "0.4" }
@@ -28,7 +28,7 @@ tracing-core = { version = "0.1" }
 
 [build-dependencies]
 fnv = { version = "1" }
-hashbrown = { version = "0.16" }
+hashbrown = { version = "0.17" }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1" }
