@@ -6,17 +6,26 @@ use scrap_ast::{
 use scrap_diagnostics::Level;
 use scrap_shared::id::ModuleId;
 
-/// Parse all input files in parallel
+/// Parse all input files in parallel.
+///
+/// Each worker holds its own `ScrapDb` clone (via [`Db::fork`]); the salsa
+/// storage is refcounted, so clones share state. Tracked-struct ids are
+/// returned across the thread boundary; the main thread reconstructs
+/// `ParsedFile<'db>` against the outer db.
 pub fn parse_input_files<'db>(
     args: &crate::args::Args,
     db: &'db dyn scrap_shared::Db,
 ) -> Vec<scrap_parser::ParsedFile<'db>> {
+    use salsa::plumbing::{AsId, FromId};
+
     let root_path = &args.entry_source_file;
 
-    args.source_files
+    let ids: Vec<salsa::Id> = args
+        .source_files
         .par_iter()
         .chain(rayon::iter::once(&args.entry_source_file))
-        .filter_map(|file_path| {
+        .map_with(db.fork(), |db, file_path| {
+            let db: &dyn scrap_shared::Db = db;
             let (is_root, root_path_segments) =
                 crate::utils::compute_relative_path_segments(args, db, root_path, file_path)?;
 
@@ -45,9 +54,14 @@ pub fn parse_input_files<'db>(
                 is_root,
                 root_path_segments,
             )?;
-            Some(parsed_file)
+            Some(parsed_file.as_id())
         })
-        .collect::<Vec<_>>()
+        .flatten()
+        .collect();
+
+    ids.into_iter()
+        .map(<scrap_parser::ParsedFile<'db> as FromId>::from_id)
+        .collect()
 }
 
 pub type Modules<'db> =
@@ -72,36 +86,60 @@ fn create_can<'db>(
     scrap_ast::Can::new(db, id, name, items)
 }
 
+/// Module map keyed by raw `salsa::Id` instead of a `'db`-bound `ModuleId`.
+///
+/// Lifetime-free and `Send + Sync`, so worker threads can share `&ModulesById`
+/// freely. Tracked structs are reconstructed per worker via `FromId`.
+type ModulesById = std::collections::HashMap<salsa::Id, salsa::Id>;
+
+fn modules_by_id<'db>(modules: &Modules<'db>) -> ModulesById {
+    use salsa::plumbing::AsId;
+    modules.iter().map(|(k, v)| (k.as_id(), v.as_id())).collect()
+}
+
 pub fn resolve_modules<'db>(
     db: &'db dyn scrap_shared::Db,
     modules: &Modules<'db>,
     entry_file: scrap_parser::ParsedFile<'db>,
 ) -> scrap_ast::Can<'db> {
+    use salsa::plumbing::{AsId, FromId};
+
     let can = entry_file.ast(db).unwrap_can();
     let mut items = can.items(db).clone();
-    items.par_iter_mut().for_each(|item| {
-        if let Item {
-            kind: ItemKind::Module(module),
-            ..
-        } = item.as_mut()
-        {
-            match module.kind(db) {
-                ModuleKind::Unloaded => {
-                    if let Some(resolved_module) = resolve_module_by_id(db, modules, module.id(db))
-                    {
-                        // Recursively resolve the module
-                        let recursively_resolved =
-                            resolve_module_recursive(db, modules, *resolved_module);
-                        let _ = std::mem::replace(module, recursively_resolved);
+    let id_modules = modules_by_id(modules);
+
+    // Each worker is seeded with its own `ScrapDb` clone (shared salsa
+    // storage). Tracked structs are bridged across the worker/outer lifetime
+    // boundary by raw `salsa::Id` — see `ModulesById`.
+    items
+        .par_iter_mut()
+        .for_each_with(db.fork(), |db_local, item| {
+            let db_local: &dyn scrap_shared::Db = db_local;
+            if let Item {
+                kind: ItemKind::Module(module),
+                ..
+            } = item.as_mut()
+            {
+                let module_local =
+                    <scrap_ast::module::Module<'_> as FromId>::from_id(module.as_id());
+                let resolved_local = match module_local.kind(db_local) {
+                    ModuleKind::Unloaded => {
+                        match resolve_module_by_id(db_local, &id_modules, module_local.id(db_local))
+                        {
+                            Some(m) => resolve_module_recursive(db_local, &id_modules, m),
+                            None => return,
+                        }
                     }
-                }
-                ModuleKind::Loaded(..) => {
-                    let recursively_resolved = resolve_module_recursive(db, modules, *module);
-                    let _ = std::mem::replace(module, recursively_resolved);
-                }
+                    ModuleKind::Loaded(..) => {
+                        resolve_module_recursive(db_local, &id_modules, module_local)
+                    }
+                };
+                let resolved = <scrap_ast::module::Module<'db> as FromId>::from_id(
+                    resolved_local.as_id(),
+                );
+                let _ = std::mem::replace(module, resolved);
             }
-        }
-    });
+        });
 
     // Return the resolved AST
     create_can(db, can.id(db), *can.name(db), items)
@@ -109,7 +147,7 @@ pub fn resolve_modules<'db>(
 
 fn resolve_module_recursive<'db>(
     db: &'db dyn scrap_shared::Db,
-    modules: &Modules<'db>,
+    modules: &ModulesById,
     module: scrap_ast::module::Module<'db>,
 ) -> scrap_ast::module::Module<'db> {
     // Match on the module kind to get items
@@ -117,8 +155,9 @@ fn resolve_module_recursive<'db>(
         ModuleKind::Loaded(items, inline, span) => {
             let mut new_items = items.clone();
 
-            // Recursively resolve all nested modules
-            new_items.par_iter_mut().for_each(|item| {
+            // Nested modules are resolved sequentially: trees are typically
+            // shallow, so rayon work-stealing overhead would dominate.
+            new_items.iter_mut().for_each(|item| {
                 if let Item {
                     kind: ItemKind::Module(nested_module),
                     ..
@@ -126,13 +165,11 @@ fn resolve_module_recursive<'db>(
                 {
                     match nested_module.kind(db) {
                         ModuleKind::Unloaded => {
-                            // Resolve unloaded modules from the modules hashmap
                             if let Some(resolved_nested) =
                                 resolve_module_by_id(db, modules, nested_module.id(db))
                             {
-                                // Recursive call to resolve nested modules
                                 let recursively_resolved =
-                                    resolve_module_recursive(db, modules, *resolved_nested);
+                                    resolve_module_recursive(db, modules, resolved_nested);
                                 let _ = std::mem::replace(nested_module, recursively_resolved);
                             }
                         }
@@ -155,7 +192,7 @@ fn resolve_module_recursive<'db>(
         ModuleKind::Unloaded => {
             // If unloaded, try to resolve it from the modules hashmap
             if let Some(resolved) = resolve_module_by_id(db, modules, module.id(db)) {
-                resolve_module_recursive(db, modules, *resolved)
+                resolve_module_recursive(db, modules, resolved)
             } else {
                 module
             }
@@ -163,13 +200,15 @@ fn resolve_module_recursive<'db>(
     }
 }
 
-fn resolve_module_by_id<'a, 'db>(
+fn resolve_module_by_id<'db>(
     db: &'db dyn scrap_shared::Db,
-    modules: &'a Modules<'db>,
+    modules: &ModulesById,
     module_id: scrap_shared::id::ModuleId<'db>,
-) -> Option<&'a scrap_ast::module::Module<'db>> {
-    if let Some(mo) = modules.get(&module_id) {
-        Some(mo)
+) -> Option<scrap_ast::module::Module<'db>> {
+    use salsa::plumbing::{AsId, FromId};
+
+    if let Some(id) = modules.get(&module_id.as_id()) {
+        Some(<scrap_ast::module::Module<'_> as FromId>::from_id(*id))
     } else {
         db.dcx().emit_err(
             Level::ERROR

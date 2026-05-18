@@ -6,34 +6,33 @@ use scrap_diagnostics::Level;
 #[derive(Clone, Default)]
 pub struct ScrapDb {
     storage: salsa::Storage<Self>,
-    emitter: scrap_diagnostics::DiagnosticEmitter<'static>,
+    emitter: scrap_diagnostics::DiagnosticEmitter,
 }
 
 #[salsa::db]
 impl salsa::Database for ScrapDb {}
 
 #[salsa::db]
-pub trait Db: salsa::Database + Sync {
+pub trait Db: salsa::Database {
     /// get diagnostic handler
-    fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a>;
+    fn dcx(&self) -> &scrap_diagnostics::DiagnosticEmitter;
+
+    /// Fork this handle into an owned, cheaply-cloneable concrete database.
+    ///
+    /// Salsa storage is refcounted, so forks share state. Used to seed rayon
+    /// workers without needing `Db: Sync` — each worker holds its own
+    /// `ScrapDb` instead of sharing a `&dyn Db`.
+    fn fork(&self) -> ScrapDb;
 }
 
 #[salsa::db]
 impl Db for ScrapDb {
-    fn dcx<'a>(&'a self) -> &'a scrap_diagnostics::DiagnosticEmitter<'a> {
-        // SAFETY: 'a is tied to self, so this is safe
-        #[allow(unsafe_code)]
-        unsafe {
-            std::mem::transmute(&self.emitter)
-        }
+    fn dcx(&self) -> &scrap_diagnostics::DiagnosticEmitter {
+        &self.emitter
     }
-}
 
-impl Drop for ScrapDb {
-    fn drop(&mut self) {
-        // clear to make sure all inner references are dropped first
-        // may or maynot be necessary because of the transmute above
-        self.emitter.clear();
+    fn fork(&self) -> ScrapDb {
+        self.clone()
     }
 }
 
