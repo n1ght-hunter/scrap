@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
       - name: Run tests
         run: cargo test --workspace --exclude scrap_rt
 
@@ -34,7 +34,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
       - name: Clippy check
         run: cargo clippy --all-targets --workspace -- -D warnings
 
