@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn identity<T>(x: T) -> T {
@@ -8,5 +8,5 @@ fn identity<T>(x: T) -> T {
 
 fn main() {
     let a: usize = identity(42);
-    ExitProcess(a);
+    __scrap_exit(a);
 }

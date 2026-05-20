@@ -94,7 +94,10 @@ type ModulesById = std::collections::HashMap<salsa::Id, salsa::Id>;
 
 fn modules_by_id<'db>(modules: &Modules<'db>) -> ModulesById {
     use salsa::plumbing::AsId;
-    modules.iter().map(|(k, v)| (k.as_id(), v.as_id())).collect()
+    modules
+        .iter()
+        .map(|(k, v)| (k.as_id(), v.as_id()))
+        .collect()
 }
 
 pub fn resolve_modules<'db>(
@@ -134,9 +137,8 @@ pub fn resolve_modules<'db>(
                         resolve_module_recursive(db_local, &id_modules, module_local)
                     }
                 };
-                let resolved = <scrap_ast::module::Module<'db> as FromId>::from_id(
-                    resolved_local.as_id(),
-                );
+                let resolved =
+                    <scrap_ast::module::Module<'db> as FromId>::from_id(resolved_local.as_id());
                 let _ = std::mem::replace(module, resolved);
             }
         });

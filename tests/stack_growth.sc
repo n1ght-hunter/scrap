@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn deep(n: usize) -> usize {
@@ -12,7 +12,7 @@ fn deep(n: usize) -> usize {
 
 fn worker(n: usize) {
     let result = deep(n);
-    ExitProcess(result);
+    __scrap_exit(result);
 }
 
 fn main() {

@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn main() {
@@ -12,5 +12,5 @@ fn main() {
         }
         sum = sum + i;
     }
-    ExitProcess(sum);
+    __scrap_exit(sum);
 }

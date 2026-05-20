@@ -102,7 +102,7 @@ mod tests {
 
     /// Test helper that wraps the logic in a Salsa tracked function
     #[salsa::tracked]
-    fn test_lower_simple_function_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
+    fn test_lower_simple_function_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
         let name = Symbol::new("test_fn");
@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_function_with_params_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
+    fn test_lower_function_with_params_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
 
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[salsa::tracked]
-    fn test_lower_type_primitives_impl<'db>(db: &'db dyn scrap_shared::Db) -> bool {
+    fn test_lower_type_primitives_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
 

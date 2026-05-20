@@ -1,12 +1,9 @@
 extern "C" {
-    fn GetStdHandle(nStdHandle: usize) -> usize;
-    fn WriteFile(hFile: usize, lpBuffer: String, nNumberOfBytesToWrite: usize,
-                 lpNumberOfBytesWritten: usize, lpOverlapped: usize) -> usize;
+    fn __scrap_print(msg: String, len: usize);
 }
 
 fn print(msg: String, len: usize) {
-    let stdout: usize = GetStdHandle(4294967285);
-    WriteFile(stdout, msg, len, 0, 0);
+    __scrap_print(msg, len);
 }
 
 fn worker_a() {

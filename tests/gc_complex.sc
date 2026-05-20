@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn make_box(val: usize) -> *usize {
@@ -54,5 +54,5 @@ fn main() {
     *re = 6;
     let doubled: usize = *e;
 
-    ExitProcess(sum1 + sum2 + doubled);
+    __scrap_exit(sum1 + sum2 + doubled);
 }

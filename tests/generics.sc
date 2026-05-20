@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 // PASS: basic generic identity
@@ -32,5 +32,5 @@ fn main() {
     let b: bool = identity(true);
     let c: usize = second(true, 10);
     let d: usize = wrap(42);
-    ExitProcess(a);
+    __scrap_exit(a);
 }

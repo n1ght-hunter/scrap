@@ -57,10 +57,16 @@ enum Emitted {
 enum StoredDiag {
     /// Pre-rendered text. A `&'static str` input stays `Cow::Borrowed` and
     /// never allocates.
-    Rendered { emitted: Emitted, text: Cow<'static, str> },
+    Rendered {
+        emitted: Emitted,
+        text: Cow<'static, str>,
+    },
     /// Owned group; rendered on demand at `render_all` / drop time so emitting
     /// a diagnostic that is later cleared costs no render.
-    Lazy { emitted: Emitted, group: Group<'static> },
+    Lazy {
+        emitted: Emitted,
+        group: Group<'static>,
+    },
 }
 
 impl StoredDiag {
@@ -290,7 +296,8 @@ impl DiagnosticEmitter {
         } else {
             Emitted::No
         };
-        self.inner.push(level, StoredDiag::Rendered { emitted, text });
+        self.inner
+            .push(level, StoredDiag::Rendered { emitted, text });
     }
 
     pub fn render_all(&self) {
@@ -299,6 +306,16 @@ impl DiagnosticEmitter {
                 anstream::eprintln!("{text}");
             }
         });
+    }
+
+    /// Renders a single Diagnostic into a formatted string and prints it to stderr.
+    pub fn render_stderr(&self, report: annotate_snippets::Report) {
+        anstream::eprintln!("{}", self.inner.renderer.render(report));
+    }
+
+    /// Renders multiple Diagnostics into formatted strings and prints them to stderr.
+    pub fn render(&self, reports: annotate_snippets::Report) {
+        anstream::eprintln!("{}", self.inner.renderer.render(reports));
     }
 }
 

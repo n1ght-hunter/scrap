@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn first<A, B>(a: A, b: B) -> A {
@@ -8,5 +8,5 @@ fn first<A, B>(a: A, b: B) -> A {
 
 fn main() {
     let x: usize = first(42, true);
-    ExitProcess(x);
+    __scrap_exit(x);
 }

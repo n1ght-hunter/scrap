@@ -100,7 +100,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if mode.is_none() {
         let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
 
-        let obj_bytes = scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone());
+        let obj_bytes =
+            scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone());
         handle_diagnostics(db)?;
 
         let obj_bytes = obj_bytes.unwrap(); // safe: handle_diagnostics would have bailed

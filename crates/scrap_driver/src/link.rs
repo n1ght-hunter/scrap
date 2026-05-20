@@ -308,7 +308,10 @@ mod tests {
         let obj = PathBuf::from("a.o");
         let exe = PathBuf::from("a");
         let args = unix_link_args(&obj, &exe, None, Some("/sdk/path"), MACOS_SYS_LIBS);
-        let pos = args.iter().position(|a| a == "-isysroot").expect("isysroot");
+        let pos = args
+            .iter()
+            .position(|a| a == "-isysroot")
+            .expect("isysroot");
         assert_eq!(args[pos + 1], "/sdk/path");
     }
 }

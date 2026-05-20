@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 struct Wrapper<T> {
@@ -8,5 +8,5 @@ struct Wrapper<T> {
 
 fn main() {
     let w = Wrapper { value: 42 };
-    ExitProcess(w.value);
+    __scrap_exit(w.value);
 }

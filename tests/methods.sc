@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 struct Point {
@@ -15,5 +15,5 @@ impl Point {
 
 fn main() {
     let p = Point { x: 42, y: 10 };
-    ExitProcess(p.get_x());
+    __scrap_exit(p.get_x());
 }
