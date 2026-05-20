@@ -1388,6 +1388,7 @@ dependencies = [
  "scrap_tycheck",
  "serde",
  "serde_json",
+ "target-lexicon",
  "thin-vec",
  "tracing",
  "workspace-hack",

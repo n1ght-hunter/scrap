@@ -100,7 +100,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if mode.is_none() {
         let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
 
-        let obj_bytes = scrap_codegen::compile_to_object(db, lowered_ir.can(db));
+        let obj_bytes = scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone());
         handle_diagnostics(db)?;
 
         let obj_bytes = obj_bytes.unwrap(); // safe: handle_diagnostics would have bailed
@@ -110,13 +110,19 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         let obj_path = out_dir.join(format!("{}.obj", args.crate_name));
         std::fs::write(&obj_path, &obj_bytes)?;
 
-        let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix()));
+        let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix(&args.target)));
 
         // Find the scrap_rt runtime archive — look for it relative to the
         // compiler binary, or in the target directory.
-        let rt_lib = find_scrap_rt_lib();
+        let rt_lib = find_scrap_rt_lib(&args.target);
 
-        link::link_executable(&args.crate_name, &obj_path, &exe_path, rt_lib.as_deref())?;
+        link::link_executable(
+            &args.target,
+            &args.crate_name,
+            &obj_path,
+            &exe_path,
+            rt_lib.as_deref(),
+        )?;
 
         eprintln!("Compiled to {}", exe_path.display());
     }
@@ -124,23 +130,26 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     Ok(())
 }
 
-/// Host executable filename suffix (`.exe` on Windows, empty on Unix).
-fn exe_suffix() -> &'static str {
-    if cfg!(windows) { ".exe" } else { "" }
+/// Executable filename suffix for the target (`.exe` for COFF/PE, empty otherwise).
+fn exe_suffix(target: &target_lexicon::Triple) -> &'static str {
+    match target.binary_format {
+        target_lexicon::BinaryFormat::Coff => ".exe",
+        _ => "",
+    }
 }
 
-/// The `scrap_rt` static archive filename for the host platform.
-fn rt_lib_name() -> &'static str {
-    if cfg!(windows) {
-        "scrap_rt.lib"
-    } else {
-        "libscrap_rt.a"
+/// The `scrap_rt` static archive filename for the target (`scrap_rt.lib` for
+/// COFF/PE, `libscrap_rt.a` otherwise).
+fn rt_lib_name(target: &target_lexicon::Triple) -> &'static str {
+    match target.binary_format {
+        target_lexicon::BinaryFormat::Coff => "scrap_rt.lib",
+        _ => "libscrap_rt.a",
     }
 }
 
 /// Find the `scrap_rt` static archive by searching common locations.
-fn find_scrap_rt_lib() -> Option<std::path::PathBuf> {
-    let name = rt_lib_name();
+fn find_scrap_rt_lib(target: &target_lexicon::Triple) -> Option<std::path::PathBuf> {
+    let name = rt_lib_name(target);
 
     // Build output directories, relative to the current working directory.
     let dirs = [

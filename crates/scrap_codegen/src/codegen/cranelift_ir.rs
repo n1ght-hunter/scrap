@@ -1222,7 +1222,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     builder.ins().call(panic_ref, &[msg_ptr, msg_len]);
                 }
 
-                // Trap as fallback (panic function diverges via ExitProcess)
+                // Trap as fallback (panic function diverges via __scrap_exit)
                 builder.ins().trap(TrapCode::user(2).unwrap());
 
                 Some(())

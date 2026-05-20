@@ -11,3 +11,4 @@ use scrap_allocator as _;
 mod sync;
 mod coroutine;
 mod gc;
+mod panic;

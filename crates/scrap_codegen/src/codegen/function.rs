@@ -78,9 +78,17 @@ impl<'db> CodegenContext<'db> {
                         self.db,
                         &self.struct_layouts,
                     )?;
+                    // On libc-startup targets the generated entry claims the
+                    // `main` symbol, so the user's `main` is emitted under a
+                    // private symbol; the internal lookup key stays "main".
+                    let symbol_name = if name == "main" {
+                        self.user_main_symbol()
+                    } else {
+                        name
+                    };
                     let func_id = self
                         .module
-                        .declare_function(name, Linkage::Local, &cl_sig)
+                        .declare_function(symbol_name, Linkage::Local, &cl_sig)
                         .or_emit(self.db)?;
                     self.functions.insert(name.to_string(), func_id);
                 }

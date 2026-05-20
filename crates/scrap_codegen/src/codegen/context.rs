@@ -7,7 +7,6 @@ use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use scrap_ir as ir;
 use std::collections::HashMap;
-use std::str::FromStr;
 use target_lexicon::Triple;
 
 use super::ResultExt;
@@ -44,20 +43,29 @@ pub struct CodegenContext<'db> {
 }
 
 impl<'db> CodegenContext<'db> {
-    /// Create a new code generation context targeting x86_64-pc-windows-msvc.
-    pub fn new(db: &'db dyn scrap_shared::Db) -> Option<Self> {
-        let target_triple = Triple::from_str("x86_64-pc-windows-msvc")
-            .map_err(|e| format!("failed to parse target triple: {e}"))
-            .or_emit(db)?;
-
+    /// Create a new code generation context for the given target triple.
+    ///
+    /// When `target` is the host triple, the host ISA builder is used so that
+    /// native CPU features are enabled; otherwise a baseline ISA is looked up
+    /// for the requested target (cross-compilation). The object format
+    /// (COFF/ELF/Mach-O) is derived from the triple automatically.
+    pub fn new(db: &'db dyn scrap_shared::Db, target: &Triple) -> Option<Self> {
         let mut shared_builder = settings::builder();
         shared_builder
             .set("preserve_frame_pointers", "true")
             .unwrap();
         let shared_flags = settings::Flags::new(shared_builder);
-        let isa = cranelift::codegen::isa::lookup(target_triple)
-            .map_err(|e| format!("ISA lookup failed: {e}"))
-            .or_emit(db)?
+
+        let isa_builder = if *target == Triple::host() {
+            cranelift_native::builder()
+                .map_err(|e| format!("host ISA builder failed: {e}"))
+                .or_emit(db)?
+        } else {
+            cranelift::codegen::isa::lookup(target.clone())
+                .map_err(|e| format!("ISA lookup failed: {e}"))
+                .or_emit(db)?
+        };
+        let isa = isa_builder
             .finish(shared_flags)
             .map_err(|e| format!("ISA finish failed: {e}"))
             .or_emit(db)?;
@@ -94,11 +102,35 @@ impl<'db> CodegenContext<'db> {
         self.declare_gc_runtime()?;
         self.declare_spawn_runtime()?;
         self.define_functions(module)?;
-        self.define_panic_function()?;
         Some(())
     }
 
-    /// Generate the `_start` entry point that calls `main`.
+    /// Whether the target goes through libc's startup (`crt` → `__libc_start_main`
+    /// → `main`). True for ELF/Mach-O; false for COFF/PE, where we emit a custom
+    /// `_start` and bypass the CRT. The runtime is Rust std, which relies on the
+    /// libc/TLS init that crt startup performs, so on ELF/Mach-O we must not
+    /// bypass it.
+    pub(crate) fn uses_libc_startup(&self) -> bool {
+        !matches!(
+            self.module.isa().triple().binary_format,
+            target_lexicon::BinaryFormat::Coff
+        )
+    }
+
+    /// Symbol name the user's `main` is emitted under. On libc-startup targets it
+    /// is renamed so our generated entry can claim the `main` symbol that crt
+    /// calls; elsewhere it keeps its name.
+    pub(crate) fn user_main_symbol(&self) -> &'static str {
+        if self.uses_libc_startup() {
+            "__scrap_user_main"
+        } else {
+            "main"
+        }
+    }
+
+    /// Generate the program entry point that initializes the runtime and calls
+    /// the user's `main`. On COFF this is a custom `_start` (CRT bypassed); on
+    /// ELF/Mach-O it is `main`, invoked by the platform's crt startup.
     pub fn generate_start(&mut self) -> Option<()> {
         let main_func_id = match self.functions.get("main").copied() {
             Some(id) => id,
@@ -108,13 +140,19 @@ impl<'db> CodegenContext<'db> {
             }
         };
 
-        // Declare _start: no params, no returns
+        let entry_name = if self.uses_libc_startup() {
+            "main"
+        } else {
+            "_start"
+        };
+
+        // Entry: no params, no returns (it diverges via __scrap_exit).
         let mut start_sig = self.module.make_signature();
         start_sig.call_conv = self.module.target_config().default_call_conv;
 
         let start_func_id = self
             .module
-            .declare_function("_start", Linkage::Export, &start_sig)
+            .declare_function(entry_name, Linkage::Export, &start_sig)
             .or_emit(self.db)?;
 
         self.ctx.func.signature = start_sig;
@@ -150,15 +188,15 @@ impl<'db> CodegenContext<'db> {
                 builder.ins().call(sched_shutdown_ref, &[]);
             }
 
-            // Call ExitProcess(0) for a clean exit after main + scheduler finish.
-            // Programs that need a specific exit code call ExitProcess explicitly.
-            if let Some(&exit_id) = self.functions.get("ExitProcess") {
+            // Call __scrap_exit(0) for a clean exit after main + scheduler finish.
+            // Programs that need a specific exit code call __scrap_exit explicitly.
+            if let Some(&exit_id) = self.functions.get("__scrap_exit") {
                 let exit_ref = self.module.declare_func_in_func(exit_id, builder.func);
                 let zero = builder.ins().iconst(types::I64, 0);
                 builder.ins().call(exit_ref, &[zero]);
             }
 
-            // Fallback trap (unreachable — ExitProcess diverges)
+            // Fallback trap (unreachable — __scrap_exit diverges)
             builder.ins().trap(TrapCode::user(1).unwrap());
 
             builder.seal_all_blocks();
@@ -175,67 +213,39 @@ impl<'db> CodegenContext<'db> {
         Some(())
     }
 
-    /// Declare the panic runtime: `__scrap_panic` and its Windows API dependencies.
-    /// Must be called before `define_functions()` so user code can reference `__scrap_panic`.
+    /// Declare the panic/exit runtime imported from `scrap_rt`: `__scrap_panic`
+    /// and `__scrap_exit`. Both are platform-agnostic (the runtime uses Rust std),
+    /// so codegen emits no OS-specific calls. Must be called before
+    /// `define_functions()` so user code can reference `__scrap_panic`.
     pub fn declare_panic_runtime(&mut self) -> Option<()> {
         let ptr_ty = types::I64;
         let call_conv = self.module.target_config().default_call_conv;
 
-        // Ensure Windows API imports exist
-        // GetStdHandle(nStdHandle: i64) -> i64
-        if !self.functions.contains_key("GetStdHandle") {
-            let mut sig = self.module.make_signature();
-            sig.call_conv = call_conv;
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.returns.push(AbiParam::new(ptr_ty));
-            let fid = self
+        // __scrap_panic(msg_ptr: i64, msg_len: i64) -> !
+        if !self.functions.contains_key("__scrap_panic") {
+            let mut panic_sig = self.module.make_signature();
+            panic_sig.call_conv = call_conv;
+            panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_ptr
+            panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_len
+            let panic_func_id = self
                 .module
-                .declare_function("GetStdHandle", Linkage::Import, &sig)
+                .declare_function("__scrap_panic", Linkage::Import, &panic_sig)
                 .or_emit(self.db)?;
-            self.functions.insert("GetStdHandle".to_string(), fid);
+            self.functions
+                .insert("__scrap_panic".to_string(), panic_func_id);
         }
 
-        // WriteFile(hFile, lpBuffer, nBytes, lpBytesWritten, lpOverlapped) -> i64
-        if !self.functions.contains_key("WriteFile") {
-            let mut sig = self.module.make_signature();
-            sig.call_conv = call_conv;
-            sig.params.push(AbiParam::new(ptr_ty)); // hFile
-            sig.params.push(AbiParam::new(ptr_ty)); // lpBuffer
-            sig.params.push(AbiParam::new(ptr_ty)); // nNumberOfBytesToWrite
-            sig.params.push(AbiParam::new(ptr_ty)); // lpNumberOfBytesWritten
-            sig.params.push(AbiParam::new(ptr_ty)); // lpOverlapped
-            sig.returns.push(AbiParam::new(ptr_ty));
-            let fid = self
-                .module
-                .declare_function("WriteFile", Linkage::Import, &sig)
-                .or_emit(self.db)?;
-            self.functions.insert("WriteFile".to_string(), fid);
-        }
-
-        // ExitProcess(exit_code: i64) -> !  (no return)
-        if !self.functions.contains_key("ExitProcess") {
+        // __scrap_exit(exit_code: i64) -> !
+        if !self.functions.contains_key("__scrap_exit") {
             let mut sig = self.module.make_signature();
             sig.call_conv = call_conv;
             sig.params.push(AbiParam::new(ptr_ty));
             let fid = self
                 .module
-                .declare_function("ExitProcess", Linkage::Import, &sig)
+                .declare_function("__scrap_exit", Linkage::Import, &sig)
                 .or_emit(self.db)?;
-            self.functions.insert("ExitProcess".to_string(), fid);
+            self.functions.insert("__scrap_exit".to_string(), fid);
         }
-
-        // Declare __scrap_panic(msg_ptr: i64, msg_len: i64) -> !
-        let mut panic_sig = self.module.make_signature();
-        panic_sig.call_conv = call_conv;
-        panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_ptr
-        panic_sig.params.push(AbiParam::new(ptr_ty)); // msg_len
-
-        let panic_func_id = self
-            .module
-            .declare_function("__scrap_panic", Linkage::Local, &panic_sig)
-            .or_emit(self.db)?;
-        self.functions
-            .insert("__scrap_panic".to_string(), panic_func_id);
 
         Some(())
     }
@@ -404,87 +414,6 @@ impl<'db> CodegenContext<'db> {
         }
     }
 
-    /// Define the `__scrap_panic` function body.
-    /// Must be called after `define_functions()`.
-    ///
-    /// Implementation:
-    ///   1. GetStdHandle(STD_ERROR_HANDLE) → handle
-    ///   2. WriteFile(handle, msg_ptr, msg_len, 0, 0)
-    ///   3. ExitProcess(101)
-    pub fn define_panic_function(&mut self) -> Option<()> {
-        let ptr_ty = types::I64;
-        let call_conv = self.module.target_config().default_call_conv;
-
-        let panic_func_id = match self.functions.get("__scrap_panic").copied() {
-            Some(id) => id,
-            None => {
-                emit_codegen_err(self.db, "function '__scrap_panic' not declared");
-                return None;
-            }
-        };
-
-        let mut panic_sig = self.module.make_signature();
-        panic_sig.call_conv = call_conv;
-        panic_sig.params.push(AbiParam::new(ptr_ty));
-        panic_sig.params.push(AbiParam::new(ptr_ty));
-
-        self.ctx.func.signature = panic_sig;
-
-        {
-            let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.func_ctx);
-            let entry_block = builder.create_block();
-            builder.append_block_params_for_function_params(entry_block);
-            builder.switch_to_block(entry_block);
-
-            let params = builder.block_params(entry_block).to_vec();
-            let msg_ptr = params[0];
-            let msg_len = params[1];
-
-            // 1. handle = GetStdHandle(STD_ERROR_HANDLE)
-            //    STD_ERROR_HANDLE = (DWORD)-12 = 0xFFFFFFF4 = 4294967284
-            let get_std_handle_id = self.functions["GetStdHandle"];
-            let get_std_handle_ref = self
-                .module
-                .declare_func_in_func(get_std_handle_id, builder.func);
-            let stderr_const = builder.ins().iconst(ptr_ty, 4294967284_i64);
-            let call_gsh = builder.ins().call(get_std_handle_ref, &[stderr_const]);
-            let handle = builder.inst_results(call_gsh)[0];
-
-            // 2. WriteFile(handle, msg_ptr, msg_len, 0, 0)
-            let write_file_id = self.functions["WriteFile"];
-            let write_file_ref = self
-                .module
-                .declare_func_in_func(write_file_id, builder.func);
-            let zero = builder.ins().iconst(ptr_ty, 0);
-            builder
-                .ins()
-                .call(write_file_ref, &[handle, msg_ptr, msg_len, zero, zero]);
-
-            // 3. ExitProcess(101)
-            let exit_process_id = self.functions["ExitProcess"];
-            let exit_process_ref = self
-                .module
-                .declare_func_in_func(exit_process_id, builder.func);
-            let exit_code = builder.ins().iconst(ptr_ty, 101);
-            builder.ins().call(exit_process_ref, &[exit_code]);
-
-            // Trap as fallback (ExitProcess never returns)
-            builder.ins().trap(TrapCode::user(1).unwrap());
-
-            builder.seal_all_blocks();
-            builder.finalize();
-        }
-
-        self.module
-            .define_function(panic_func_id, &mut self.ctx)
-            .or_emit(self.db)?;
-
-        self.collect_unwind_info(panic_func_id);
-        self.module.clear_context(&mut self.ctx);
-
-        Some(())
-    }
-
     /// Extract user stack maps from the just-compiled function.
     /// Must be called after `define_function()` but before `clear_context()`.
     pub(crate) fn collect_stack_maps(&mut self, func_id: FuncId) {
@@ -620,14 +549,17 @@ impl<'db> CodegenContext<'db> {
     ///   - `__scrap_stackmap_index`: sorted array of (return_addr: u64, roots_start: u32, roots_count: u32)
     ///   - `__scrap_stackmap_roots`: packed array of u32 SP-relative offsets
     ///
-    /// The `return_addr` fields carry IMAGE_REL_AMD64_ADDR64 relocations so the
-    /// linker fills in absolute code addresses.
+    /// The `return_addr` fields carry absolute 64-bit relocations so the linker
+    /// fills in absolute code addresses (emitted as the correct per-format type).
     fn emit_stack_map_table(
         product: &mut ObjectProduct,
         entries: &[(FuncId, CodeOffset, Vec<u32>)],
     ) {
         use cranelift_object::object::write::{Relocation, Symbol};
-        use cranelift_object::object::{SectionKind, SymbolFlags, SymbolKind, SymbolScope, pe};
+        use cranelift_object::object::{
+            RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags,
+            SymbolKind, SymbolScope,
+        };
 
         // Collect function symbols before borrowing product.object mutably.
         let func_syms: Vec<_> = entries
@@ -733,8 +665,13 @@ impl<'db> CodegenContext<'db> {
                     offset: entry_offset,
                     symbol: func_sym,
                     addend: *code_offset as i64,
-                    flags: cranelift_object::object::RelocationFlags::Coff {
-                        typ: pe::IMAGE_REL_AMD64_ADDR64,
+                    // Generic absolute 64-bit relocation; the object writer maps
+                    // this to the right per-format type (IMAGE_REL_AMD64_ADDR64
+                    // on COFF, R_X86_64_64 on ELF, the Mach-O equivalent).
+                    flags: RelocationFlags::Generic {
+                        kind: RelocationKind::Absolute,
+                        encoding: RelocationEncoding::Generic,
+                        size: 64,
                     },
                 },
             )

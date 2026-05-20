@@ -1,16 +1,22 @@
-//! Platform-dispatched linking of the compiled object into an executable.
+//! Target-driven linking of the compiled object into an executable.
 //!
-//! System library search paths are resolved the way rustc/cargo do:
-//! on Windows-MSVC via [`cc::windows_registry`] (so we no longer depend on an
-//! inherited `LIB` env var), and on Unix by driving the link through the system
-//! C compiler driver (`cc`/`clang`), which already knows the crt and system
-//! library search paths.
+//! The link strategy is selected from the *target* triple's binary format
+//! (not the compiler host): COFF/PE links via `lld-link`, ELF and Mach-O drive
+//! the link through the system C compiler driver (`cc`/`clang`), which already
+//! knows the crt and system library search paths. System library search paths
+//! on Windows-MSVC are resolved the way rustc/cargo do, via
+//! [`cc::windows_registry`], so we don't depend on an inherited `LIB` env var.
+//!
+//! Native targets (target == host) use the same tooling as before and are the
+//! supported path; cross-linking is best-effort and depends on a cross-capable
+//! linker being installed for the target format.
 
 use std::path::Path;
 
+use target_lexicon::{BinaryFormat, Triple};
+
 /// MSVC system libraries required by Rust's std (bundled into the `scrap_rt`
 /// staticlib). `kernel32.lib` is always linked and handled separately.
-#[cfg(windows)]
 const WINDOWS_SYS_LIBS: &[&str] = &[
     "advapi32.lib",
     "bcrypt.lib",
@@ -23,28 +29,27 @@ const WINDOWS_SYS_LIBS: &[&str] = &[
 ];
 
 /// Linux system libraries pulled in by Rust's std (bundled into the staticlib).
-#[cfg(all(unix, not(target_os = "macos")))]
-const LINUX_SYS_LIBS: &[&str] = &["-lpthread", "-ldl", "-lm", "-lrt"];
+/// `-lgcc_s` provides the `_Unwind_*` personality routines std references; it is
+/// standard on GNU/clang toolchains and accepted by `zig cc` for cross-linking.
+const LINUX_SYS_LIBS: &[&str] = &["-lpthread", "-ldl", "-lm", "-lrt", "-lgcc_s"];
 
 /// macOS system libraries. `libSystem` provides libc + libm + pthread.
-#[cfg(target_os = "macos")]
 const MACOS_SYS_LIBS: &[&str] = &["-lSystem"];
 
-/// Link the object file into an executable for the host platform.
+/// Link the object file into an executable for the given target triple.
 pub fn link_executable(
+    target: &Triple,
     crate_name: &str,
     obj_path: &Path,
     exe_path: &Path,
     rt_lib: Option<&Path>,
 ) -> anyhow::Result<()> {
     let _ = crate_name;
-    #[cfg(windows)]
-    {
-        link_windows(obj_path, exe_path, rt_lib)
-    }
-    #[cfg(unix)]
-    {
-        link_unix(obj_path, exe_path, rt_lib)
+    match target.binary_format {
+        BinaryFormat::Coff => link_pe(obj_path, exe_path, rt_lib),
+        BinaryFormat::Elf => link_elf(obj_path, exe_path, rt_lib),
+        BinaryFormat::Macho => link_macho(obj_path, exe_path, rt_lib),
+        other => anyhow::bail!("unsupported target binary format for linking: {other:?}"),
     }
 }
 
@@ -52,8 +57,8 @@ pub fn link_executable(
 ///
 /// Uses [`cc::windows_registry::find_tool`] to locate the MSVC toolchain and
 /// reads the `LIB` entry of its environment. Falls back to the ambient `LIB`
-/// env var if the tool can't be found.
-#[cfg(windows)]
+/// env var if the tool can't be found. Returns no directories when not on a
+/// Windows host targeting MSVC.
 fn windows_libpaths() -> Vec<String> {
     if let Some(tool) = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe") {
         for (key, val) in tool.env() {
@@ -78,7 +83,6 @@ fn windows_libpaths() -> Vec<String> {
 
 /// Build the `lld-link.exe` argument vector. Pure: no env or process access, so
 /// it can be unit-tested.
-#[cfg(windows)]
 fn windows_link_args(
     obj_path: &Path,
     exe_path: &Path,
@@ -105,8 +109,7 @@ fn windows_link_args(
     args
 }
 
-#[cfg(windows)]
-fn link_windows(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow::Result<()> {
+fn link_pe(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow::Result<()> {
     let libpaths = windows_libpaths();
     if libpaths.is_empty() {
         anyhow::bail!(
@@ -133,44 +136,41 @@ fn link_windows(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyh
     Ok(())
 }
 
-/// The C compiler driver to drive the Unix link through: `$CC` if set, else
-/// `clang` on macOS / `cc` on Linux.
-#[cfg(unix)]
-fn unix_compiler() -> String {
+/// The C compiler driver to drive a Unix link through, as an argv vector
+/// (program plus any leading args). `$CC` if set — split on whitespace so values
+/// like `zig cc -target x86_64-linux-gnu` work — else `clang` for Mach-O /
+/// `cc` for ELF.
+fn unix_compiler(is_macho: bool) -> Vec<String> {
     if let Ok(cc) = std::env::var("CC")
-        && !cc.is_empty()
+        && !cc.trim().is_empty()
     {
-        return cc;
+        return cc.split_whitespace().map(str::to_string).collect();
     }
-    if cfg!(target_os = "macos") {
-        "clang".to_string()
+    if is_macho {
+        vec!["clang".to_string()]
     } else {
-        "cc".to_string()
+        vec!["cc".to_string()]
     }
 }
 
 /// Build the argument vector passed to the C compiler driver (everything after
 /// the compiler program name). Pure: no env or process access, so it can be
 /// unit-tested. `isysroot` is the macOS SDK path, if any.
-#[cfg(unix)]
+///
+/// The link goes through the platform's crt startup (`crt1`/`Scrt1` →
+/// `__libc_start_main` → `main`); codegen emits the runtime driver as `main`
+/// on these targets, so we do not override the entry point or skip startfiles.
 fn unix_link_args(
     obj_path: &Path,
     exe_path: &Path,
     rt_lib: Option<&Path>,
     isysroot: Option<&str>,
+    sys_libs: &[&str],
 ) -> Vec<String> {
-    let entry = if cfg!(target_os = "macos") {
-        "-Wl,-e,__start"
-    } else {
-        "-Wl,-e,_start"
-    };
-
     let mut args: Vec<String> = vec![
         obj_path.to_string_lossy().into_owned(),
         "-o".to_string(),
         exe_path.to_string_lossy().into_owned(),
-        "-nostartfiles".to_string(),
-        entry.to_string(),
     ];
 
     if let Some(sdk) = isysroot {
@@ -182,16 +182,13 @@ fn unix_link_args(
         args.push(rt.to_string_lossy().into_owned());
     }
 
-    #[cfg(target_os = "macos")]
-    args.extend(MACOS_SYS_LIBS.iter().map(|s| (*s).to_string()));
-    #[cfg(all(unix, not(target_os = "macos")))]
-    args.extend(LINUX_SYS_LIBS.iter().map(|s| (*s).to_string()));
+    args.extend(sys_libs.iter().map(|s| (*s).to_string()));
 
     args
 }
 
-/// Query the macOS SDK path via `xcrun --show-sdk-path`.
-#[cfg(target_os = "macos")]
+/// Query the macOS SDK path via `xcrun --show-sdk-path`. Returns `None` when
+/// `xcrun` is unavailable (i.e. not on a macOS host).
 fn macos_sdk_path() -> Option<String> {
     let out = std::process::Command::new("xcrun")
         .args(["--show-sdk-path"])
@@ -204,23 +201,16 @@ fn macos_sdk_path() -> Option<String> {
     if path.is_empty() { None } else { Some(path) }
 }
 
-#[cfg(unix)]
-fn link_unix(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow::Result<()> {
-    let compiler = unix_compiler();
+fn run_unix_link(compiler: &[String], args: &[String]) -> anyhow::Result<()> {
+    let (program, prefix_args) = compiler
+        .split_first()
+        .ok_or_else(|| anyhow::anyhow!("empty compiler command"))?;
 
-    #[cfg(target_os = "macos")]
-    let sdk = macos_sdk_path();
-    #[cfg(target_os = "macos")]
-    let isysroot = sdk.as_deref();
-    #[cfg(not(target_os = "macos"))]
-    let isysroot: Option<&str> = None;
-
-    let args = unix_link_args(obj_path, exe_path, rt_lib, isysroot);
-
-    let status = std::process::Command::new(&compiler)
-        .args(&args)
+    let status = std::process::Command::new(program)
+        .args(prefix_args)
+        .args(args)
         .status()
-        .map_err(|e| anyhow::anyhow!("Failed to run linker driver `{compiler}`: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("Failed to run linker driver `{program}`: {e}"))?;
 
     if !status.success() {
         anyhow::bail!(
@@ -232,12 +222,24 @@ fn link_unix(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow:
     Ok(())
 }
 
+fn link_elf(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow::Result<()> {
+    let compiler = unix_compiler(false);
+    let args = unix_link_args(obj_path, exe_path, rt_lib, None, LINUX_SYS_LIBS);
+    run_unix_link(&compiler, &args)
+}
+
+fn link_macho(obj_path: &Path, exe_path: &Path, rt_lib: Option<&Path>) -> anyhow::Result<()> {
+    let compiler = unix_compiler(true);
+    let sdk = macos_sdk_path();
+    let args = unix_link_args(obj_path, exe_path, rt_lib, sdk.as_deref(), MACOS_SYS_LIBS);
+    run_unix_link(&compiler, &args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    #[cfg(windows)]
     #[test]
     fn windows_args_contain_essentials() {
         let obj = PathBuf::from("target/scrap/hello.obj");
@@ -259,7 +261,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
     #[test]
     fn windows_args_omit_syslibs_without_rt() {
         let obj = PathBuf::from("a.obj");
@@ -271,42 +272,42 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     #[test]
-    fn unix_args_contain_essentials() {
+    fn elf_args_contain_essentials() {
         let obj = PathBuf::from("target/scrap/hello.o");
         let exe = PathBuf::from("target/scrap/hello");
         let rt = PathBuf::from("target/release/libscrap_rt.a");
 
-        let args = unix_link_args(&obj, &exe, Some(&rt), None);
+        let args = unix_link_args(&obj, &exe, Some(&rt), None, LINUX_SYS_LIBS);
 
-        assert!(args.iter().any(|a| a == "-nostartfiles"));
         assert!(args.iter().any(|a| a == "-o"));
-        assert!(args.iter().any(|a| a.starts_with("-Wl,-e,")));
         assert!(args.iter().any(|a| a.contains("libscrap_rt.a")));
-
-        #[cfg(target_os = "macos")]
-        {
-            assert!(args.iter().any(|a| a == "-Wl,-e,__start"));
-            for lib in MACOS_SYS_LIBS {
-                assert!(args.iter().any(|a| a == lib), "missing syslib {lib}");
-            }
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            assert!(args.iter().any(|a| a == "-Wl,-e,_start"));
-            for lib in LINUX_SYS_LIBS {
-                assert!(args.iter().any(|a| a == lib), "missing syslib {lib}");
-            }
+        // Startup is driven by crt → main, so we must NOT skip startfiles or
+        // override the entry point.
+        assert!(!args.iter().any(|a| a == "-nostartfiles"));
+        assert!(!args.iter().any(|a| a.starts_with("-Wl,-e,")));
+        for lib in LINUX_SYS_LIBS {
+            assert!(args.iter().any(|a| a == lib), "missing syslib {lib}");
         }
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
-    fn macos_isysroot_passed_through() {
+    fn macho_args_use_macos_libs() {
         let obj = PathBuf::from("a.o");
         let exe = PathBuf::from("a");
-        let args = unix_link_args(&obj, &exe, None, Some("/sdk/path"));
+        let args = unix_link_args(&obj, &exe, None, None, MACOS_SYS_LIBS);
+
+        assert!(!args.iter().any(|a| a.starts_with("-Wl,-e,")));
+        for lib in MACOS_SYS_LIBS {
+            assert!(args.iter().any(|a| a == lib), "missing syslib {lib}");
+        }
+    }
+
+    #[test]
+    fn macho_isysroot_passed_through() {
+        let obj = PathBuf::from("a.o");
+        let exe = PathBuf::from("a");
+        let args = unix_link_args(&obj, &exe, None, Some("/sdk/path"), MACOS_SYS_LIBS);
         let pos = args.iter().position(|a| a == "-isysroot").expect("isysroot");
         assert_eq!(args[pos + 1], "/sdk/path");
     }
