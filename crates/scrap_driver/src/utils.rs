@@ -194,15 +194,20 @@ pub fn lower_input_files_to_ir<'db>(
     (entry_ir, other_ir)
 }
 
-/// Create a LoweredIr Can from entry and other modules (tracked function for creating tracked structs)
+/// Create a LoweredIr Can from entry and other modules (tracked function for creating tracked structs).
+/// `interop_first` holds synthesized Rust-interop extern modules; they are placed
+/// first so their imported functions are declared before any user module's bodies
+/// reference them (codegen declares + defines per module in order).
 #[salsa::tracked(persist)]
 pub fn create_lowered_ir<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_ir: Option<scrap_ir::Module<'db>>,
     mut other_ir: Vec<scrap_ir::Module<'db>>,
+    mut interop_first: Vec<scrap_ir::Module<'db>>,
 ) -> scrap_ast_lowering::LoweredIr<'db> {
     // Collect all successfully lowered modules
-    let mut modules = Vec::with_capacity(other_ir.len() + 1);
+    let mut modules = Vec::with_capacity(other_ir.len() + interop_first.len() + 1);
+    modules.append(&mut interop_first);
     if let Some(entry_module) = entry_ir {
         modules.push(entry_module);
     }

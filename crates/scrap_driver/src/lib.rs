@@ -5,6 +5,7 @@ mod cache;
 mod link;
 mod parsing;
 mod pretty;
+mod rust_use;
 mod utils;
 
 use std::ffi::OsString;
@@ -60,6 +61,37 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let modules = utils::collect_modules(db, entry_file, other_files.clone());
     let resolved_can = parsing::resolve_modules(db, &modules, entry_file);
 
+    let out_dir = std::path::Path::new("target/scrap");
+
+    // Phase 1.6: Rust interop. Build the anchor (when rust deps are declared) so
+    // its metadata is available before type checking, then resolve `use rust::…`
+    // imports into synthesized `extern "Rust"` bindings: AST items injected into
+    // the `Can` for tycheck, IR `ExternFn`s for codegen, and a name → mangled
+    // symbol map for linking.
+    let anchor = build_interop_anchor(args, out_dir)?;
+    let mut can_for_check = resolved_can;
+    let mut extern_modules: Vec<scrap_ir::Module> = Vec::new();
+    let mut rust_fn_symbols = std::collections::HashMap::new();
+    if let Some(meta) = anchor.as_ref().and_then(|a| a.metadata.as_ref()) {
+        let catalog = rust_use::build_catalog(meta);
+        let use_refs = rust_use::scan_rust_uses(db, resolved_can);
+        if !use_refs.is_empty() {
+            let outcome = rust_use::resolve_uses(db, &use_refs, &catalog);
+            handle_diagnostics(db)?;
+            rust_fn_symbols = outcome.fn_symbols;
+            if !outcome.ast_items.is_empty() {
+                can_for_check = rust_use::rebuild_can(db, resolved_can, outcome.ast_items);
+            }
+            if !outcome.imports.is_empty() {
+                extern_modules.push(rust_use::synth_extern_module(
+                    db,
+                    resolved_can,
+                    outcome.imports,
+                ));
+            }
+        }
+    }
+
     let mode = pretty::PpMode::determine_pp_mode(args);
 
     // Pretty print AST if requested
@@ -67,12 +99,12 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         && mode.needs_ast()
     {
         db.attach(|db| {
-            pretty::print(db, mode, pretty::CompilationOutput::Ast(resolved_can));
+            pretty::print(db, mode, pretty::CompilationOutput::Ast(can_for_check));
         });
     }
 
     // Phase 2: Type checking
-    let _type_table = scrap_tycheck::check_types(db, resolved_can, entry_file.file(db));
+    let _type_table = scrap_tycheck::check_types(db, can_for_check, entry_file.file(db));
     handle_diagnostics(db)?;
 
     // Phase 3: Lower to IR with type information
@@ -80,7 +112,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         db,
         entry_file,
         other_files.to_vec(),
-        resolved_can,
+        can_for_check,
         entry_file.file(db),
     );
 
@@ -89,7 +121,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if let Some(mode) = mode
         && mode.needs_ir()
     {
-        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir.clone());
+        let lowered_ir =
+            utils::create_lowered_ir(db, entry_ir, other_ir.clone(), extern_modules.clone());
 
         db.attach(|db| {
             pretty::print(db, mode, pretty::CompilationOutput::Ir(lowered_ir));
@@ -98,18 +131,11 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     // Phase 4: Code generation (when no pretty-print mode is active)
     if mode.is_none() {
-        let out_dir = std::path::Path::new("target/scrap");
         std::fs::create_dir_all(out_dir)?;
 
-        // Build the Rust-interop anchor first (when rust deps are declared): its
-        // metadata (mangled symbols + layouts) feeds codegen, and its archive
-        // (folding scrap_rt in) replaces the standalone scrap_rt.lib at link.
-        let anchor = build_interop_anchor(args, out_dir)?;
+        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir, extern_modules);
 
-        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
-
-        let obj_bytes = if let Some(a) = &anchor {
-            let rust_fn_symbols = rust_fn_symbol_map(a.metadata.as_ref());
+        let obj_bytes = if anchor.is_some() {
             scrap_codegen::compile_to_object_interop(
                 db,
                 lowered_ir.can(db),
@@ -198,26 +224,6 @@ fn build_interop_anchor(
         out_root: out_dir,
         release: false,
     })
-}
-
-/// Build the `extern "Rust"` name → mangled-symbol map from interop metadata,
-/// keyed by each function's last path segment (the name as written in an
-/// `extern "Rust"` block).
-fn rust_fn_symbol_map(
-    metadata: Option<&scrap_rmeta::RustMetadata>,
-) -> std::collections::HashMap<String, String> {
-    let mut map = std::collections::HashMap::new();
-    if let Some(metadata) = metadata {
-        for krate in &metadata.crates {
-            for f in &krate.fns {
-                if let Some(mono) = &f.mono {
-                    let name = f.path.rsplit("::").next().unwrap_or(&f.path);
-                    map.insert(name.to_string(), mono.symbol.clone());
-                }
-            }
-        }
-    }
-    map
 }
 
 /// Locate a repository subdirectory (e.g. `crates/scrap_rt`, `tools/scrap-rustc`)
