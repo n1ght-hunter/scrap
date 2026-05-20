@@ -2,6 +2,7 @@
 
 mod args;
 mod cache;
+mod link;
 mod parsing;
 mod pretty;
 mod utils;
@@ -109,51 +110,13 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         let obj_path = out_dir.join(format!("{}.obj", args.crate_name));
         std::fs::write(&obj_path, &obj_bytes)?;
 
-        // Link with lld-link
-        let exe_path = out_dir.join(format!("{}.exe", args.crate_name));
+        let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix()));
 
-        // Find scrap_rt.lib — look for it relative to the compiler binary,
-        // or in the target directory
+        // Find the scrap_rt runtime archive — look for it relative to the
+        // compiler binary, or in the target directory.
         let rt_lib = find_scrap_rt_lib();
 
-        let mut link_args: Vec<String> = vec![
-            obj_path.to_str().unwrap().to_string(),
-            "kernel32.lib".to_string(),
-            "/SUBSYSTEM:CONSOLE".to_string(),
-            "/ENTRY:_start".to_string(),
-            format!("/OUT:{}", exe_path.display()),
-        ];
-        if let Some(ref rt) = rt_lib {
-            link_args.push(rt.to_str().unwrap().to_string());
-            // System libraries required by Rust's std (bundled in the staticlib)
-            link_args.extend(
-                [
-                    "advapi32.lib",
-                    "bcrypt.lib",
-                    "msvcrt.lib",
-                    "ntdll.lib",
-                    "userenv.lib",
-                    "ws2_32.lib",
-                    // Modern MSVC CRT components
-                    "vcruntime.lib",
-                    "ucrt.lib",
-                ]
-                .iter()
-                .map(std::string::ToString::to_string),
-            );
-        }
-
-        let status = std::process::Command::new("lld-link.exe")
-            .args(&link_args)
-            .status()
-            .map_err(|e| anyhow::anyhow!("Failed to run lld-link.exe: {e}"))?;
-
-        if !status.success() {
-            anyhow::bail!(
-                "Linking failed with exit code: {}",
-                status.code().unwrap_or(-1)
-            );
-        }
+        link::link_executable(&args.crate_name, &obj_path, &exe_path, rt_lib.as_deref())?;
 
         eprintln!("Compiled to {}", exe_path.display());
     }
@@ -161,31 +124,51 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     Ok(())
 }
 
-/// Find `scrap_rt.lib` by searching common locations.
+/// Host executable filename suffix (`.exe` on Windows, empty on Unix).
+fn exe_suffix() -> &'static str {
+    if cfg!(windows) { ".exe" } else { "" }
+}
+
+/// The `scrap_rt` static archive filename for the host platform.
+fn rt_lib_name() -> &'static str {
+    if cfg!(windows) {
+        "scrap_rt.lib"
+    } else {
+        "libscrap_rt.a"
+    }
+}
+
+/// Find the `scrap_rt` static archive by searching common locations.
 fn find_scrap_rt_lib() -> Option<std::path::PathBuf> {
-    // Check common build output directories
-    let candidates = [
-        // Standalone crate build output (scrap_rt is outside the workspace)
-        "crates/scrap_rt/target/release/scrap_rt.lib",
-        "crates/scrap_rt/target/debug/scrap_rt.lib",
-        // Legacy workspace build paths
-        "target/release/scrap_rt.lib",
-        "target/debug/scrap_rt.lib",
-        "target/x86_64-pc-windows-msvc/release/scrap_rt.lib",
-        "target/x86_64-pc-windows-msvc/debug/scrap_rt.lib",
+    let name = rt_lib_name();
+
+    // Build output directories, relative to the current working directory.
+    let dirs = [
+        // Standalone crate build output (scrap_rt may be built on its own).
+        "crates/scrap_rt/target/release",
+        "crates/scrap_rt/target/debug",
+        // Workspace build paths.
+        "target/release",
+        "target/debug",
+        "target/x86_64-pc-windows-msvc/release",
+        "target/x86_64-pc-windows-msvc/debug",
+        "target/x86_64-unknown-linux-gnu/release",
+        "target/x86_64-unknown-linux-gnu/debug",
+        "target/x86_64-apple-darwin/release",
+        "target/x86_64-apple-darwin/debug",
     ];
-    for candidate in &candidates {
-        let path = std::path::PathBuf::from(candidate);
+    for dir in &dirs {
+        let path = std::path::Path::new(dir).join(name);
         if path.exists() {
             return Some(path);
         }
     }
 
-    // Check relative to the compiler binary
+    // Check relative to the compiler binary.
     if let Ok(exe) = std::env::current_exe()
         && let Some(dir) = exe.parent()
     {
-        let rt = dir.join("scrap_rt.lib");
+        let rt = dir.join(name);
         if rt.exists() {
             return Some(rt);
         }

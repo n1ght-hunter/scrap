@@ -59,6 +59,7 @@ strum = "0.28.0"
 strum_macros = "0.28.0"
 pathdiff = "0.2.3"
 toml = "1.1"
+cc = "1"
 
 # diagnostics and error reporting
 tracing = "0.1"

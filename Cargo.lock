@@ -1367,6 +1367,7 @@ name = "scrap_driver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cc",
  "clap",
  "crossbeam-channel",
  "hashbrown 0.17.1",
