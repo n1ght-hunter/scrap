@@ -12,7 +12,7 @@ pub struct TyVid(pub u32);
 /// This is separate from the AST types and IR types - it's used only
 /// during the type checking phase.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InferTy<'db> {
+pub enum InferTy {
     /// Inference variable (unknown type to be solved)
     Var(TyVid),
 
@@ -38,33 +38,33 @@ pub enum InferTy<'db> {
     Never,
 
     /// User-defined type (struct/enum) without generic arguments
-    Adt(Symbol<'db>),
+    Adt(Symbol),
 
     /// Generic type parameter (e.g., `T` in `fn foo<T>`)
-    Param(Symbol<'db>),
+    Param(Symbol),
 
     /// Applied generic type (e.g., `Vec<int>`, `Option<T>`)
     /// First Symbol is the type name, Vec contains the type arguments
-    App(Symbol<'db>, Vec<InferTy<'db>>),
+    App(Symbol, Vec<InferTy>),
 
     /// Function type (for first-class functions)
     /// Parameters followed by return type
-    Fn(Vec<InferTy<'db>>, Box<InferTy<'db>>),
+    Fn(Vec<InferTy>, Box<InferTy>),
 
     /// Tuple type (including unit `()` as empty tuple)
-    Tuple(Vec<InferTy<'db>>),
+    Tuple(Vec<InferTy>),
 
     /// GC-managed reference type: `&T` or `&mut T`
-    Ref(Box<InferTy<'db>>, Mutability),
+    Ref(Box<InferTy>, Mutability),
 
     /// GC-managed pointer type: `*T`
-    Ptr(Box<InferTy<'db>>),
+    Ptr(Box<InferTy>),
 
     /// Error type (for error recovery - unifies with anything)
     Error,
 }
 
-impl<'db> InferTy<'db> {
+impl InferTy {
     /// Returns true if this is the void type
     pub fn is_unit(&self) -> bool {
         matches!(self, InferTy::Void)

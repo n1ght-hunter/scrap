@@ -1,9 +1,9 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn worker(code: usize) {
-    ExitProcess(code);
+    __scrap_exit(code);
 }
 
 fn main() {

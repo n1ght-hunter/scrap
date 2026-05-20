@@ -6,15 +6,15 @@ use scrap_shared::ident::Ident;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct FieldDef<'db> {
+pub struct FieldDef {
     pub id: NodeId,
-    pub span: Span<'db>,
-    pub vis: Visibility<'db>,
-    pub ident: Option<Ident<'db>>,
-    pub ty: Box<Ty<'db>>,
+    pub span: Span,
+    pub vis: Visibility,
+    pub ident: Option<Ident>,
+    pub ty: Box<Ty>,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for FieldDef<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for FieldDef {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         if let Some(ident) = &self.ident {
             ident.pretty_print(f)?;

@@ -1,85 +1,77 @@
 //! Type table for storing resolved type information.
 //!
-//! The type table maps AST node IDs to their resolved types,
-//! allowing downstream passes (like IR lowering) to look up
-//! the type of any expression or local variable.
+//! Plain struct with HashMap fields for O(1) lookups.
+//! Returned from `check_types` via salsa `returns(ref)`.
+
+use hashbrown::HashMap;
 
 use scrap_shared::NodeId;
 use scrap_shared::ident::Symbol;
 
 use crate::resolved::ResolvedTy;
 
-/// Type information collected during type checking.
-/// Maps AST node IDs to their resolved types.
-#[salsa::tracked(debug, persist)]
-pub struct TypeTable<'db> {
-    /// Expression types as (NodeId, ResolvedTy) pairs
-    #[tracked]
-    #[returns(ref)]
-    pub expr_types: Vec<(NodeId, ResolvedTy<'db>)>,
-
-    /// Local variable types as (NodeId, ResolvedTy) pairs
-    #[tracked]
-    #[returns(ref)]
-    pub local_types: Vec<(NodeId, ResolvedTy<'db>)>,
-
-    /// Inferred function return types as (Symbol, ResolvedTy) pairs.
-    /// Only populated when the inferred return type differs from the declared one
-    /// (e.g., a function with no return annotation whose body diverges).
-    #[tracked]
-    #[returns(ref)]
-    pub fn_return_types: Vec<(Symbol<'db>, ResolvedTy<'db>)>,
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TypeTable {
+    expr_types: HashMap<NodeId, ResolvedTy>,
+    local_types: HashMap<NodeId, ResolvedTy>,
+    fn_return_types: HashMap<Symbol, ResolvedTy>,
+    generic_instantiations: HashMap<Symbol, Vec<(NodeId, Vec<(Symbol, ResolvedTy)>)>>,
 }
 
-impl<'db> TypeTable<'db> {
-    /// Get the type of an expression by its NodeId.
-    pub fn expr_type(
-        self,
-        db: &'db dyn scrap_shared::Db,
-        id: NodeId,
-    ) -> Option<&'db ResolvedTy<'db>> {
-        self.expr_types(db)
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, ty)| ty)
+impl TypeTable {
+    pub(crate) fn new(
+        expr_types: HashMap<NodeId, ResolvedTy>,
+        local_types: HashMap<NodeId, ResolvedTy>,
+        fn_return_types: HashMap<Symbol, ResolvedTy>,
+        generic_instantiations: HashMap<Symbol, Vec<(NodeId, Vec<(Symbol, ResolvedTy)>)>>,
+    ) -> Self {
+        Self {
+            expr_types,
+            local_types,
+            fn_return_types,
+            generic_instantiations,
+        }
     }
 
-    /// Get the type of a local variable by its NodeId.
-    pub fn local_type(
-        self,
-        db: &'db dyn scrap_shared::Db,
-        id: NodeId,
-    ) -> Option<&'db ResolvedTy<'db>> {
-        self.local_types(db)
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, ty)| ty)
+    pub fn empty() -> Self {
+        Self {
+            expr_types: HashMap::new(),
+            local_types: HashMap::new(),
+            fn_return_types: HashMap::new(),
+            generic_instantiations: HashMap::new(),
+        }
     }
 
-    /// Get the inferred return type of a function by its name.
-    pub fn fn_return_type(
-        self,
-        db: &'db dyn scrap_shared::Db,
-        name: Symbol<'db>,
-    ) -> Option<&'db ResolvedTy<'db>> {
-        self.fn_return_types(db)
-            .iter()
-            .find(|(sym, _)| *sym == name)
-            .map(|(_, ty)| ty)
+    pub fn insert_expr_type(&mut self, id: NodeId, ty: ResolvedTy) {
+        self.expr_types.insert(id, ty);
     }
 
-    /// Check if the table is empty.
-    pub fn is_empty(self, db: &'db dyn scrap_shared::Db) -> bool {
-        self.expr_types(db).is_empty() && self.local_types(db).is_empty()
+    pub fn expr_type(&self, id: NodeId) -> Option<&ResolvedTy> {
+        self.expr_types.get(&id)
     }
 
-    /// Get the number of recorded expression types.
-    pub fn expr_count(self, db: &'db dyn scrap_shared::Db) -> usize {
-        self.expr_types(db).len()
+    pub fn local_type(&self, id: NodeId) -> Option<&ResolvedTy> {
+        self.local_types.get(&id)
     }
 
-    /// Get the number of recorded local types.
-    pub fn local_count(self, db: &'db dyn scrap_shared::Db) -> usize {
-        self.local_types(db).len()
+    pub fn fn_return_type(&self, name: Symbol) -> Option<&ResolvedTy> {
+        self.fn_return_types.get(&name)
+    }
+
+    pub fn generic_instantiations_for(
+        &self,
+        name: Symbol,
+    ) -> Option<&Vec<(NodeId, Vec<(Symbol, ResolvedTy)>)>> {
+        self.generic_instantiations.get(&name)
+    }
+
+    pub fn all_generic_instantiations(
+        &self,
+    ) -> &HashMap<Symbol, Vec<(NodeId, Vec<(Symbol, ResolvedTy)>)>> {
+        &self.generic_instantiations
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.expr_types.is_empty() && self.local_types.is_empty()
     }
 }

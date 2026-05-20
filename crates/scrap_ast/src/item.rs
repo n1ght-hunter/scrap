@@ -13,9 +13,9 @@ use scrap_shared::{ident::Ident, path::Path};
 )]
 pub struct Item<'db> {
     pub kind: ItemKind<'db>,
-    pub span: Span<'db>,
+    pub span: Span,
     pub id: NodeId,
-    pub vis: Visibility<'db>,
+    pub vis: Visibility,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Item<'db> {
@@ -39,11 +39,11 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Item<'db> {
 #[strum_discriminants(derive(EnumIter))]
 pub enum ItemKind<'db> {
     Fn(FnDef<'db>),
-    Enum(EnumDef<'db>),
-    Struct(StructDef<'db>),
+    Enum(EnumDef),
+    Struct(StructDef),
     Module(Module<'db>),
-    Use(UseTree<'db>),
-    ForeignMod(ForeignMod<'db>),
+    Use(UseTree),
+    ForeignMod(ForeignMod),
     Impl(ImplBlock<'db>),
 }
 
@@ -72,13 +72,13 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct UseTree<'db> {
-    pub prefix: Path<'db>,
-    pub kind: UseTreeKind<'db>,
-    pub span: Span<'db>,
+pub struct UseTree {
+    pub prefix: Path,
+    pub kind: UseTreeKind,
+    pub span: Span,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for UseTree<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for UseTree {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.prefix.pretty_print_indent(f, 0)?;
         match &self.kind {
@@ -109,11 +109,8 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for UseTree<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum UseTreeKind<'db> {
-    Simple(Option<Ident<'db>>),
-    Nested {
-        items: ThinVec<UseTree<'db>>,
-        span: Span<'db>,
-    },
+pub enum UseTreeKind {
+    Simple(Option<Ident>),
+    Nested { items: ThinVec<UseTree>, span: Span },
     Glob,
 }

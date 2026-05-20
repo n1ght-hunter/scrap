@@ -6,6 +6,39 @@ use scrap_ir as ir;
 use crate::{MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
+    /// Resolve function operand and args, substituting mangled names for generic calls.
+    fn resolve_call_operands(
+        &mut self,
+        callee: &Expr<'db>,
+        args: &thin_vec::ThinVec<Box<Expr<'db>>>,
+        call_expr: &Expr<'db>,
+    ) -> MResult<(ir::Operand<'db>, Vec<ir::Operand<'db>>)> {
+        let callee_name = if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind {
+            path.single_segment().map(|s| s.ident.name)
+        } else {
+            None
+        };
+        let generic_inst = callee_name.and_then(|name| {
+            self.type_table
+                .generic_instantiations_for(name)
+                .and_then(|insts| insts.first())
+                .map(|(_, subst)| (name, subst))
+        });
+
+        if let Some((fn_name, subst_pairs)) = generic_inst {
+            let mangled = super::super::module::mangle_generic_name(self.db, fn_name, subst_pairs);
+            let func_id = ir::FunctionId::new(self.db, mangled);
+            let func_op = ir::Operand::FunctionRef(func_id);
+            let mut arg_ops = Vec::new();
+            for arg in args {
+                arg_ops.push(self.lower_expr(arg)?);
+            }
+            Ok((func_op, arg_ops))
+        } else {
+            self.lower_call_parts(call_expr)
+        }
+    }
+
     /// Lower the common parts of a function call (func operand + args).
     fn lower_call_parts(
         &mut self,
@@ -61,7 +94,7 @@ impl<'db> ExprLowerer<'db> {
             && let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
             && let Some(seg) = path.single_segment()
         {
-            return seg.ident.name.text(self.db) == "box";
+            return seg.ident.name.text() == "box";
         }
         false
     }
@@ -97,12 +130,12 @@ impl<'db> ExprLowerer<'db> {
     fn is_enum_variant_call(
         &self,
         call_expr: &Expr<'db>,
-    ) -> Option<(String, scrap_shared::ident::Symbol<'db>, usize)> {
+    ) -> Option<(String, scrap_shared::ident::Symbol, usize)> {
         if let scrap_ast::expr::ExprKind::Call(callee, _) = &call_expr.kind
             && let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
             && path.segments.len() == 2
         {
-            let enum_name = path.segments[0].ident.name.text(self.db).to_string();
+            let enum_name = path.segments[0].ident.name.text().to_string();
             let variant_name = path.segments[1].ident.name;
             if let Some(enum_info) = self.enum_info.get(&enum_name)
                 && let Some((_, variant_idx, _)) = enum_info
@@ -146,7 +179,11 @@ impl<'db> ExprLowerer<'db> {
             return Ok(ir::Operand::Place(ir::Place::Local(temp)));
         }
 
-        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+        let scrap_ast::expr::ExprKind::Call(callee, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
+        };
+
+        let (func_operand, arg_operands) = self.resolve_call_operands(callee, args, call_expr)?;
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
         let never = matches!(result_ty, ir::Ty::Never);
@@ -193,7 +230,7 @@ impl<'db> ExprLowerer<'db> {
     ) -> MResult<ir::Operand<'db>> {
         let name = format!("__spawn_block_{}", self.spawn_block_counter);
         self.spawn_block_counter += 1;
-        let name_sym = scrap_shared::ident::Symbol::new(self.db, name.clone());
+        let name_sym = scrap_shared::ident::Symbol::new(name.clone());
 
         // Create a fresh lowerer for the anonymous function body.
         let mut block_lowerer = ExprLowerer::new(self.db, self.source, self.type_table);
@@ -268,7 +305,12 @@ impl<'db> ExprLowerer<'db> {
 
         let result_ty = self.lookup_and_convert_type(call_expr.id);
         let never = matches!(result_ty, ir::Ty::Never);
-        let (func_operand, arg_operands) = self.lower_call_parts(call_expr)?;
+
+        let scrap_ast::expr::ExprKind::Call(callee, args) = &call_expr.kind else {
+            return Err(crate::BuilderError::LowerExpressionError);
+        };
+
+        let (func_operand, arg_operands) = self.resolve_call_operands(callee, args, call_expr)?;
         self.emit_call(func_operand, arg_operands, dest, never);
         Ok(())
     }
@@ -285,10 +327,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_simple_call(db: &dyn scrap_shared::Db) {
         // foo()
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Create binding for foo
-        let foo_sym = Symbol::new(db, "foo".to_string());
+        let foo_sym = Symbol::new("foo");
         let foo_local = lowerer.allocate_named_local(foo_sym, ir::Ty::Never);
         lowerer.insert_binding(foo_sym, foo_local);
 
@@ -308,10 +351,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_args(db: &dyn scrap_shared::Db) {
         // add(1, 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create binding for add
-        let add_sym = Symbol::new(db, "add".to_string());
+        let add_sym = Symbol::new("add");
         let add_local = lowerer.allocate_named_local(add_sym, ir::Ty::Never);
         lowerer.insert_binding(add_sym, add_local);
 
@@ -330,18 +374,19 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_with_expression_args(db: &dyn scrap_shared::Db) {
         // max(x + 1, y * 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
-        let max_sym = Symbol::new(db, "max".to_string());
+        let max_sym = Symbol::new("max");
         let max_local = lowerer.allocate_named_local(max_sym, ir::Ty::Never);
         lowerer.insert_binding(max_sym, max_local);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -367,14 +412,15 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_calls(db: &dyn scrap_shared::Db) {
         // outer(inner(1))
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
-        let outer_sym = Symbol::new(db, "outer".to_string());
+        let outer_sym = Symbol::new("outer");
         let outer_local = lowerer.allocate_named_local(outer_sym, ir::Ty::Never);
         lowerer.insert_binding(outer_sym, outer_local);
 
-        let inner_sym = Symbol::new(db, "inner".to_string());
+        let inner_sym = Symbol::new("inner");
         let inner_local = lowerer.allocate_named_local(inner_sym, ir::Ty::Never);
         lowerer.insert_binding(inner_sym, inner_local);
 
@@ -400,14 +446,15 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_result_assignment(db: &dyn scrap_shared::Db) {
         // result = foo(1, 2)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create bindings
-        let result_sym = Symbol::new(db, "result".to_string());
+        let result_sym = Symbol::new("result");
         let result_local = lowerer.allocate_named_local(result_sym, ir::Ty::Never);
         lowerer.insert_binding(result_sym, result_local);
 
-        let foo_sym = Symbol::new(db, "foo".to_string());
+        let foo_sym = Symbol::new("foo");
         let foo_local = lowerer.allocate_named_local(foo_sym, ir::Ty::Never);
         lowerer.insert_binding(foo_sym, foo_local);
 
@@ -431,14 +478,15 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_call_in_if_condition(db: &dyn scrap_shared::Db) {
         // if is_valid(x) { }
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Create bindings
-        let is_valid_sym = Symbol::new(db, "is_valid".to_string());
+        let is_valid_sym = Symbol::new("is_valid");
         let is_valid_local = lowerer.allocate_named_local(is_valid_sym, ir::Ty::Never);
         lowerer.insert_binding(is_valid_sym, is_valid_local);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 

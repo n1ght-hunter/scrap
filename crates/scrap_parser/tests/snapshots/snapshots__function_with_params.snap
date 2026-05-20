@@ -22,9 +22,7 @@ Can(
                                     id: -2,
                                     file_hash: 0,
                                 },
-                                name: Symbol {
-                                    text: "test",
-                                },
+                                name: Symbol("test"),
                                 span: Span {
                                     start: 0,
                                     end: 4,
@@ -52,13 +50,14 @@ Can(
                                 id: 1,
                                 file_hash: 16101345102062212073,
                             },
-                            name: Symbol {
-                                text: "add",
-                            },
+                            name: Symbol("add"),
                             span: Span {
                                 start: 3,
                                 end: 6,
                             },
+                        },
+                        generics: Generics {
+                            params: [],
                         },
                         args: [
                             Param {
@@ -71,9 +70,7 @@ Can(
                                         id: 2,
                                         file_hash: 16101345102062212073,
                                     },
-                                    name: Symbol {
-                                        text: "a",
-                                    },
+                                    name: Symbol("a"),
                                     span: Span {
                                         start: 7,
                                         end: 8,
@@ -97,9 +94,7 @@ Can(
                                                             id: 3,
                                                             file_hash: 16101345102062212073,
                                                         },
-                                                        name: Symbol {
-                                                            text: "int",
-                                                        },
+                                                        name: Symbol("int"),
                                                         span: Span {
                                                             start: 10,
                                                             end: 13,
@@ -144,9 +139,7 @@ Can(
                                         id: 7,
                                         file_hash: 16101345102062212073,
                                     },
-                                    name: Symbol {
-                                        text: "b",
-                                    },
+                                    name: Symbol("b"),
                                     span: Span {
                                         start: 15,
                                         end: 16,
@@ -170,9 +163,7 @@ Can(
                                                             id: 8,
                                                             file_hash: 16101345102062212073,
                                                         },
-                                                        name: Symbol {
-                                                            text: "int",
-                                                        },
+                                                        name: Symbol("int"),
                                                         span: Span {
                                                             start: 18,
                                                             end: 21,
@@ -227,9 +218,7 @@ Can(
                                                         id: 12,
                                                         file_hash: 16101345102062212073,
                                                     },
-                                                    name: Symbol {
-                                                        text: "int",
-                                                    },
+                                                    name: Symbol("int"),
                                                     span: Span {
                                                         start: 26,
                                                         end: 29,
@@ -288,9 +277,7 @@ Can(
                                                                             id: 14,
                                                                             file_hash: 16101345102062212073,
                                                                         },
-                                                                        name: Symbol {
-                                                                            text: "a",
-                                                                        },
+                                                                        name: Symbol("a"),
                                                                         span: Span {
                                                                             start: 36,
                                                                             end: 37,
@@ -327,9 +314,7 @@ Can(
                                                                             id: 17,
                                                                             file_hash: 16101345102062212073,
                                                                         },
-                                                                        name: Symbol {
-                                                                            text: "b",
-                                                                        },
+                                                                        name: Symbol("b"),
                                                                         span: Span {
                                                                             start: 40,
                                                                             end: 41,

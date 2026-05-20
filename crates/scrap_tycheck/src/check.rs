@@ -71,7 +71,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Collect a foreign function signature.
-    fn collect_foreign_fn_signature(&mut self, item: &ForeignItem<'db>) {
+    fn collect_foreign_fn_signature(&mut self, item: &ForeignItem) {
         let name = item.ident.name;
 
         let type_params = vec![];
@@ -108,8 +108,12 @@ impl<'db> TypeContext<'db> {
         let ident = fn_def.ident(self.db());
         let name = ident.name;
 
-        // TODO: Collect type parameters from fn_def when added to AST
-        let type_params = vec![];
+        let type_params: Vec<_> = fn_def
+            .generics(self.db())
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
 
         // Set up type params context for parsing param types
         self.set_type_params(type_params.clone());
@@ -177,8 +181,16 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Collect a struct definition.
-    fn collect_struct_definition(&mut self, struct_def: &StructDef<'db>) {
+    fn collect_struct_definition(&mut self, struct_def: &StructDef) {
         let name = struct_def.ident.name;
+
+        let type_params: Vec<_> = struct_def
+            .generics
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
+        self.set_type_params(type_params.clone());
 
         if let VariantData::Struct { fields } = &struct_def.data {
             let field_defs: Vec<_> = fields
@@ -191,17 +203,27 @@ impl<'db> TypeContext<'db> {
                 .collect();
 
             let def = crate::context::StructDef {
-                type_params: vec![],
+                type_params,
                 fields: field_defs,
             };
 
             self.register_struct(name, def);
         }
+
+        self.clear_type_params();
     }
 
     /// Collect an enum definition.
-    fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef<'db>) {
+    fn collect_enum_definition(&mut self, enum_def: &scrap_ast::enumdef::EnumDef) {
         let name = enum_def.ident.name;
+
+        let type_params: Vec<_> = enum_def
+            .generics
+            .params
+            .iter()
+            .map(|p| p.ident.name)
+            .collect();
+        self.set_type_params(type_params.clone());
 
         let variants: Vec<_> = enum_def
             .variants
@@ -233,8 +255,10 @@ impl<'db> TypeContext<'db> {
             })
             .collect();
 
+        self.clear_type_params();
+
         let def = crate::context::EnumDef {
-            type_params: vec![],
+            type_params,
             variants,
         };
 
@@ -291,16 +315,18 @@ impl<'db> TypeContext<'db> {
 
         for method in &impl_block.methods {
             let method_ident = method.ident(self.db());
-            let mangled = Symbol::new(
-                self.db(),
-                format!(
-                    "{}::{}",
-                    type_name.text(self.db()),
-                    method_ident.name.text(self.db())
-                ),
-            );
+            let mangled = Symbol::new(format!(
+                "{}::{}",
+                type_name.text(),
+                method_ident.name.text()
+            ));
 
-            let type_params = vec![];
+            let type_params: Vec<_> = method
+                .generics(self.db())
+                .params
+                .iter()
+                .map(|p| p.ident.name)
+                .collect();
             self.set_type_params(type_params.clone());
 
             let params: Vec<_> = method
@@ -331,16 +357,13 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Type check a method body (same as check_function but uses mangled name).
-    fn check_method(&mut self, fn_def: FnDef<'db>, type_name: Symbol<'db>) {
+    fn check_method(&mut self, fn_def: FnDef<'db>, type_name: Symbol) {
         let method_ident = fn_def.ident(self.db());
-        let mangled = Symbol::new(
-            self.db(),
-            format!(
-                "{}::{}",
-                type_name.text(self.db()),
-                method_ident.name.text(self.db())
-            ),
-        );
+        let mangled = Symbol::new(format!(
+            "{}::{}",
+            type_name.text(),
+            method_ident.name.text()
+        ));
 
         let sig = match self.lookup_function(mangled) {
             Some(sig) => sig.clone(),

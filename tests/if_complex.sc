@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn main() {
@@ -49,5 +49,5 @@ fn main() {
         0
     };
 
-    ExitProcess(result);
+    __scrap_exit(result);
 }

@@ -6,7 +6,7 @@ use scrap_shared::types::Mutability;
 use scrap_span::Span;
 
 impl<'a, 'db> super::Parser<'a, 'db> {
-    pub fn parse_type(&mut self) -> PResult<'a, Ty<'db>> {
+    pub fn parse_type(&mut self) -> PResult<'a, Ty> {
         // Never type: `!`
         if self.check(Token::Bang) {
             let span = self.token.span;
@@ -26,7 +26,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             let end_span = inner.span;
             return Ok(Ty {
                 id: self.state.new_node_id(),
-                span: Span::new(self.db, start_span.start(self.db), end_span.end(self.db)),
+                span: Span::new(start_span.start, end_span.end),
                 kind: TyKind::Ptr(Box::new(inner)),
             });
         }
@@ -38,7 +38,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
             // Check for `mut` keyword (it's an Ident, not a keyword)
             let mutability = if self.check(Token::Ident) {
-                let text = &self.source[self.token.span.to_range(self.db)];
+                let text = &self.source[self.token.span.start..self.token.span.end];
                 if text == "mut" {
                     self.bump(); // consume `mut`
                     Mutability::Mut
@@ -53,7 +53,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             let end_span = inner.span;
             return Ok(Ty {
                 id: self.state.new_node_id(),
-                span: Span::new(self.db, start_span.start(self.db), end_span.end(self.db)),
+                span: Span::new(start_span.start, end_span.end),
                 kind: TyKind::Ref(Box::new(inner), mutability),
             });
         }

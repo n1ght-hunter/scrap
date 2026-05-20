@@ -16,7 +16,7 @@ pub struct Stmt<'db> {
     /// The specific kind of statement
     pub kind: StmtKind<'db>,
     /// Source location span for this statement
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for Stmt<'db> {

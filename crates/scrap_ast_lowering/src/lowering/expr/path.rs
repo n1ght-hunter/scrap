@@ -7,7 +7,7 @@ use crate::{BuilderError, MResult, lowerer::ExprLowerer};
 
 impl<'db> ExprLowerer<'db> {
     /// Lower a path (variable reference) to an operand
-    pub(crate) fn lower_path(&mut self, path: &Path<'db>) -> MResult<ir::Operand<'db>> {
+    pub(crate) fn lower_path(&mut self, path: &Path) -> MResult<ir::Operand<'db>> {
         // Single-segment path: variable or function reference
         if let Some(ident) = path.single_segment().map(|s| s.ident) {
             // Try to look up the variable in the symbol table
@@ -16,13 +16,13 @@ impl<'db> ExprLowerer<'db> {
             }
 
             // Not found as a local - treat as a function reference
-            let func_id = ir::FunctionId::new(self.db, ident.name.text(self.db).to_string());
+            let func_id = ir::FunctionId::new(self.db, ident.name.text().to_string());
             return Ok(ir::Operand::FunctionRef(func_id));
         }
 
         // Multi-segment path: check for enum unit variant (e.g. Option::None)
         if path.segments.len() == 2 {
-            let enum_name = path.segments[0].ident.name.text(self.db).to_string();
+            let enum_name = path.segments[0].ident.name.text().to_string();
             let variant_name = path.segments[1].ident.name;
 
             if let Some(enum_info) = self.enum_info.get(&enum_name)
@@ -58,10 +58,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_variable_reference(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "x");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // First, create a binding for "x"
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -79,7 +80,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_unknown_path_as_function_ref(db: &dyn scrap_shared::Db) {
         let expr = create_ident_expr(db, "some_function");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Unknown paths are treated as function references (for function calls)
         let result = lowerer.lower_expr(&expr);

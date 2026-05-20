@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 struct Pair {
@@ -15,5 +15,5 @@ impl Pair {
 
 fn main() {
     let p = Pair { a: 32, b: 10 };
-    ExitProcess(p.sum());
+    __scrap_exit(p.sum());
 }

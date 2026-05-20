@@ -5,4 +5,4 @@ pub mod module;
 pub mod ty;
 
 pub use module::{lower_body, lower_function, lower_module, lower_signature};
-pub use ty::lower_type;
+pub use ty::{lower_type, lower_type_with_subst};

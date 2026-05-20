@@ -22,8 +22,9 @@ pub use error::{CodegenError, CodegenResult};
 pub fn compile_to_object<'db>(
     db: &'db dyn scrap_shared::Db,
     ir: scrap_ir::Can<'db>,
+    target: target_lexicon::Triple,
 ) -> Option<Vec<u8>> {
-    let mut ctx = codegen::CodegenContext::new(db)?;
+    let mut ctx = codegen::CodegenContext::new(db, &target)?;
 
     for module in ir.modules(db) {
         ctx.compile_module(*module)?;

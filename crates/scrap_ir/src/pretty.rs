@@ -54,7 +54,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
     fn print_function(&mut self, func: Function<'db>) {
         let sig = func.signature(self.db);
         self.write_indent();
-        write!(self.output, "fn {}", sig.name(self.db).text(self.db)).unwrap();
+        write!(self.output, "fn {}", sig.name(self.db).text()).unwrap();
 
         // Parameters (referenced by local ID: _1, _2, ...)
         write!(self.output, "(").unwrap();
@@ -90,8 +90,8 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         write!(
             self.output,
             "extern \"{}\" fn {}",
-            abi.text(self.db),
-            sig.name(self.db).text(self.db)
+            abi.text(),
+            sig.name(self.db).text()
         )
         .unwrap();
 
@@ -114,12 +114,12 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn print_struct(&mut self, s: Struct<'db>) {
         self.write_indent();
-        writeln!(self.output, "struct {} {{", s.name(self.db).text(self.db)).unwrap();
+        writeln!(self.output, "struct {} {{", s.name(self.db).text()).unwrap();
         self.indent += 1;
 
         for (name, ty) in s.fields(self.db) {
             self.write_indent();
-            write!(self.output, "{}: ", name.text(self.db)).unwrap();
+            write!(self.output, "{}: ", name.text()).unwrap();
             self.print_type(ty);
             writeln!(self.output, ",").unwrap();
         }
@@ -131,17 +131,17 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
 
     fn print_enum(&mut self, e: Enum<'db>) {
         self.write_indent();
-        writeln!(self.output, "enum {} {{", e.name(self.db).text(self.db)).unwrap();
+        writeln!(self.output, "enum {} {{", e.name(self.db).text()).unwrap();
         self.indent += 1;
 
         for variant in e.variants(self.db) {
             self.write_indent();
             match variant {
                 EnumVariant::Unit(name) => {
-                    writeln!(self.output, "{},", name.text(self.db)).unwrap();
+                    writeln!(self.output, "{},", name.text()).unwrap();
                 }
                 EnumVariant::Tuple(name, types) => {
-                    write!(self.output, "{}(", name.text(self.db)).unwrap();
+                    write!(self.output, "{}(", name.text()).unwrap();
                     for (i, ty) in types.iter().enumerate() {
                         if i > 0 {
                             write!(self.output, ", ").unwrap();
@@ -151,11 +151,11 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                     writeln!(self.output, "),").unwrap();
                 }
                 EnumVariant::Struct(name, fields) => {
-                    writeln!(self.output, "{} {{", name.text(self.db)).unwrap();
+                    writeln!(self.output, "{} {{", name.text()).unwrap();
                     self.indent += 1;
                     for (field_name, ty) in fields {
                         self.write_indent();
-                        write!(self.output, "{}: ", field_name.text(self.db)).unwrap();
+                        write!(self.output, "{}: ", field_name.text()).unwrap();
                         self.print_type(ty);
                         writeln!(self.output, ",").unwrap();
                     }
@@ -179,7 +179,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         for (i, local) in locals.iter().enumerate() {
             if let Some(name) = local.name(self.db) {
                 self.write_indent();
-                writeln!(self.output, "debug {} => _{};", name.text(self.db), i).unwrap();
+                writeln!(self.output, "debug {} => _{};", name.text(), i).unwrap();
             }
         }
 
@@ -335,7 +335,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                             write!(self.output, ", ").unwrap();
                         }
                         if let Some(name) = field_names.get(i) {
-                            write!(self.output, "{}: ", name.text(self.db)).unwrap();
+                            write!(self.output, "{}: ", name.text()).unwrap();
                         }
                         self.print_operand(op);
                     }
@@ -420,7 +420,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             Place::Field(base, field_idx, field_name) => {
                 self.print_place(base);
                 if let Some(name) = field_name {
-                    write!(self.output, ".{}", name.text(self.db)).unwrap();
+                    write!(self.output, ".{}", name.text()).unwrap();
                 } else {
                     write!(self.output, ".{}", field_idx).unwrap();
                 }
@@ -434,7 +434,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "(").unwrap();
                 self.print_place(base);
                 if let Some(name) = variant_name {
-                    write!(self.output, " as {})", name.text(self.db)).unwrap();
+                    write!(self.output, " as {})", name.text()).unwrap();
                 } else {
                     write!(self.output, " as variant_{})", _variant_idx).unwrap();
                 }
@@ -443,7 +443,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
         }
     }
 
-    fn print_constant(&mut self, constant: &Constant<'db>) {
+    fn print_constant(&mut self, constant: &Constant) {
         match constant {
             Constant::Int(val) => {
                 let ty = val.ty();
@@ -507,7 +507,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             }
             Constant::Void => write!(self.output, "void").unwrap(),
             Constant::Bool(b) => write!(self.output, "{}", b).unwrap(),
-            Constant::String(s) => write!(self.output, "\"{}\"", s.text(self.db)).unwrap(),
+            Constant::String(s) => write!(self.output, "\"{}\"", s.text()).unwrap(),
         }
     }
 

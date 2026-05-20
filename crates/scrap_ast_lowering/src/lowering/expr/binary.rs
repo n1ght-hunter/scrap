@@ -248,7 +248,8 @@ mod tests {
         let rhs = create_int_lit(db, 3);
         let expr = create_binary_expr(db, BinOpKind::Add, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -259,7 +260,8 @@ mod tests {
         let rhs = create_int_lit(db, 4);
         let expr = create_binary_expr(db, BinOpKind::Sub, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -270,7 +272,8 @@ mod tests {
         let rhs = create_int_lit(db, 7);
         let expr = create_binary_expr(db, BinOpKind::Mul, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -281,7 +284,8 @@ mod tests {
         let rhs = create_int_lit(db, 10);
         let expr = create_binary_expr(db, BinOpKind::Lt, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -292,7 +296,8 @@ mod tests {
         let rhs = create_bool_lit(db, false);
         let expr = create_binary_expr(db, BinOpKind::And, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -303,7 +308,8 @@ mod tests {
         let rhs = create_int_lit(db, 3);
         let expr = create_binary_expr(db, BinOpKind::BitAnd, lhs, rhs);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
     }
@@ -318,7 +324,8 @@ mod tests {
         let two = create_int_lit(db, 2);
         let mul_expr = create_binary_expr(db, BinOpKind::Mul, add_expr, two);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&mul_expr);
         assert!(result.is_ok());
     }
@@ -328,7 +335,8 @@ mod tests {
         let inner = create_int_lit(db, 42);
         let expr = create_paren_expr(db, inner);
 
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
 

@@ -4,12 +4,12 @@ use crate::path::{Path, PathKey};
 #[salsa::interned(debug, persist)]
 pub struct ModuleId<'db> {
     #[returns(ref)]
-    pub path: PathKey<'db>,
+    pub path: PathKey,
 }
 
 impl<'db> ModuleId<'db> {
     /// Create a ModuleId from a Path
-    pub fn from_path(db: &'db dyn crate::Db, path: &Path<'db>) -> Self {
+    pub fn from_path(db: &'db dyn crate::Db, path: &Path) -> Self {
         ModuleId::new(db, PathKey::new(path.clone()))
     }
 
@@ -27,12 +27,12 @@ impl<'db> ModuleId<'db> {
 #[salsa::interned(debug, persist)]
 pub struct TypeId<'db> {
     #[returns(ref)]
-    pub path: PathKey<'db>,
+    pub path: PathKey,
 }
 
 impl<'db> TypeId<'db> {
     /// Create a TypeId from a Path
-    pub fn from_path(db: &'db dyn crate::Db, path: &Path<'db>) -> Self {
+    pub fn from_path(db: &'db dyn crate::Db, path: &Path) -> Self {
         TypeId::new(db, PathKey::new(path.clone()))
     }
 

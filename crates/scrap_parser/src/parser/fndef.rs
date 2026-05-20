@@ -14,6 +14,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         let start_span = self.token.span;
         self.expect(Token::Fn)?;
         let ident = self.parse_ident()?;
+        let generics = self.parse_generics()?;
         let params = self.parse_fn_params()?;
         let ret_type = if self.eat(Token::Arrow) {
             Some(self.parse_type()?)
@@ -21,12 +22,13 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             None
         };
         let body = self.parse_block()?;
-        let span = Span::new(self.db, start_span.start(self.db), body.span.end(self.db));
+        let span = Span::new(start_span.start, body.span.end);
 
         Ok(FnDef::new(
             self.db,
             self.state.new_node_id(),
             ident,
+            generics,
             params,
             ret_type,
             body,
@@ -34,7 +36,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         ))
     }
 
-    pub fn parse_fn_params(&mut self) -> PResult<'a, ThinVec<Param<'db>>> {
+    pub fn parse_fn_params(&mut self) -> PResult<'a, ThinVec<Param>> {
         self.expect(Token::LParen)?;
         let mut params = ThinVec::new();
 
@@ -44,11 +46,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             let param_type = self.parse_type()?;
 
             params.push(Param {
-                span: Span::new(
-                    self.db,
-                    param_ident.span.start(self.db),
-                    param_type.span.end(self.db),
-                ),
+                span: Span::new(param_ident.span.start, param_type.span.end),
                 id: self.state.new_node_id(),
                 ident: param_ident,
                 ty: Box::new(param_type),
@@ -76,8 +74,8 @@ mod tests {
         let source = "fn my_function() {}";
         let mut parser = parse_with(db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
-        assert_eq!(fn_def.ident(db).name.text(db), "my_function");
-        assert_eq!(fn_def.ident(db).span.to_range(db), 3..14);
+        assert_eq!(fn_def.ident(db).name.text(), "my_function");
+        assert_eq!(fn_def.ident(db).span.range(), 3..14);
     }
 
     #[scrap_macros::salsa_test]
@@ -85,9 +83,9 @@ mod tests {
         let source = "fn add(a: i32, b: i32) {}";
         let mut parser = parse_with(db, source);
         let fn_def = parser.parse_fn_def().unwrap_or_render();
-        assert_eq!(fn_def.ident(db).name.text(db), "add");
+        assert_eq!(fn_def.ident(db).name.text(), "add");
         assert_eq!(fn_def.args(db).len(), 2);
-        assert_eq!(fn_def.args(db)[0].ident.name.text(db), "a");
-        assert_eq!(fn_def.args(db)[1].ident.name.text(db), "b");
+        assert_eq!(fn_def.args(db)[0].ident.name.text(), "a");
+        assert_eq!(fn_def.args(db)[1].ident.name.text(), "b");
     }
 }

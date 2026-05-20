@@ -3,7 +3,6 @@ use cranelift_module::{DataDescription, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::fs::File;
 use std::io::Write;
-use std::str::FromStr;
 use target_lexicon::Triple;
 
 /// Creates the `main` function which handles the core logic of printing the message.
@@ -159,8 +158,7 @@ fn main() -> Result<(), String> {
         std::fs::create_dir(&output_dir).map_err(|e| e.to_string())?;
     }
 
-    // FIX: Use `from_str` to parse the triple string.
-    let target_triple = Triple::from_str("x86_64-pc-windows-msvc").map_err(|e| e.to_string())?;
+    let target_triple = Triple::host();
 
     let shared_builder = settings::builder();
     let shared_flags = settings::Flags::new(shared_builder);

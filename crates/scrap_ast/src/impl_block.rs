@@ -8,9 +8,9 @@ use scrap_shared::ident::Ident;
 )]
 pub struct ImplBlock<'db> {
     pub id: NodeId,
-    pub type_name: Ident<'db>,
+    pub type_name: Ident,
     pub methods: Vec<FnDef<'db>>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for ImplBlock<'db> {

@@ -214,7 +214,7 @@ impl Token {
 
 #[salsa::tracked(debug, persist)]
 pub struct LexedTokens<'db> {
-    pub tokens: token_stream::TokenStream<'db>,
+    pub tokens: token_stream::TokenStream,
 }
 
 #[salsa::tracked(persist)]
@@ -226,7 +226,7 @@ pub fn lex_file<'db>(
     let token_iter = Token::lexer(content)
         .spanned()
         .filter_map(|(new_tok, new_span)| {
-            let span = scrap_span::Span::new(db, new_span.start, new_span.end);
+            let span = scrap_span::Span::new(new_span.start, new_span.end);
             match new_tok {
                 Ok(new_tok) => Some(Spanned::new(new_tok, span)),
                 Err(e) => {
@@ -236,7 +236,7 @@ pub fn lex_file<'db>(
                                 .path(file.path(db).to_string_lossy())
                                 .annotation(
                                     AnnotationKind::Primary
-                                        .span(span.to_range(db))
+                                        .span(span.range())
                                         .label(e.to_string()),
                                 ),
                         ),

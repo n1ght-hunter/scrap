@@ -45,7 +45,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_empty_array(db: &dyn scrap_shared::Db) {
         // []
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let array_expr = create_array_expr(db, vec![]);
 
@@ -59,7 +60,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_array_with_literals(db: &dyn scrap_shared::Db) {
         // [1, 2, 3]
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let one = create_int_lit(db, 1);
         let two = create_int_lit(db, 2);
@@ -76,14 +78,15 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_array_with_variables(db: &dyn scrap_shared::Db) {
         // [x, y]
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Create bindings for x and y
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -102,7 +105,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_array_with_expressions(db: &dyn scrap_shared::Db) {
         // [1 + 2, 3 * 4]
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let one = create_int_lit(db, 1);
         let two = create_int_lit(db, 2);
@@ -124,7 +128,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_array(db: &dyn scrap_shared::Db) {
         // [[1, 2], [3, 4]]
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let one = create_int_lit(db, 1);
         let two = create_int_lit(db, 2);
@@ -146,10 +151,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_array_assignment(db: &dyn scrap_shared::Db) {
         // arr = [1, 2, 3]
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create binding for arr
-        let arr_sym = Symbol::new(db, "arr".to_string());
+        let arr_sym = Symbol::new("arr");
         let arr_local = lowerer.allocate_named_local(arr_sym, ir::Ty::Never);
         lowerer.insert_binding(arr_sym, arr_local);
 

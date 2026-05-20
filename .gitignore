@@ -8,3 +8,4 @@ lib.clif
 local/
 *.local*
 *.log
+mise.local.toml

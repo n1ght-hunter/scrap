@@ -9,15 +9,17 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         self.check(Token::Struct)
     }
 
-    pub fn parse_struct_def(&mut self) -> PResult<'a, StructDef<'db>> {
+    pub fn parse_struct_def(&mut self) -> PResult<'a, StructDef> {
         self.expect(Token::Struct)?;
         let ident = self.parse_ident()?;
+        let generics = self.parse_generics()?;
 
         let var_data = self.parse_variant_data(Token::Semicolon)?;
 
         Ok(scrap_ast::structdef::StructDef {
             id: self.state.new_node_id(),
             ident,
+            generics,
             data: var_data,
         })
     }
@@ -25,7 +27,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
     pub fn parse_variant_data(
         &mut self,
         term: Token,
-    ) -> PResult<'a, scrap_ast::enumdef::VariantData<'db>> {
+    ) -> PResult<'a, scrap_ast::enumdef::VariantData> {
         if self.eat(Token::LBrace) {
             let mut fields = thin_vec::ThinVec::new();
             while !self.check(Token::RBrace) {
@@ -35,11 +37,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
                 let field_type = self.parse_type()?;
                 fields.push(FieldDef {
                     id: self.state.new_node_id(),
-                    span: Span::new(
-                        self.db,
-                        field_ident.span.start(self.db),
-                        field_type.span.end(self.db),
-                    ),
+                    span: Span::new(field_ident.span.start, field_type.span.end),
                     vis,
                     ident: Some(field_ident),
                     ty: Box::new(field_type),
@@ -92,11 +90,11 @@ mod tests {
             "struct MyStruct { pub field1: i32, field2: bool }",
         );
         let struct_def = parser.parse_struct_def().unwrap_or_render();
-        assert_eq!(struct_def.ident.name.text(db), "MyStruct");
+        assert_eq!(struct_def.ident.name.text(), "MyStruct");
         let data = struct_def.data.unwrap_struct();
         assert_eq!(data.len(), 2);
-        assert_eq!(data[0].ident.as_ref().unwrap().name.text(db), "field1");
-        assert_eq!(data[1].ident.as_ref().unwrap().name.text(db), "field2");
+        assert_eq!(data[0].ident.as_ref().unwrap().name.text(), "field1");
+        assert_eq!(data[1].ident.as_ref().unwrap().name.text(), "field2");
     }
 
     #[scrap_macros::salsa_test]

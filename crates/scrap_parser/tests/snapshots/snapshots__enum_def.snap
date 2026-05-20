@@ -22,9 +22,7 @@ Can(
                                     id: -2,
                                     file_hash: 0,
                                 },
-                                name: Symbol {
-                                    text: "test",
-                                },
+                                name: Symbol("test"),
                                 span: Span {
                                     start: 0,
                                     end: 4,
@@ -52,13 +50,14 @@ Can(
                                 id: 1,
                                 file_hash: 16101345102062212073,
                             },
-                            name: Symbol {
-                                text: "Color",
-                            },
+                            name: Symbol("Color"),
                             span: Span {
                                 start: 5,
                                 end: 10,
                             },
+                        },
+                        generics: Generics {
+                            params: [],
                         },
                         variants: [
                             Variant {
@@ -75,9 +74,7 @@ Can(
                                         id: 2,
                                         file_hash: 16101345102062212073,
                                     },
-                                    name: Symbol {
-                                        text: "Red",
-                                    },
+                                    name: Symbol("Red"),
                                     span: Span {
                                         start: 17,
                                         end: 20,
@@ -104,9 +101,7 @@ Can(
                                         id: 5,
                                         file_hash: 16101345102062212073,
                                     },
-                                    name: Symbol {
-                                        text: "Green",
-                                    },
+                                    name: Symbol("Green"),
                                     span: Span {
                                         start: 26,
                                         end: 31,
@@ -133,9 +128,7 @@ Can(
                                         id: 8,
                                         file_hash: 16101345102062212073,
                                     },
-                                    name: Symbol {
-                                        text: "Blue",
-                                    },
+                                    name: Symbol("Blue"),
                                     span: Span {
                                         start: 37,
                                         end: 41,
@@ -178,9 +171,7 @@ Can(
                                                                         id: 9,
                                                                         file_hash: 16101345102062212073,
                                                                     },
-                                                                    name: Symbol {
-                                                                        text: "int",
-                                                                    },
+                                                                    name: Symbol("int"),
                                                                     span: Span {
                                                                         start: 42,
                                                                         end: 45,

@@ -27,11 +27,7 @@ impl<'db> ExprLowerer<'db> {
     ) -> MResult<()> {
         // Check for enum struct variant: `Message::Move { x: 1, y: 2 }`
         if struct_expr.path.segments.len() == 2 {
-            let enum_name = struct_expr.path.segments[0]
-                .ident
-                .name
-                .text(self.db)
-                .to_string();
+            let enum_name = struct_expr.path.segments[0].ident.name.text().to_string();
             let variant_name = struct_expr.path.segments[1].ident.name;
 
             let variant_idx_opt = self.enum_info.get(&enum_name).and_then(|info| {
@@ -64,7 +60,16 @@ impl<'db> ExprLowerer<'db> {
             .ident
             .name;
 
-        let type_id = ir::TypeId::new(self.db, struct_name.text(self.db).to_string());
+        // For generic structs, check if the type table has a monomorphized name
+        let type_name = self
+            .type_table
+            .generic_instantiations_for(struct_name)
+            .and_then(|insts| insts.first())
+            .map(|(_, subst)| {
+                super::super::module::mangle_generic_name(self.db, struct_name, subst)
+            })
+            .unwrap_or_else(|| struct_name.text().to_string());
+        let type_id = ir::TypeId::new(self.db, type_name);
 
         // Lower each field expression to an operand
         let mut operands = Vec::new();
@@ -85,7 +90,7 @@ impl<'db> ExprLowerer<'db> {
     pub(crate) fn lower_field_access(
         &mut self,
         base: &Expr<'db>,
-        field_ident: &Ident<'db>,
+        field_ident: &Ident,
         _node_id: scrap_shared::NodeId,
     ) -> MResult<ir::Operand<'db>> {
         let base_operand = self.lower_expr(base)?;
@@ -103,19 +108,30 @@ impl<'db> ExprLowerer<'db> {
     pub(crate) fn resolve_field_index(
         &self,
         base_node_id: scrap_shared::NodeId,
-        field_name: scrap_shared::ident::Symbol<'db>,
+        field_name: scrap_shared::ident::Symbol,
     ) -> MResult<usize> {
         let base_resolved_ty = self
             .lookup_expr_type(base_node_id)
             .ok_or(BuilderError::LowerExpressionError)?;
 
-        if let scrap_tycheck::ResolvedTy::Adt(struct_sym) = base_resolved_ty {
-            let struct_name = struct_sym.text(self.db);
-            if let Some(field_map) = self.struct_fields.get(struct_name.as_str())
-                && let Some(&idx) = field_map.get(&field_name)
-            {
-                return Ok(idx);
+        let struct_key = match base_resolved_ty {
+            scrap_tycheck::ResolvedTy::Adt(struct_sym) => Some(struct_sym.text().to_string()),
+            scrap_tycheck::ResolvedTy::App(struct_sym, args) => {
+                let resolved_args: Vec<_> = args.to_vec();
+                Some(crate::lowering::module::mangle_generic_name_from_resolved(
+                    self.db,
+                    *struct_sym,
+                    &resolved_args,
+                ))
             }
+            _ => None,
+        };
+
+        if let Some(key) = struct_key
+            && let Some(field_map) = self.struct_fields.get(&key)
+            && let Some(&idx) = field_map.get(&field_name)
+        {
+            return Ok(idx);
         }
 
         Err(BuilderError::LowerExpressionError)

@@ -1,23 +1,26 @@
 use scrap_span::Span;
 use thin_vec::ThinVec;
 
-use crate::{block::Block, node_id::NodeId, pat::Pat, typedef::Ty};
+use crate::{block::Block, generics::Generics, node_id::NodeId, pat::Pat, typedef::Ty};
 use scrap_shared::ident::Ident;
 
 #[salsa::tracked(debug, persist)]
 pub struct FnDef<'db> {
     pub id: NodeId,
-    pub ident: Ident<'db>,
+    pub ident: Ident,
     #[tracked]
     #[returns(ref)]
-    pub args: ThinVec<Param<'db>>,
+    pub generics: Generics,
     #[tracked]
     #[returns(ref)]
-    pub ret_type: Option<Ty<'db>>,
+    pub args: ThinVec<Param>,
+    #[tracked]
+    #[returns(ref)]
+    pub ret_type: Option<Ty>,
     #[tracked]
     #[returns(ref)]
     pub body: Block<'db>,
-    pub span: Span<'db>,
+    pub span: Span,
 }
 
 impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
@@ -25,6 +28,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
         let res = salsa::with_attached_database(|db| {
             write!(f, "fn ")?;
             self.ident(db).pretty_print_indent(f, 0)?;
+            self.generics(db).pretty_print_indent(f, 0)?;
             write!(f, "(")?;
             for (i, param) in self.args(db).iter().enumerate() {
                 if i > 0 {
@@ -52,15 +56,15 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Param<'db> {
+pub struct Param {
     pub id: NodeId,
-    pub ident: Ident<'db>,
-    pub ty: Box<Ty<'db>>,
-    pub pat: Box<Pat<'db>>,
-    pub span: Span<'db>,
+    pub ident: Ident,
+    pub ty: Box<Ty>,
+    pub pat: Box<Pat>,
+    pub span: Span,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for Param<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for Param {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         self.ident.pretty_print_indent(f, 0)?;
         write!(f, ": ")?;

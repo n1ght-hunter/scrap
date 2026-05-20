@@ -42,6 +42,7 @@ pub mod enumdef;
 pub mod expr;
 pub mod fndef;
 pub mod foreign;
+pub mod generics;
 pub mod ident;
 pub mod impl_block;
 pub mod item;
@@ -55,12 +56,12 @@ pub mod ty;
 
 pub struct Parser<'a, 'db> {
     pub(crate) source: &'a str,
-    pub(crate) token_stream: TokenStreamCursor<'db>,
+    pub(crate) token_stream: TokenStreamCursor,
     pub(super) expected_token_types: TokenTypeSet,
-    pub(crate) token: Spanned<'db, Token>,
+    pub(crate) token: Spanned<Token>,
     pub(crate) state: State<'a>,
     pub(crate) db: &'db dyn scrap_shared::Db,
-    pub(crate) current_module_path: Rc<RefCell<Path<'db>>>,
+    pub(crate) current_module_path: Rc<RefCell<Path>>,
     /// All inlined modules parsed so far
     pub modules: Vec<scrap_ast::module::Module<'db>>,
 }
@@ -69,14 +70,14 @@ impl<'a, 'db> Parser<'a, 'db> {
     pub fn new(
         db: &'db dyn scrap_shared::Db,
         source: &'a str,
-        token_stream: TokenStreamCursor<'db>,
+        token_stream: TokenStreamCursor,
         state: State<'a>,
-        root_path: Path<'db>,
+        root_path: Path,
     ) -> Self {
         Self {
             token: token_stream
                 .curr()
-                .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(db))),
+                .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::default())),
             source,
             token_stream,
             expected_token_types: TokenTypeSet::new(),
@@ -112,7 +113,7 @@ impl<'a, 'db> Parser<'a, 'db> {
     }
 
     #[inline]
-    pub fn look_ahead(&mut self, n: usize) -> Option<&Spanned<'db, Token>> {
+    pub fn look_ahead(&mut self, n: usize) -> Option<&Spanned<Token>> {
         self.token_stream.look_ahead(n)
     }
 
@@ -121,7 +122,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         self.token = self
             .token_stream
             .curr()
-            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)));
+            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::default()));
     }
 
     #[inline]
@@ -177,7 +178,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         self.token = self
             .token_stream
             .curr()
-            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::new_default(self.db)));
+            .unwrap_or_else(|| Spanned::new(Token::dummy(), Span::default()));
     }
 
     pub fn parse_can(&mut self) -> crate::PResult<'a, Can<'db>> {
@@ -187,7 +188,7 @@ impl<'a, 'db> Parser<'a, 'db> {
         Ok(Can::new(self.db, id, name, items))
     }
 
-    pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility<'db>> {
+    pub fn parse_visibility(&mut self) -> crate::PResult<'a, Visibility> {
         if self.eat(Token::Pub) {
             Ok(Visibility {
                 kind: scrap_ast::VisibilityKind::Public,
@@ -203,12 +204,12 @@ impl<'a, 'db> Parser<'a, 'db> {
         }
     }
 
-    pub fn push_current_module_path(&mut self, ident: Ident<'db>) {
-        let new_path = self.current_module_path.borrow().extend(self.db, ident);
+    pub fn push_current_module_path(&mut self, ident: Ident) {
+        let new_path = self.current_module_path.borrow().extend(ident);
         *self.current_module_path.borrow_mut() = new_path;
     }
 
-    pub fn guard_current_module_path(&mut self, ident: Ident<'db>) -> PopOnDrop<'db> {
+    pub fn guard_current_module_path(&mut self, ident: Ident) -> PopOnDrop {
         self.push_current_module_path(ident);
         PopOnDrop(Rc::clone(&self.current_module_path))
     }
@@ -218,14 +219,14 @@ impl<'a, 'db> Parser<'a, 'db> {
         segments.pop();
     }
 
-    pub fn current_module_path(&self) -> std::cell::Ref<'_, scrap_shared::path::Path<'db>> {
+    pub fn current_module_path(&self) -> std::cell::Ref<'_, scrap_shared::path::Path> {
         self.current_module_path.borrow()
     }
 }
 
-pub struct PopOnDrop<'db>(std::rc::Rc<std::cell::RefCell<scrap_shared::path::Path<'db>>>);
+pub struct PopOnDrop(std::rc::Rc<std::cell::RefCell<scrap_shared::path::Path>>);
 
-impl Drop for PopOnDrop<'_> {
+impl Drop for PopOnDrop {
     fn drop(&mut self) {
         let segments = &mut self.0.borrow_mut().segments;
         segments.pop();
@@ -260,13 +261,7 @@ pub mod parse_test_utils {
     ) -> Parser<'a, 'db> {
         let token_stream = TokenStreamCursor::new(tokens.tokens(db));
         let state = State::new("test.sc");
-        Parser::new(
-            db,
-            source,
-            token_stream,
-            state,
-            Path::from_segment(db, "test"),
-        )
+        Parser::new(db, source, token_stream, state, Path::from_segment("test"))
     }
 
     pub fn render(report: &[Group]) -> ! {

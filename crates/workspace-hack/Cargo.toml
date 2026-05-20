@@ -16,11 +16,12 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 fnv = { version = "1" }
-hashbrown = { version = "0.16" }
+hashbrown = { version = "0.17", features = ["serde"] }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
+serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 tracing = { version = "0.1" }
@@ -28,13 +29,14 @@ tracing-core = { version = "0.1" }
 
 [build-dependencies]
 fnv = { version = "1" }
-hashbrown = { version = "0.16" }
+hashbrown = { version = "0.17", features = ["serde"] }
 indexmap = { version = "2", features = ["serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1" }
 quote = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
+serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 syn = { version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }

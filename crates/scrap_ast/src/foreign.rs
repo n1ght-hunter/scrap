@@ -8,30 +8,30 @@ use scrap_shared::ident::{Ident, Symbol};
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct ForeignMod<'db> {
+pub struct ForeignMod {
     /// The ABI string, e.g. `"C"`
-    pub abi: Symbol<'db>,
+    pub abi: Symbol,
     /// The foreign function declarations inside the block
-    pub items: ThinVec<ForeignItem<'db>>,
-    pub span: Span<'db>,
+    pub items: ThinVec<ForeignItem>,
+    pub span: Span,
 }
 
 /// A single foreign function declaration: `fn ExitProcess(exit_code: usize) -> !;`
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct ForeignItem<'db> {
+pub struct ForeignItem {
     pub id: NodeId,
-    pub ident: Ident<'db>,
-    pub args: ThinVec<Param<'db>>,
-    pub ret_type: Option<Ty<'db>>,
-    pub span: Span<'db>,
+    pub ident: Ident,
+    pub args: ThinVec<Param>,
+    pub ret_type: Option<Ty>,
+    pub span: Span,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for ForeignMod<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for ForeignMod {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, indent: usize) -> std::fmt::Result {
-        salsa::with_attached_database(|db| {
-            write!(f, "extern \"{}\" {{", self.abi.text(db))?;
+        salsa::with_attached_database(|_db| {
+            write!(f, "extern \"{}\" {{", self.abi.text())?;
             for item in self.items.iter() {
                 writeln!(f)?;
                 Self::write_indent(f, indent + 1)?;
@@ -45,7 +45,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ForeignMod<'db> {
     }
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for ForeignItem<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for ForeignItem {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         write!(f, "fn ")?;
         self.ident.pretty_print_indent(f, 0)?;

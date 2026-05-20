@@ -3,11 +3,11 @@ fn add(a: usize, b: usize) -> usize {
 }
 
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 fn exit(code: usize) {
-    ExitProcess(code);
+    __scrap_exit(code);
 }
 
 fn main() {

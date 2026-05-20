@@ -1,6 +1,13 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
+use target_lexicon::Triple;
+
+/// Parse a `--target` value into a [`Triple`]. Used as a clap `value_parser`.
+fn parse_triple(s: &str) -> Result<Triple, String> {
+    Triple::from_str(s).map_err(|e| e.to_string())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -20,6 +27,11 @@ pub struct Args {
     /// Specify the type of crate to build.
     #[arg(long)]
     pub crate_type: CrateType,
+
+    /// Target triple to compile for (e.g. x86_64-unknown-linux-gnu).
+    /// Defaults to the host triple.
+    #[arg(long, value_parser = parse_triple, default_value_t = Triple::host())]
+    pub target: Triple,
 
     #[arg(long)]
     pub cache: Option<PathBuf>,

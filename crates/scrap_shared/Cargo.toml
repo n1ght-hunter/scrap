@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 salsa.workspace = true
+lasso.workspace = true
 serde.workspace = true
 tracing.workspace = true
 scrap_span.workspace = true

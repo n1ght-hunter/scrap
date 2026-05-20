@@ -120,7 +120,7 @@ impl<'db> ExprLowerer<'db> {
     /// Resolve a pattern to its variant index within the enum.
     fn resolve_pattern_variant_idx(
         &self,
-        pat: &scrap_ast::pat::Pat<'db>,
+        pat: &scrap_ast::pat::Pat,
         enum_name: &str,
     ) -> Option<usize> {
         match &pat.kind {
@@ -145,7 +145,7 @@ impl<'db> ExprLowerer<'db> {
     /// Bind pattern variables from a match arm pattern.
     fn bind_pattern_variables(
         &mut self,
-        pat: &scrap_ast::pat::Pat<'db>,
+        pat: &scrap_ast::pat::Pat,
         scrutinee_place: &ir::Place<'db>,
         enum_name: &str,
     ) -> MResult<()> {
@@ -268,7 +268,7 @@ impl<'db> ExprLowerer<'db> {
         &self,
         enum_name: &str,
         variant_idx: usize,
-        field_name: Symbol<'db>,
+        field_name: Symbol,
     ) -> Option<usize> {
         let enum_info = self.enum_info.get(enum_name)?;
         let (_, _, variant_info) = enum_info.variants.get(variant_idx)?;

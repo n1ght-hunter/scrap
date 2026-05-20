@@ -17,6 +17,8 @@ scrap_codegen.workspace = true
 scrap_diagnostics.workspace = true
 crossbeam-channel = { workspace = true }
 pathdiff = { workspace = true }
+cc = { workspace = true }
+target-lexicon = { workspace = true }
 
 clap = { workspace = true, features = ["derive"] }
 salsa = { workspace = true }

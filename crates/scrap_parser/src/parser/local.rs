@@ -5,12 +5,12 @@ use scrap_span::Span;
 impl<'a, 'db> super::Parser<'a, 'db> {
     /// let [mut] <pat>:<ty> = <expr>;
     pub fn parse_local(&mut self) -> crate::PResult<'a, Local<'db>> {
-        let start = self.token.span.start(self.db);
+        let start = self.token.span.start;
         self.expect(Token::Let)?;
 
         // Check for `mut` keyword (contextual — parsed as identifier)
         let mutability = if self.check(Token::Ident) {
-            let text = &self.source[self.token.span.to_range(self.db)];
+            let text = &self.source[self.token.span.start..self.token.span.end];
             if text == "mut" {
                 self.bump();
                 scrap_shared::Mutability::Mut
@@ -31,7 +31,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
         if self.eat(Token::Semicolon) {
             return Ok(Local {
                 id: self.state.new_node_id(),
-                span: Span::new(self.db, start, self.token.span.end(self.db)),
+                span: Span::new(start, self.token.span.end),
                 pat: Box::new(pat),
                 ty: None,
                 kind: LocalKind::Decl,
@@ -46,7 +46,7 @@ impl<'a, 'db> super::Parser<'a, 'db> {
 
         Ok(Local {
             id: self.state.new_node_id(),
-            span: Span::new(self.db, start, expr.span.end(self.db)),
+            span: Span::new(start, expr.span.end),
             pat: Box::new(pat),
             ty,
             kind: LocalKind::Init(Box::new(expr)),

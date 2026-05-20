@@ -6,20 +6,20 @@ use crate::types::InferTy;
 
 /// A constraint between types that must be satisfied.
 #[derive(Debug, Clone)]
-pub enum Constraint<'db> {
+pub enum Constraint {
     /// Two types must be equal: T1 == T2
-    Eq(InferTy<'db>, InferTy<'db>, ConstraintOrigin<'db>),
+    Eq(InferTy, InferTy, ConstraintOrigin),
 }
 
 /// Origin of a constraint (for better error messages).
 #[derive(Debug, Clone)]
-pub struct ConstraintOrigin<'db> {
-    pub span: Span<'db>,
+pub struct ConstraintOrigin {
+    pub span: Span,
     pub kind: ConstraintKind,
 }
 
-impl<'db> ConstraintOrigin<'db> {
-    pub fn new(span: Span<'db>, kind: ConstraintKind) -> Self {
+impl ConstraintOrigin {
+    pub fn new(span: Span, kind: ConstraintKind) -> Self {
         Self { span, kind }
     }
 }

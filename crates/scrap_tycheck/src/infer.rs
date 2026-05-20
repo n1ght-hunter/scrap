@@ -20,7 +20,7 @@ use crate::{constraints::ConstraintKind, context::TypeContext, types::InferTy};
 
 impl<'db> TypeContext<'db> {
     /// Infer the type of an expression.
-    pub fn infer_expr(&mut self, expr: &Expr<'db>) -> InferTy<'db> {
+    pub fn infer_expr(&mut self, expr: &Expr<'db>) -> InferTy {
         let ty = match &expr.kind {
             ExprKind::Lit(lit) => self.infer_literal(lit),
 
@@ -114,7 +114,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a literal.
-    fn infer_literal(&mut self, lit: &Lit<'db>) -> InferTy<'db> {
+    fn infer_literal(&mut self, lit: &Lit) -> InferTy {
         match lit.kind {
             LitKind::Bool => InferTy::Bool,
             LitKind::Integer => self.fresh_ty_var(), // Will be resolved by context or default to i32
@@ -124,7 +124,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a path (variable reference).
-    fn infer_path(&mut self, path: &Path<'db>, span: Span<'db>) -> InferTy<'db> {
+    fn infer_path(&mut self, path: &Path, span: Span) -> InferTy {
         // For now, handle simple single-segment paths (variable names)
         if let Some(segment) = path.single_segment() {
             let name = segment.ident.name;
@@ -146,7 +146,7 @@ impl<'db> TypeContext<'db> {
                 return self.fresh_ty_var();
             }
 
-            self.emit_undefined_variable(name.text(self.db()), span);
+            self.emit_undefined_variable(name.text(), span);
             InferTy::Error
         } else if path.segments.len() == 2 {
             let enum_name = path.segments[0].ident.name;
@@ -174,8 +174,8 @@ impl<'db> TypeContext<'db> {
         op: &BinOp<'db>,
         lhs: &Expr<'db>,
         rhs: &Expr<'db>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         let lhs_ty = self.infer_expr(lhs);
         let rhs_ty = self.infer_expr(rhs);
 
@@ -228,7 +228,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a unary operation.
-    fn infer_unary_op(&mut self, op: UnOp, inner: &Expr<'db>, _span: Span<'db>) -> InferTy<'db> {
+    fn infer_unary_op(&mut self, op: UnOp, inner: &Expr<'db>, _span: Span) -> InferTy {
         let inner_ty = self.infer_expr(inner);
         match op {
             UnOp::Deref => {
@@ -261,12 +261,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of an address-of expression (`&expr` or `&mut expr`).
-    fn infer_addr_of(
-        &mut self,
-        mutability: Mutability,
-        inner: &Expr<'db>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+    fn infer_addr_of(&mut self, mutability: Mutability, inner: &Expr<'db>, span: Span) -> InferTy {
         let inner_ty = self.infer_expr(inner);
 
         // Check borrow rules on the inner expression
@@ -278,7 +273,7 @@ impl<'db> TypeContext<'db> {
                 && let Some(var_mut) = self.lookup_var_mutability(name)
                 && var_mut.is_not()
             {
-                self.emit_cannot_borrow_as_mutable(name.text(self.db()), inner.span);
+                self.emit_cannot_borrow_as_mutable(name.text(), inner.span);
             }
             self.record_borrow(name, mutability, span);
         }
@@ -296,15 +291,15 @@ impl<'db> TypeContext<'db> {
         &mut self,
         callee: &Expr<'db>,
         args: &thin_vec::ThinVec<Box<Expr<'db>>>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         // Try to get function name from callee
         if let ExprKind::Path(path) = &callee.kind {
             if let Some(segment) = path.single_segment() {
                 let name = segment.ident.name;
 
                 // Built-in: box(value) -> *T
-                if name.text(self.db()) == "box" {
+                if name.text() == "box" {
                     if args.len() != 1 {
                         self.emit_arity_mismatch(1, args.len(), span);
                         return InferTy::Error;
@@ -321,7 +316,7 @@ impl<'db> TypeContext<'db> {
                     }
 
                     // Instantiate generic parameters with fresh type variables
-                    let mut subst: HashMap<Symbol<'db>, InferTy<'db>> = HashMap::new();
+                    let mut subst: HashMap<Symbol, InferTy> = HashMap::new();
                     for type_param in &sig.type_params {
                         subst.insert(*type_param, self.fresh_ty_var());
                     }
@@ -338,11 +333,14 @@ impl<'db> TypeContext<'db> {
                         );
                     }
 
-                    // Return the instantiated return type
+                    if !sig.type_params.is_empty() {
+                        self.record_generic_instantiation(name, callee.id, subst.clone());
+                    }
+
                     return self.substitute(&sig.return_ty, &subst);
                 }
 
-                self.emit_undefined_function(name.text(self.db()), span);
+                self.emit_undefined_function(name.text(), span);
                 return InferTy::Error;
             }
 
@@ -395,8 +393,8 @@ impl<'db> TypeContext<'db> {
         cond: &Expr<'db>,
         then_block: &Block<'db>,
         else_expr: Option<&Expr<'db>>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         // Condition must be bool
         let cond_ty = self.infer_expr(cond);
         self.constrain_eq_with_kind(
@@ -422,7 +420,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a block.
-    pub fn infer_block(&mut self, block: &Block<'db>) -> InferTy<'db> {
+    pub fn infer_block(&mut self, block: &Block<'db>) -> InferTy {
         self.push_scope();
 
         let mut result_ty = InferTy::unit(); // Default to unit
@@ -436,7 +434,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a statement.
-    fn infer_stmt(&mut self, stmt: &Stmt<'db>) -> InferTy<'db> {
+    fn infer_stmt(&mut self, stmt: &Stmt<'db>) -> InferTy {
         match &stmt.kind {
             StmtKind::Let(local) => {
                 self.infer_local(local);
@@ -497,7 +495,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of a return expression.
-    fn infer_return(&mut self, value: Option<&Expr<'db>>, span: Span<'db>) -> InferTy<'db> {
+    fn infer_return(&mut self, value: Option<&Expr<'db>>, span: Span) -> InferTy {
         let return_ty = match value {
             Some(expr) => self.infer_expr(expr),
             None => InferTy::unit(),
@@ -512,7 +510,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Infer the type of an assignment.
-    fn infer_assign(&mut self, lhs: &Expr<'db>, rhs: &Expr<'db>, span: Span<'db>) -> InferTy<'db> {
+    fn infer_assign(&mut self, lhs: &Expr<'db>, rhs: &Expr<'db>, span: Span) -> InferTy {
         let lhs_ty = self.infer_expr(lhs);
         self.check_assign_mutability(lhs);
         let rhs_ty = self.infer_expr(rhs);
@@ -528,8 +526,8 @@ impl<'db> TypeContext<'db> {
         _op: &AssignOp<'db>,
         lhs: &Expr<'db>,
         rhs: &Expr<'db>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         let lhs_ty = self.infer_expr(lhs);
         self.check_assign_mutability(lhs);
         let rhs_ty = self.infer_expr(rhs);
@@ -549,7 +547,7 @@ impl<'db> TypeContext<'db> {
                     && let Some(mutability) = self.lookup_var_mutability(segment.ident.name)
                     && mutability.is_not()
                 {
-                    self.emit_immutable_assign_error(segment.ident.name.text(self.db()), lhs.span);
+                    self.emit_immutable_assign_error(segment.ident.name.text(), lhs.span);
                 }
             }
             ExprKind::Field(base, _) => {
@@ -580,12 +578,12 @@ impl<'db> TypeContext<'db> {
     fn infer_array(
         &mut self,
         elements: &thin_vec::ThinVec<Box<Expr<'db>>>,
-        _span: Span<'db>,
-    ) -> InferTy<'db> {
+        _span: Span,
+    ) -> InferTy {
         if elements.is_empty() {
             // Empty array - element type is unknown
             let elem_ty = self.fresh_ty_var();
-            return InferTy::App(Symbol::new(self.db(), "Array".to_string()), vec![elem_ty]);
+            return InferTy::App(Symbol::new("Array"), vec![elem_ty]);
         }
 
         // All elements must have same type
@@ -600,17 +598,17 @@ impl<'db> TypeContext<'db> {
             );
         }
 
-        InferTy::App(Symbol::new(self.db(), "Array".to_string()), vec![first_ty])
+        InferTy::App(Symbol::new("Array"), vec![first_ty])
     }
 
     /// Convert an AST type to an InferTy.
     /// Infer the type of a struct initialization expression.
     fn infer_struct_init(
         &mut self,
-        path: &Path<'db>,
+        path: &Path,
         fields: &thin_vec::ThinVec<scrap_ast::expr::ExprField<'db>>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         // Check for enum struct variant: `Message::Move { x: 1, y: 2 }`
         if path.segments.len() == 2 {
             let enum_name = path.segments[0].ident.name;
@@ -647,7 +645,7 @@ impl<'db> TypeContext<'db> {
         let struct_def = match self.lookup_struct(struct_name) {
             Some(def) => def.clone(),
             None => {
-                self.emit_undefined_variable(struct_name.text(self.db()), span);
+                self.emit_undefined_variable(struct_name.text(), span);
                 return InferTy::Error;
             }
         };
@@ -660,15 +658,15 @@ impl<'db> TypeContext<'db> {
                 .iter()
                 .any(|(name, _)| *name == field_init.ident.name);
             if !field_exists {
-                let sn = struct_name.text(self.db());
-                let fn_ = field_init.ident.name.text(self.db());
+                let sn = struct_name.text();
+                let fn_ = field_init.ident.name.text();
                 let note = if struct_def.fields.is_empty() {
                     "all struct fields are already assigned".to_string()
                 } else {
                     let available: Vec<_> = struct_def
                         .fields
                         .iter()
-                        .map(|(n, _)| format!("`{}`", n.text(self.db())))
+                        .map(|(n, _)| format!("`{}`", n.text()))
                         .collect();
                     format!("available fields are: {}", available.join(", "))
                 };
@@ -681,8 +679,8 @@ impl<'db> TypeContext<'db> {
         for (def_name, _) in struct_def.fields.iter() {
             let provided = fields.iter().any(|f| f.ident.name == *def_name);
             if !provided {
-                let sn = struct_name.text(self.db());
-                let fn_ = def_name.text(self.db());
+                let sn = struct_name.text();
+                let fn_ = def_name.text();
                 self.emit_missing_struct_field(sn, fn_, span);
                 has_error = true;
             }
@@ -692,7 +690,13 @@ impl<'db> TypeContext<'db> {
             return InferTy::Error;
         }
 
-        // Constrain field types
+        // Instantiate generic parameters with fresh type variables
+        let mut subst: HashMap<Symbol, InferTy> = HashMap::new();
+        for type_param in &struct_def.type_params {
+            subst.insert(*type_param, self.fresh_ty_var());
+        }
+
+        // Constrain field types (with substitution for generic fields)
         for field_init in fields.iter() {
             let field_ty = self.infer_expr(&field_init.expr);
             if let Some((_, expected_ty)) = struct_def
@@ -700,20 +704,35 @@ impl<'db> TypeContext<'db> {
                 .iter()
                 .find(|(name, _)| *name == field_init.ident.name)
             {
-                self.constrain_eq(field_ty, expected_ty.clone(), field_init.span);
+                let expected = if subst.is_empty() {
+                    expected_ty.clone()
+                } else {
+                    self.substitute(expected_ty, &subst)
+                };
+                self.constrain_eq(field_ty, expected, field_init.span);
             }
         }
 
-        InferTy::Adt(struct_name)
+        if struct_def.type_params.is_empty() {
+            InferTy::Adt(struct_name)
+        } else {
+            let type_args: Vec<_> = struct_def
+                .type_params
+                .iter()
+                .map(|p| subst[p].clone())
+                .collect();
+            self.record_generic_instantiation(struct_name, path.segments[0].id, subst);
+            InferTy::App(struct_name, type_args)
+        }
     }
 
     /// Infer the type of a field access expression.
     fn infer_field_access(
         &mut self,
         base: &Expr<'db>,
-        field_ident: &scrap_shared::ident::Ident<'db>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        field_ident: &scrap_shared::ident::Ident,
+        span: Span,
+    ) -> InferTy {
         let base_ty = self.infer_expr(base);
         let resolved_base = self.resolve(&base_ty);
 
@@ -736,11 +755,38 @@ impl<'db> TypeContext<'db> {
                     field_ty.clone()
                 } else {
                     self.emit_undefined_variable(
-                        &format!(
-                            "{}.{}",
-                            struct_name.text(self.db()),
-                            field_name.text(self.db())
-                        ),
+                        &format!("{}.{}", struct_name.text(), field_name.text()),
+                        span,
+                    );
+                    InferTy::Error
+                }
+            }
+            InferTy::App(struct_name, type_args) => {
+                let struct_def = match self.lookup_struct(*struct_name) {
+                    Some(def) => def.clone(),
+                    None => {
+                        self.emit_type_mismatch("struct", &self.ty_to_string(&base_ty), span);
+                        return InferTy::Error;
+                    }
+                };
+
+                let subst: HashMap<Symbol, InferTy> = struct_def
+                    .type_params
+                    .iter()
+                    .zip(type_args.iter())
+                    .map(|(p, a)| (*p, a.clone()))
+                    .collect();
+
+                let field_name = field_ident.name;
+                if let Some((_, field_ty)) = struct_def
+                    .fields
+                    .iter()
+                    .find(|(name, _)| *name == field_name)
+                {
+                    self.substitute(field_ty, &subst)
+                } else {
+                    self.emit_undefined_variable(
+                        &format!("{}.{}", struct_name.text(), field_name.text()),
                         span,
                     );
                     InferTy::Error
@@ -754,12 +800,12 @@ impl<'db> TypeContext<'db> {
         }
     }
 
-    pub fn lower_ast_ty(&mut self, ty: &Ty<'db>) -> InferTy<'db> {
+    pub fn lower_ast_ty(&mut self, ty: &Ty) -> InferTy {
         match &ty.kind {
             TyKind::Path(path) => {
                 if let Some(segment) = path.single_segment() {
-                    let name_str = segment.ident.name.text(self.db());
-                    match name_str.as_str() {
+                    let name_str = segment.ident.name.text();
+                    match name_str {
                         // Signed integers
                         "i8" => InferTy::Int(IntTy::I8),
                         "i16" => InferTy::Int(IntTy::I16),
@@ -786,12 +832,16 @@ impl<'db> TypeContext<'db> {
                         "bool" => InferTy::Bool,
                         "String" => InferTy::Str,
                         _ => {
-                            // Check if it's a type parameter
                             let sym = segment.ident.name;
                             if self.is_type_param(sym) {
                                 InferTy::Param(sym)
-                            } else {
+                            } else if self.lookup_struct(sym).is_some()
+                                || self.lookup_enum(sym).is_some()
+                            {
                                 InferTy::Adt(sym)
+                            } else {
+                                self.emit_undefined_type(name_str, ty.span);
+                                InferTy::Error
                             }
                         }
                     }
@@ -818,11 +868,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Substitute type parameters with their instantiated types.
-    pub fn substitute(
-        &self,
-        ty: &InferTy<'db>,
-        subst: &HashMap<Symbol<'db>, InferTy<'db>>,
-    ) -> InferTy<'db> {
+    pub fn substitute(&self, ty: &InferTy, subst: &HashMap<Symbol, InferTy>) -> InferTy {
         match ty {
             InferTy::Param(name) => subst.get(name).cloned().unwrap_or_else(|| ty.clone()),
             InferTy::App(name, args) => {
@@ -849,8 +895,8 @@ impl<'db> TypeContext<'db> {
         &mut self,
         scrutinee: &Expr<'db>,
         arms: &[scrap_ast::expr::Arm<'db>],
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         // Infer scrutinee type
         let scrutinee_ty = self.infer_expr(scrutinee);
 
@@ -871,10 +917,10 @@ impl<'db> TypeContext<'db> {
     fn infer_method_call(
         &mut self,
         receiver: &Expr<'db>,
-        method: &scrap_shared::ident::Ident<'db>,
+        method: &scrap_shared::ident::Ident,
         args: &thin_vec::ThinVec<Box<Expr<'db>>>,
-        span: Span<'db>,
-    ) -> InferTy<'db> {
+        span: Span,
+    ) -> InferTy {
         let recv_ty = self.infer_expr(receiver);
         let resolved = self.resolve(&recv_ty);
 
@@ -887,23 +933,12 @@ impl<'db> TypeContext<'db> {
         };
 
         // Construct mangled name: TypeName::method_name
-        let mangled = Symbol::new(
-            self.db(),
-            format!(
-                "{}::{}",
-                type_name.text(self.db()),
-                method.name.text(self.db())
-            ),
-        );
+        let mangled = Symbol::new(format!("{}::{}", type_name.text(), method.name.text()));
 
         let sig = match self.lookup_function(mangled) {
             Some(sig) => sig.clone(),
             None => {
-                let msg = format!(
-                    "{}::{}",
-                    type_name.text(self.db()),
-                    method.name.text(self.db())
-                );
+                let msg = format!("{}::{}", type_name.text(), method.name.text());
                 self.emit_undefined_function(&msg, span);
                 return InferTy::Error;
             }
@@ -934,7 +969,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Bind variables from a match pattern into the current scope.
-    fn bind_match_pattern(&mut self, pat: &scrap_ast::pat::Pat<'db>, scrutinee_ty: &InferTy<'db>) {
+    fn bind_match_pattern(&mut self, pat: &scrap_ast::pat::Pat, scrutinee_ty: &InferTy) {
         use scrap_ast::pat::PatKind;
         match &pat.kind {
             PatKind::Wildcard | PatKind::Missing | PatKind::Lit(_) => {}

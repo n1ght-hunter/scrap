@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 enum Message {
@@ -13,5 +13,5 @@ fn main() {
         Message::Move { x, y } => x,
         Message::Quit => 0,
     };
-    ExitProcess(result);
+    __scrap_exit(result);
 }

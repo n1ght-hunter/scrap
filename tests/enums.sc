@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 enum Option {
@@ -13,5 +13,5 @@ fn main() {
         Option::Some(val) => val,
         Option::None => 0,
     };
-    ExitProcess(result);
+    __scrap_exit(result);
 }

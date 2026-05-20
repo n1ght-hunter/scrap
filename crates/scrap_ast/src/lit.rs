@@ -7,19 +7,19 @@ use crate::node_id::NodeId;
 #[derive(
     Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Lit<'db> {
+pub struct Lit {
     /// Unique identifier for this literal node
     pub id: NodeId,
     /// The kind of literal (determines how it should be interpreted)
     pub kind: LitKind,
     /// The span of the literal in the source code
-    pub span: Span<'db>,
+    pub span: Span,
     // In full Rust AST, there would also be:
     // pub symbol: Symbol,        // The original source representation
     // pub suffix: Option<Symbol>, // Type suffix like "f32" in "1.0f32"
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for Lit<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for Lit {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match self.kind {
             LitKind::Bool => write!(f, "<bool literal>"),

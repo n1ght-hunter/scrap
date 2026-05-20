@@ -146,28 +146,49 @@ pub fn collect_modules<'db>(
 //         .collect()
 // }
 
-/// Lower all input files to IR in parallel with type information
+/// Per-file lowering wrapper. The `#[salsa::tracked]` attribute is necessary
+/// here: rayon workers receive a freshly-cloned `ScrapDb` that is not inside
+/// any tracked-function context, and tracked-struct creation panics outside
+/// one. Calling this from a worker re-establishes the per-thread context.
 #[salsa::tracked(persist)]
+fn lower_one_file<'db>(
+    db: &'db dyn scrap_shared::Db,
+    file: scrap_parser::ParsedFile<'db>,
+    can: scrap_ast::Can<'db>,
+    input_file: scrap_shared::salsa::InputFile<'db>,
+) -> Option<scrap_ir::Module<'db>> {
+    let type_table = scrap_tycheck::check_types(db, can, input_file);
+    let module = file.ast(db).to_module(db);
+    let module_id = module.id(db);
+    scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table)
+}
+
 pub fn lower_input_files_to_ir<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_file: scrap_parser::ParsedFile<'db>,
     other_files: Vec<scrap_parser::ParsedFile<'db>>,
-    type_table: scrap_tycheck::TypeTable<'db>,
+    can: scrap_ast::Can<'db>,
+    input_file: scrap_shared::salsa::InputFile<'db>,
 ) -> (Option<scrap_ir::Module<'db>>, Vec<scrap_ir::Module<'db>>) {
-    // Lower entry file
-    let entry_module = entry_file.ast(db).to_module(db);
-    let entry_module_id = entry_module.id(db);
-    let entry_ir =
-        scrap_ast_lowering::lower_parsed_file(db, entry_file, entry_module_id, type_table);
+    use salsa::plumbing::{AsId, FromId};
 
-    // Lower other files in parallel
-    let other_ir: Vec<_> = other_files
+    let entry_ir = lower_one_file(db, entry_file, can, input_file);
+
+    // Workers compute lowered modules in parallel; salsa storage is shared
+    // via clone, so we can return raw `salsa::Id`s and reconstruct
+    // `Module<'db>` on the main thread against the outer `db`.
+    let ids: Vec<salsa::Id> = other_files
         .into_par_iter()
-        .filter_map(|file| {
-            let module = file.ast(db).to_module(db);
-            let module_id = module.id(db);
-            scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table)
+        .map_with(db.fork(), |db, file| {
+            let db: &dyn scrap_shared::Db = db;
+            lower_one_file(db, file, can, input_file).map(|m| m.as_id())
         })
+        .flatten()
+        .collect();
+
+    let other_ir: Vec<scrap_ir::Module<'db>> = ids
+        .into_iter()
+        .map(<scrap_ir::Module<'db> as FromId>::from_id)
         .collect();
 
     (entry_ir, other_ir)

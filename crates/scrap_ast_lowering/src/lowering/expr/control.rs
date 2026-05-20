@@ -182,22 +182,19 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_without_else(db: &dyn scrap_shared::Db) {
         // if x > 0 { }
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        // Create variable x
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        // Create condition: x > 0
         let x_expr = create_ident_expr(db, "x");
         let zero = create_int_lit(db, 0);
         let cond = create_binary_expr(db, BinOpKind::Gt, x_expr, zero);
 
-        // Create empty then block
         let then_block = create_empty_block(db);
 
-        // Create if expression
         let if_expr = create_if_expr(db, cond, then_block);
 
         let result = lowerer.lower_expr(&if_expr);
@@ -210,24 +207,23 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_else(db: &dyn scrap_shared::Db) {
         // if x > 0 { } else { }
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        // Condition: x > 0
         let x_expr = create_ident_expr(db, "x");
         let zero = create_int_lit(db, 0);
         let cond = create_binary_expr(db, BinOpKind::Gt, x_expr, zero);
 
-        // Then and else blocks
         let then_block = create_empty_block(db);
         let else_block = create_empty_block(db);
         let else_expr = Expr {
             id: test_node_id(),
             kind: ExprKind::Block(Box::new(else_block)),
-            span: test_span(db),
+            span: test_span(),
         };
 
         let if_expr = create_if_else_expr(db, cond, then_block, else_expr);
@@ -242,13 +238,14 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_nested_if(db: &dyn scrap_shared::Db) {
         // if x > 0 { if y > 0 { } }
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -283,7 +280,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_return_without_value(db: &dyn scrap_shared::Db) {
         // return;
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let return_expr = create_return_expr(db, None);
 
@@ -297,7 +295,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_return_with_value(db: &dyn scrap_shared::Db) {
         // return 42;
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let value = create_int_lit(db, 42);
         let return_expr = create_return_expr(db, Some(value));
@@ -316,9 +315,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_return_in_then(db: &dyn scrap_shared::Db) {
         // if x > 0 { return 1; }
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -345,7 +345,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_early_return(db: &dyn scrap_shared::Db) {
         // return 42; (followed by more code would be dead)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let value = create_int_lit(db, 42);
         let return_expr = create_return_expr(db, Some(value));
@@ -363,13 +364,14 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_if_with_complex_condition(db: &dyn scrap_shared::Db) {
         // if x > 0 && y < 10 { }
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
-        let y_sym = Symbol::new(db, "y".to_string());
+        let y_sym = Symbol::new("y");
         let y_local = lowerer.allocate_named_local(y_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(y_sym, y_local);
 
@@ -399,9 +401,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_cfg_builder_integration(db: &dyn scrap_shared::Db) {
         // Test that we can build a complete CFG
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -423,7 +426,7 @@ mod tests {
                 db,
                 vec![create_expr_stmt(db, return_zero)],
             ))),
-            span: test_span(db),
+            span: test_span(),
         };
 
         let if_expr = create_if_else_expr(db, cond, then_block, else_block_expr);

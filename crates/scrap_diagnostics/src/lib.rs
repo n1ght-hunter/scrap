@@ -1,36 +1,46 @@
 //! Defines the structures and rendering logic for compiler diagnostics.
 //! This is the "presentation layer" for errors.
 
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    borrow::Cow,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 pub use annotate_snippets::{self, Annotation, AnnotationKind, Level, Snippet};
 pub use anstream;
 pub use anstyle;
 
-use annotate_snippets::{Group, Renderer, Report, renderer::DecorStyle};
-use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use annotate_snippets::{Group, Renderer, renderer::DecorStyle};
 use scrap_errors::ErrorGuaranteed;
 
+/// Owned, lifetime-free emitter. The whole emitter is a single
+/// `Arc<DiagnosticInner>`, so cloning (e.g. per rayon worker via
+/// [`Db::fork`](scrap_shared)) is a refcount bump — the `Renderer` and config
+/// flags live behind the `Arc` rather than being copied per clone. This also
+/// lets `DiagnosticEmitter` be embedded in a long-lived `Db` without lifetime
+/// gymnastics on the borrow returned by `dcx()`.
 #[derive(Clone)]
-pub struct DiagnosticEmitter<'a> {
-    diagnostics: Arc<DiagnosticInner<'a>>,
-    renderer: Renderer,
-    /// Whether diagnostics should be automatically rendered when emitted.
+pub struct DiagnosticEmitter {
+    inner: Arc<DiagnosticInner>,
+    /// Whether diagnostics should be printed to stderr at emit time.
     auto_render: bool,
-    /// Whether all diagnostics should be rendered when the emitter is dropped.
-    /// This will use the Arc to count references, so it only renders when the last reference is dropped.
+    /// Whether all unrendered diagnostics should be flushed when the last
+    /// emitter handle is dropped.
     render_on_drop: bool,
 }
 
-impl<'a> Default for DiagnosticEmitter<'a> {
+impl Default for DiagnosticEmitter {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Drop for DiagnosticEmitter<'_> {
+impl Drop for DiagnosticEmitter {
     fn drop(&mut self) {
-        if self.render_on_drop && Arc::strong_count(&self.diagnostics) == 1 {
+        if self.render_on_drop && Arc::strong_count(&self.inner) == 1 {
             self.render_all();
         }
     }
@@ -42,25 +52,61 @@ enum Emitted {
     No,
 }
 
-#[derive(Default, Debug)]
-struct DiagnosticInner<'a> {
-    errors: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
-    warnings: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
-    others: parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>,
+/// A stored diagnostic, either already rendered to text or kept as an owned
+/// group to be rendered lazily at display time.
+enum StoredDiag {
+    /// Pre-rendered text. A `&'static str` input stays `Cow::Borrowed` and
+    /// never allocates.
+    Rendered {
+        emitted: Emitted,
+        text: Cow<'static, str>,
+    },
+    /// Owned group; rendered on demand at `render_all` / drop time so emitting
+    /// a diagnostic that is later cleared costs no render.
+    Lazy {
+        emitted: Emitted,
+        group: Group<'static>,
+    },
 }
 
-impl<'a> DiagnosticInner<'a> {
-    fn push(&self, level: Level<'_>, emitted: Emitted, diag: Group<'a>) {
+impl StoredDiag {
+    fn emitted(&self) -> Emitted {
+        match self {
+            Self::Rendered { emitted, .. } | Self::Lazy { emitted, .. } => *emitted,
+        }
+    }
+
+    fn set_emitted(&mut self, value: Emitted) {
+        match self {
+            Self::Rendered { emitted, .. } | Self::Lazy { emitted, .. } => *emitted = value,
+        }
+    }
+
+    /// Rendered text, read-only. A `Rendered` entry borrows its stored text
+    /// (no alloc); a `Lazy` entry renders its group on the fly into an owned
+    /// string. The caller marks the entry emitted afterwards, so a given entry
+    /// is never rendered twice.
+    fn render<'r>(&'r self, renderer: &Renderer) -> Cow<'r, str> {
+        match self {
+            Self::Rendered { text, .. } => Cow::Borrowed(text),
+            Self::Lazy { group, .. } => Cow::Owned(renderer.render(std::slice::from_ref(group))),
+        }
+    }
+}
+
+struct DiagnosticInner {
+    errors: parking_lot::Mutex<Vec<StoredDiag>>,
+    warnings: parking_lot::Mutex<Vec<StoredDiag>>,
+    others: parking_lot::Mutex<Vec<StoredDiag>>,
+    renderer: Renderer,
+}
+
+impl DiagnosticInner {
+    fn push(&self, level: Level<'_>, diag: StoredDiag) {
         match level {
-            Level::ERROR => {
-                self.errors.lock().push((emitted, diag));
-            }
-            Level::WARNING => {
-                self.warnings.lock().push((emitted, diag));
-            }
-            _ => {
-                self.others.lock().push((emitted, diag));
-            }
+            Level::ERROR => self.errors.lock().push(diag),
+            Level::WARNING => self.warnings.lock().push(diag),
+            _ => self.others.lock().push(diag),
         }
     }
 
@@ -73,29 +119,29 @@ impl<'a> DiagnosticInner<'a> {
     }
 
     fn has_unrendered(&self) -> bool {
-        let check = |input: &parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>| {
+        let check = |input: &parking_lot::Mutex<Vec<StoredDiag>>| {
             let guard = input.lock();
-            guard.par_iter().any(|(emitted, _)| *emitted == Emitted::No)
+            guard.iter().any(|d| d.emitted() == Emitted::No)
         };
         let result = AtomicBool::new(false);
         rayon::scope(|s| {
             s.spawn(|_| {
                 if check(&self.errors) {
-                    result.store(true, std::sync::atomic::Ordering::Relaxed);
+                    result.store(true, Ordering::Relaxed);
                 }
             });
             s.spawn(|_| {
                 if check(&self.warnings) {
-                    result.store(true, std::sync::atomic::Ordering::Relaxed);
+                    result.store(true, Ordering::Relaxed);
                 }
             });
             s.spawn(|_| {
                 if check(&self.others) {
-                    result.store(true, std::sync::atomic::Ordering::Relaxed);
+                    result.store(true, Ordering::Relaxed);
                 }
             });
         });
-        result.load(std::sync::atomic::Ordering::Relaxed)
+        result.load(Ordering::Relaxed)
     }
 
     fn clear(&self) {
@@ -112,38 +158,47 @@ impl<'a> DiagnosticInner<'a> {
         )
     }
 
-    fn all_non_rendered(&self, render: impl Fn(Level, Report) + Sync + Send) {
-        let render = |level: Level, input: &parking_lot::Mutex<Vec<(Emitted, Group<'a>)>>| {
+    fn all_non_rendered(
+        &self,
+        print: impl Fn(Level, &mut dyn Iterator<Item = Cow<'_, str>>) + Sync + Send,
+    ) {
+        // Sequential within a level: each level already runs on its own
+        // `rayon::scope` thread. Both phases run under one held lock, so `print`
+        // receives a borrowing iterator (no intermediate `Vec`).
+        let collect = |level: Level, input: &parking_lot::Mutex<Vec<StoredDiag>>| {
             let mut guard = input.lock();
-            let report = guard
-                .par_iter_mut()
-                .filter_map(|(emitted, diag)| {
-                    if *emitted == Emitted::No {
-                        *emitted = Emitted::Yes;
-                        Some(diag.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if !report.is_empty() {
-                render(level, &report);
+            // 1. Render unemitted diagnostics on the fly and hand them to
+            //    `print` as an iterator.
+            let mut texts = guard
+                .iter()
+                .filter(|d| d.emitted() == Emitted::No)
+                .map(|d| d.render(&self.renderer));
+            print(level, &mut texts);
+            // 2. Mark them emitted (the filter above prevents double-render).
+            for d in guard.iter_mut() {
+                if d.emitted() == Emitted::No {
+                    d.set_emitted(Emitted::Yes);
+                }
             }
         };
         rayon::scope(|s| {
-            s.spawn(|_| render(Level::ERROR, &self.errors));
-            s.spawn(|_| render(Level::WARNING, &self.warnings));
+            s.spawn(|_| collect(Level::ERROR, &self.errors));
+            s.spawn(|_| collect(Level::WARNING, &self.warnings));
             // info is used for "other" diagnostics
-            s.spawn(|_| render(Level::INFO, &self.others));
+            s.spawn(|_| collect(Level::INFO, &self.others));
         });
     }
 }
 
-impl<'a> DiagnosticEmitter<'a> {
+impl DiagnosticEmitter {
     pub fn new() -> Self {
         Self {
-            diagnostics: Arc::new(DiagnosticInner::default()),
-            renderer: Renderer::styled().decor_style(DecorStyle::Unicode),
+            inner: Arc::new(DiagnosticInner {
+                errors: parking_lot::Mutex::default(),
+                warnings: parking_lot::Mutex::default(),
+                others: parking_lot::Mutex::default(),
+                renderer: Renderer::styled().decor_style(DecorStyle::Unicode),
+            }),
             auto_render: false,
             render_on_drop: true,
         }
@@ -158,61 +213,109 @@ impl<'a> DiagnosticEmitter<'a> {
         self.render_on_drop = render_on_drop;
         self
     }
-}
 
-impl<'a> DiagnosticEmitter<'a> {
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.has_errors()
+        self.inner.has_errors()
     }
 
     pub fn has_warnings(&self) -> bool {
-        self.diagnostics.has_warnings()
+        self.inner.has_warnings()
     }
 
     pub fn has_unrendered(&self) -> bool {
-        self.diagnostics.has_unrendered()
+        self.inner.has_unrendered()
     }
 
     pub fn clear(&self) {
-        self.diagnostics.clear();
+        self.inner.clear();
     }
 
     /// Returns the counts of (errors, warnings, others)
     pub fn counts(&self) -> (usize, usize, usize) {
-        self.diagnostics.counts()
+        self.inner.counts()
     }
 
-    pub fn emit_err(&self, diag: Group<'a>) -> ErrorGuaranteed {
+    pub fn emit_err(&self, diag: Group<'_>) -> ErrorGuaranteed {
         self.emit(Level::ERROR, diag);
         #[allow(deprecated)]
         ErrorGuaranteed::unchecked_error_guaranteed()
     }
 
-    pub fn emit(&self, level: Level<'_>, diag: Group<'a>) {
-        let mut emitted = Emitted::No;
+    /// Render `diag` immediately and store the resulting text.
+    ///
+    /// Use this for groups built from borrowed/`format!`-ed data, which cannot
+    /// outlive the call. For owned `Group<'static>` prefer [`Self::emit_lazy`].
+    pub fn emit(&self, level: Level<'_>, diag: Group<'_>) {
+        let text = self.inner.renderer.render(std::slice::from_ref(&diag));
+        let emitted = if self.auto_render {
+            anstream::eprintln!("{text}");
+            Emitted::Yes
+        } else {
+            Emitted::No
+        };
+        self.inner.push(
+            level,
+            StoredDiag::Rendered {
+                emitted,
+                text: Cow::Owned(text),
+            },
+        );
+    }
+
+    /// Store an owned group and defer rendering until display time, so a
+    /// diagnostic that is later cleared costs no render.
+    pub fn emit_lazy(&self, level: Level<'_>, diag: Group<'static>) {
         if self.auto_render {
-            emitted = Emitted::Yes;
-            self.render(std::slice::from_ref(&diag));
+            let text = self.inner.renderer.render(std::slice::from_ref(&diag));
+            anstream::eprintln!("{text}");
+            self.inner.push(
+                level,
+                StoredDiag::Rendered {
+                    emitted: Emitted::Yes,
+                    text: Cow::Owned(text),
+                },
+            );
+        } else {
+            self.inner.push(
+                level,
+                StoredDiag::Lazy {
+                    emitted: Emitted::No,
+                    group: diag,
+                },
+            );
         }
-        self.diagnostics.push(level, emitted, diag);
+    }
+
+    /// Store an already-rendered message. A `&'static str` stays borrowed and
+    /// never allocates or invokes the renderer.
+    pub fn emit_rendered(&self, level: Level<'_>, msg: impl Into<Cow<'static, str>>) {
+        let text = msg.into();
+        let emitted = if self.auto_render {
+            anstream::eprintln!("{text}");
+            Emitted::Yes
+        } else {
+            Emitted::No
+        };
+        self.inner
+            .push(level, StoredDiag::Rendered { emitted, text });
     }
 
     pub fn render_all(&self) {
-        self.diagnostics
-            .all_non_rendered(|level, report| match level {
-                Level::ERROR | Level::WARNING => self.render(report),
-                _ => self.render_stderr(report),
-            });
+        self.inner.all_non_rendered(|_level, texts| {
+            for text in texts {
+                anstream::eprintln!("{text}");
+            }
+        });
     }
 
     /// Renders a single Diagnostic into a formatted string and prints it to stderr.
-    pub fn render_stderr(&self, report: Report) {
-        anstream::eprintln!("{}", self.renderer.render(report));
+    pub fn render_stderr(&self, report: annotate_snippets::Report) {
+        anstream::eprintln!("{}", self.inner.renderer.render(report));
     }
 
     /// Renders multiple Diagnostics into formatted strings and prints them to stderr.
-    pub fn render(&self, reports: Report) {
-        anstream::eprintln!("{}", self.renderer.render(reports));
+    pub fn render(&self, reports: annotate_snippets::Report) {
+        anstream::eprintln!("{}", self.inner.renderer.render(reports));
     }
 }
 
@@ -250,12 +353,42 @@ mod tests {
                             .label("expected expression here found `;` instead"),
                     ),
                 )
-                .element(Level::NOTE.message(message))
+                .element(Level::NOTE.message(&message))
                 .element(
                     Snippet::source(source)
                         .path(file_name)
                         .patch(Patch::new(23..23, "<expr>")),
                 ),
         );
+    }
+
+    #[test]
+    fn emit_rendered_static_str_stays_borrowed() {
+        let emitter = DiagnosticEmitter::new().with_render_on_drop(false);
+        emitter.emit_rendered(Level::ERROR, "unexpected EOF");
+
+        let guard = emitter.inner.errors.lock();
+        assert_eq!(guard.len(), 1);
+        assert!(matches!(
+            &guard[0],
+            StoredDiag::Rendered {
+                text: Cow::Borrowed(_),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn emit_lazy_defers_render() {
+        let emitter = DiagnosticEmitter::new().with_render_on_drop(false);
+        emitter.emit_lazy(
+            Level::ERROR,
+            Level::ERROR
+                .primary_title("boom")
+                .element(Level::NOTE.message("detail")),
+        );
+
+        let guard = emitter.inner.errors.lock();
+        assert!(matches!(&guard[0], StoredDiag::Lazy { .. }));
     }
 }

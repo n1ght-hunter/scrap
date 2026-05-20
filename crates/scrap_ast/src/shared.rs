@@ -7,12 +7,12 @@ pub use scrap_shared::NodeId;
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub struct Visibility<'db> {
-    pub kind: VisibilityKind<'db>,
-    pub span: Span<'db>,
+pub struct Visibility {
+    pub kind: VisibilityKind,
+    pub span: Span,
 }
 
-impl<'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
+impl scrap_shared::pretty_print::PrettyPrint for Visibility {
     fn pretty_print_indent(&self, f: &mut dyn std::fmt::Write, _indent: usize) -> std::fmt::Result {
         match &self.kind {
             VisibilityKind::Public => write!(f, "pub"),
@@ -29,10 +29,10 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Visibility<'db> {
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
-pub enum VisibilityKind<'db> {
+pub enum VisibilityKind {
     Public,
     Restricted {
-        path: Box<Path<'db>>,
+        path: Box<Path>,
         id: NodeId,
         shorthand: bool,
     },

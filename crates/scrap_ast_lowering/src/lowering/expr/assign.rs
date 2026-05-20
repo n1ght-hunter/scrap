@@ -171,10 +171,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_simple_assignment(db: &dyn scrap_shared::Db) {
         // x = 5
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // First, create a binding for "x"
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -193,7 +194,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_assignment_to_undefined_variable(db: &dyn scrap_shared::Db) {
         // undefined = 5 (should fail)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let lhs = create_ident_expr(db, "undefined");
         let rhs = create_int_lit(db, 5);
@@ -206,10 +208,11 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_compound_assignment_add(db: &dyn scrap_shared::Db) {
         // x += 5
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         // Create a binding for "x"
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -228,9 +231,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_compound_assignment_sub(db: &dyn scrap_shared::Db) {
         // x -= 3
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -245,9 +249,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_compound_assignment_mul(db: &dyn scrap_shared::Db) {
         // x *= 2
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -262,9 +267,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_compound_assignment_bitwise(db: &dyn scrap_shared::Db) {
         // x <<= 1
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -279,9 +285,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_assignment_with_expression(db: &dyn scrap_shared::Db) {
         // x = 5 + 3
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -301,9 +308,10 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_chained_assignment_operations(db: &dyn scrap_shared::Db) {
         // x += 5; then x *= 2 (two separate operations)
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -328,7 +336,8 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_assign_op_conversion(db: &dyn scrap_shared::Db) {
-        let lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let lowerer = ExprLowerer::new(db, "", &tt);
 
         // Test unchecked (non-integer) assignment operators
         assert_eq!(
@@ -415,9 +424,10 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_lower_place_from_path(db: &dyn scrap_shared::Db) {
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
-        let x_sym = Symbol::new(db, "x".to_string());
+        let x_sym = Symbol::new("x");
         let x_local = lowerer.allocate_named_local(x_sym, ir::Ty::Int(IntTy::I32));
         lowerer.insert_binding(x_sym, x_local);
 
@@ -431,7 +441,8 @@ mod tests {
 
     #[scrap_macros::salsa_test]
     fn test_lower_place_from_literal_fails(db: &dyn scrap_shared::Db) {
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         // Trying to use a literal as an lvalue should fail
         let expr = create_int_lit(db, 42);

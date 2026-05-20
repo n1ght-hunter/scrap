@@ -37,9 +37,9 @@ fn unescape_string(s: &str) -> String {
 
 impl<'db> ExprLowerer<'db> {
     /// Build an IR constant from a literal (shared by lower_literal and lower_literal_into).
-    fn build_constant(&self, lit: &Lit<'db>, ty: &ir::Ty<'db>) -> MResult<ir::Constant<'db>> {
-        let start = lit.span.start(self.db);
-        let end = lit.span.end(self.db);
+    fn build_constant(&self, lit: &Lit, ty: &ir::Ty<'db>) -> MResult<ir::Constant> {
+        let start = lit.span.start;
+        let end = lit.span.end;
         let text = &self.source[start..end];
 
         match lit.kind {
@@ -73,7 +73,7 @@ impl<'db> ExprLowerer<'db> {
                             Level::ERROR.primary_title("Invalid literal type").element(
                                 Snippet::source(self.source).annotation(
                                     AnnotationKind::Primary
-                                        .span(lit.span.to_range(self.db))
+                                        .span(lit.span.range())
                                         .label("Expected an integer literal here"),
                                 ),
                             ),
@@ -92,7 +92,7 @@ impl<'db> ExprLowerer<'db> {
                     ""
                 };
                 let unescaped = unescape_string(inner);
-                let sym = Symbol::new(self.db, unescaped);
+                let sym = Symbol::new(unescaped);
                 Ok(ir::Constant::String(sym))
             }
             LitKind::Float => {
@@ -105,7 +105,7 @@ impl<'db> ExprLowerer<'db> {
                                 Level::ERROR.primary_title("Invalid literal type").element(
                                     Snippet::source(self.source).annotation(
                                         AnnotationKind::Primary
-                                            .span(lit.span.to_range(self.db))
+                                            .span(lit.span.range())
                                             .label("Expected a float literal here"),
                                     ),
                                 ),
@@ -121,16 +121,11 @@ impl<'db> ExprLowerer<'db> {
                             self.db.dcx().emit_err(
                                 Level::ERROR
                                     .primary_title("Unsupported float type")
-                                    .element(
-                                        Snippet::source(self.source).annotation(
-                                            AnnotationKind::Primary
-                                                .span(lit.span.to_range(self.db))
-                                                .label(format!(
-                                                    "{} is not yet supported",
-                                                    float_ty.name_str()
-                                                )),
+                                    .element(Snippet::source(self.source).annotation(
+                                        AnnotationKind::Primary.span(lit.span.range()).label(
+                                            format!("{} is not yet supported", float_ty.name_str()),
                                         ),
-                                    ),
+                                    )),
                             ),
                         ));
                     }
@@ -143,7 +138,7 @@ impl<'db> ExprLowerer<'db> {
     /// Lower a literal to an operand (returns Operand::Constant directly).
     pub(crate) fn lower_literal(
         &mut self,
-        lit: &Lit<'db>,
+        lit: &Lit,
         expr_id: NodeId,
     ) -> MResult<ir::Operand<'db>> {
         let ty = self.infer_literal_type(lit, expr_id)?;
@@ -154,7 +149,7 @@ impl<'db> ExprLowerer<'db> {
     /// Lower a literal directly into a destination place.
     pub(crate) fn lower_literal_into(
         &mut self,
-        lit: &Lit<'db>,
+        lit: &Lit,
         expr_id: NodeId,
         dest: ir::Place<'db>,
     ) -> MResult<()> {
@@ -169,11 +164,7 @@ impl<'db> ExprLowerer<'db> {
     /// For bool and str, the type is unambiguous from the literal kind.
     /// For integer and float, consults the type table (for type-annotated contexts
     /// like `let x: u32 = 42`). Returns an error if the type cannot be determined.
-    pub(crate) fn infer_literal_type(
-        &self,
-        lit: &Lit<'_>,
-        expr_id: NodeId,
-    ) -> MResult<ir::Ty<'db>> {
+    pub(crate) fn infer_literal_type(&self, lit: &Lit, expr_id: NodeId) -> MResult<ir::Ty<'db>> {
         // For bool and str, the type is unambiguous from the literal kind —
         // no need to consult the type table.
         match lit.kind {
@@ -195,7 +186,7 @@ impl<'db> ExprLowerer<'db> {
                     .element(
                         Snippet::source(self.source).annotation(
                             AnnotationKind::Primary
-                                .span(lit.span.to_range(self.db))
+                                .span(lit.span.range())
                                 .label("Type not found in type table"),
                         ),
                     ),
@@ -212,7 +203,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_int_literal(db: &dyn scrap_shared::Db) {
         let expr = create_int_lit(db, 42);
-        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, create_test_type_table(db));
+        let tt = create_test_type_table();
+        let mut lowerer = ExprLowerer::new(db, TEST_SOURCE, &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
@@ -230,7 +222,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_bool_literal(db: &dyn scrap_shared::Db) {
         let expr = create_bool_lit(db, true);
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());
@@ -246,7 +239,8 @@ mod tests {
     #[scrap_macros::salsa_test]
     fn test_lower_string_literal(db: &dyn scrap_shared::Db) {
         let expr = create_string_lit(db, "hello");
-        let mut lowerer = ExprLowerer::new(db, "", create_empty_type_table(db));
+        let tt = create_empty_type_table();
+        let mut lowerer = ExprLowerer::new(db, "", &tt);
 
         let result = lowerer.lower_expr(&expr);
         assert!(result.is_ok());

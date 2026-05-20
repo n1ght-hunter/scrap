@@ -1,5 +1,5 @@
 extern "C" {
-    fn ExitProcess(exit_code: usize) -> !;
+    fn __scrap_exit(exit_code: usize) -> !;
 }
 
 struct Counter {
@@ -14,5 +14,5 @@ impl Counter {
 
 fn main() {
     let c = Counter { value: 32 };
-    ExitProcess(c.add(10));
+    __scrap_exit(c.add(10));
 }

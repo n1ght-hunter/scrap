@@ -16,7 +16,7 @@ use crate::syntax_kind::SyntaxKind;
 
 pub struct Parser<'db> {
     /// All tokens including trivia (used for building the tree)
-    tokens: Vec<Spanned<'db, Token>>,
+    tokens: Vec<Spanned<Token>>,
     /// Indices of non-trivia tokens in the tokens array
     filtered_indices: Vec<usize>,
     /// Current position in the original token stream
@@ -25,7 +25,7 @@ pub struct Parser<'db> {
     filtered_pos: usize,
     builder: GreenNodeBuilder<'static>,
     errors: Vec<String>,
-    db: &'db dyn scrap_shared::Db,
+    _db: &'db dyn scrap_shared::Db,
     source: String,
 }
 
@@ -52,14 +52,14 @@ impl<'db> Parser<'db> {
             filtered_pos: 0,
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
-            db,
+            _db: db,
             source,
         }
     }
 
     /// Get the current token from the original stream (may include trivia)
     #[allow(dead_code)]
-    fn current(&self) -> Option<&Spanned<'db, Token>> {
+    fn current(&self) -> Option<&Spanned<Token>> {
         self.tokens.get(self.pos)
     }
 
@@ -110,8 +110,8 @@ impl<'db> Parser<'db> {
             while self.pos < target_idx {
                 if let Some(token) = self.tokens.get(self.pos) {
                     let kind: SyntaxKind = token.node.into();
-                    let start = token.span.start(self.db);
-                    let end = token.span.end(self.db);
+                    let start = token.span.start;
+                    let end = token.span.end;
                     let text = &self.source[start..end];
                     self.builder.token(kind.into(), text);
                 }
@@ -121,8 +121,8 @@ impl<'db> Parser<'db> {
             // Consume the target non-trivia token
             if let Some(token) = self.tokens.get(self.pos) {
                 let kind: SyntaxKind = token.node.into();
-                let start = token.span.start(self.db);
-                let end = token.span.end(self.db);
+                let start = token.span.start;
+                let end = token.span.end;
                 let text = &self.source[start..end];
                 self.builder.token(kind.into(), text);
                 self.pos += 1;
@@ -192,8 +192,8 @@ impl<'db> Parser<'db> {
         while self.pos < self.tokens.len() {
             if let Some(token) = self.tokens.get(self.pos) {
                 let kind: SyntaxKind = token.node.into();
-                let start = token.span.start(self.db);
-                let end = token.span.end(self.db);
+                let start = token.span.start;
+                let end = token.span.end;
                 let text = &self.source[start..end];
                 self.builder.token(kind.into(), text);
             }

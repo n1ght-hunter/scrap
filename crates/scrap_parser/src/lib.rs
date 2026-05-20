@@ -20,7 +20,7 @@ mod errors;
 pub mod parser;
 
 pub type PResult<'a, T> = std::result::Result<T, ErrorGuaranteed>;
-pub type TokenStream<'db> = scrap_lexer::token_stream::TokenStream<'db>;
+pub type TokenStream = scrap_lexer::token_stream::TokenStream;
 
 #[salsa::tracked(debug, persist)]
 pub struct ParsedFile<'db> {
@@ -66,7 +66,7 @@ impl<'db> CanOrModule<'db> {
                 ModuleKind::Loaded(
                     can.items(db).clone(),
                     scrap_ast::module::Inline::Yes,
-                    scrap_span::new_dummy_span(db),
+                    scrap_span::Span::default(),
                 ),
             ),
         }
@@ -84,7 +84,7 @@ pub fn parse_tokens<'db>(
     let tokens = tokens.tokens(db);
     let token_stream = TokenStreamCursor::new(tokens);
     let state = State::new(file.path(db).to_str().unwrap());
-    let path = Path::from_segments(db, &root_path);
+    let path = Path::from_segments(&root_path);
     let id = scrap_shared::id::ModuleId::from_path(db, &path);
     let mut parser = Parser::new(db, file.content(db), token_stream, state, path.clone());
     let ast = if is_root {
@@ -106,7 +106,7 @@ pub fn parse_tokens<'db>(
                     ModuleKind::Loaded(
                         ast,
                         scrap_ast::module::Inline::No,
-                        scrap_span::new_dummy_span(db),
+                        scrap_span::Span::default(),
                     ),
                 )),
                 std::mem::take(&mut parser.modules),
