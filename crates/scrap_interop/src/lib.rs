@@ -8,6 +8,7 @@
 
 mod anchor;
 mod cache;
+mod driver;
 mod schema;
 
 pub use anchor::{AnchorArtifact, AnchorRequest, build_anchor};

@@ -1,0 +1,8 @@
+# Pins the driver to the exact nightly whose rustc-private internals it links
+# against — must match the workspace root rust-toolchain.toml and the anchor's
+# generated pin. `rustc-dev` provides the internal crates (rustc_driver,
+# rustc_middle, …); `llvm-tools` provides llvm-nm for verifying symbols.
+[toolchain]
+channel = "nightly-2026-02-10"
+components = ["rustc-dev", "llvm-tools", "rust-src"]
+profile = "minimal"

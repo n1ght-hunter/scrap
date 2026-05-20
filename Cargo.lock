@@ -1424,6 +1424,7 @@ name = "scrap_interop"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "scrap_rmeta",
  "serde",
  "serde_json",
  "target-lexicon",
@@ -1529,6 +1530,13 @@ dependencies = [
  "serde",
  "text-size",
  "workspace-hack",
+]
+
+[[package]]
+name = "scrap_rmeta"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

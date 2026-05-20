@@ -1,0 +1,21 @@
+[package]
+name = "scrap-rustc"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detached from the scrap workspace: this crate links the pinned nightly's
+# `rustc_private` internals (heavy `rustc-dev` component) and must not drag that
+# into the main compiler build.
+[workspace]
+
+[[bin]]
+name = "scrap-rustc"
+path = "src/main.rs"
+
+[dependencies]
+scrap_rmeta = { path = "../../crates/scrap_rmeta" }
+serde_json = "1"
+
+[package.metadata.rust-analyzer]
+rustc_private = true

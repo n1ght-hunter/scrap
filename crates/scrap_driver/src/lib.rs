@@ -167,13 +167,17 @@ fn resolve_runtime_archive(
         return Ok(find_scrap_rt_lib(&args.target));
     }
 
-    let scrap_rt_crate_dir = find_scrap_rt_crate_dir().ok_or_else(|| {
+    let scrap_rt_crate_dir = find_repo_subdir("crates/scrap_rt").ok_or_else(|| {
         anyhow::anyhow!("could not locate the scrap_rt crate directory for the anchor build")
+    })?;
+    let scrap_rustc_crate_dir = find_repo_subdir("tools/scrap-rustc").ok_or_else(|| {
+        anyhow::anyhow!("could not locate the scrap-rustc driver crate for the anchor build")
     })?;
 
     let anchor = scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
         rust_deps: &rust_deps,
         scrap_rt_crate_dir: &scrap_rt_crate_dir,
+        scrap_rustc_crate_dir: &scrap_rustc_crate_dir,
         target: &args.target,
         toolchain_channel: scrap_interop::PINNED_TOOLCHAIN,
         out_root: out_dir,
@@ -183,11 +187,14 @@ fn resolve_runtime_archive(
     Ok(anchor.map(|a| a.archive))
 }
 
-/// Locate the `scrap_rt` *source crate* directory (for the anchor's path dep).
-/// Returns a clean absolute path (no `\\?\` verbatim prefix) so cargo accepts it.
-fn find_scrap_rt_crate_dir() -> Option<std::path::PathBuf> {
+/// Locate a repository subdirectory (e.g. `crates/scrap_rt`, `tools/scrap-rustc`)
+/// as a clean absolute path (no `\\?\` verbatim prefix, so cargo accepts it).
+/// Searches the CWD first (dev: run from the workspace root), then ancestors of
+/// the compiler binary.
+fn find_repo_subdir(rel: &str) -> Option<std::path::PathBuf> {
+    let rel = std::path::Path::new(rel);
     if let Ok(cwd) = std::env::current_dir() {
-        let cand = cwd.join("crates").join("scrap_rt");
+        let cand = cwd.join(rel);
         if cand.join("Cargo.toml").exists() {
             return Some(cand);
         }
@@ -195,7 +202,7 @@ fn find_scrap_rt_crate_dir() -> Option<std::path::PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         let mut cur = exe.parent();
         while let Some(dir) = cur {
-            let cand = dir.join("crates").join("scrap_rt");
+            let cand = dir.join(rel);
             if cand.join("Cargo.toml").exists() {
                 return Some(cand);
             }

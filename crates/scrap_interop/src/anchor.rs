@@ -21,6 +21,10 @@ pub struct AnchorRequest<'a> {
     pub rust_deps: &'a RustDeps,
     /// Absolute path to the `scrap_rt` crate directory (depended on as an rlib).
     pub scrap_rt_crate_dir: &'a Path,
+    /// Absolute path to the `tools/scrap-rustc` driver crate directory. The
+    /// driver is built on demand and run as cargo's `RUSTC_WORKSPACE_WRAPPER` to
+    /// dump interop metadata for the anchor.
+    pub scrap_rustc_crate_dir: &'a Path,
     /// The target triple the Scrap program is being compiled for.
     pub target: &'a Triple,
     /// The pinned toolchain channel (e.g. `nightly-2026-02-10`).
@@ -35,6 +39,9 @@ pub struct AnchorRequest<'a> {
 pub struct AnchorArtifact {
     /// Path to the produced static archive.
     pub archive: PathBuf,
+    /// The interop metadata the driver dumped for the requested dep crates, if
+    /// the dump was produced and read back successfully.
+    pub metadata: Option<scrap_rmeta::RustMetadata>,
 }
 
 /// Build the anchor crate for `req`, reusing a cached archive when the inputs
@@ -61,18 +68,45 @@ pub fn build_anchor(req: &AnchorRequest) -> anyhow::Result<Option<AnchorArtifact
     let anchor_dir = abs_out_root.join("anchor").join(&key);
     let target_dir = anchor_dir.join(".cargo-target");
     let stamp_path = anchor_dir.join("stamp.json");
+    let metadata_path = anchor_dir.join("metadata.json");
 
     if let Some(archive) = read_stamp(&stamp_path, &key) {
-        return Ok(Some(AnchorArtifact { archive }));
+        return Ok(Some(AnchorArtifact {
+            archive,
+            metadata: read_metadata(&metadata_path),
+        }));
     }
+
+    let driver_bin = crate::driver::ensure_driver(req.scrap_rustc_crate_dir)?;
 
     generate_files(req, &anchor_dir)
         .with_context(|| format!("failed to generate anchor crate at {}", anchor_dir.display()))?;
 
-    let archive = run_cargo(req, &anchor_dir, &target_dir)?;
+    let archive = run_cargo(req, &anchor_dir, &target_dir, &driver_bin, &metadata_path)?;
     write_stamp(&stamp_path, &key, &archive)?;
 
-    Ok(Some(AnchorArtifact { archive }))
+    Ok(Some(AnchorArtifact {
+        archive,
+        metadata: read_metadata(&metadata_path),
+    }))
+}
+
+/// Comma-separated crate names (Cargo dep keys, hyphens normalized to
+/// underscores) the driver should dump metadata for.
+fn dep_crate_list(req: &AnchorRequest) -> String {
+    req.rust_deps
+        .0
+        .keys()
+        .map(|k| k.replace('-', "_"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Read back a metadata dump, returning `None` (rather than failing the build)
+/// if it is absent or unreadable — Phase 1/early Phase 2 still link fine without it.
+fn read_metadata(path: &Path) -> Option<scrap_rmeta::RustMetadata> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 /// The anchor's static-archive filename for the target format.
@@ -145,6 +179,8 @@ fn run_cargo(
     req: &AnchorRequest,
     anchor_dir: &Path,
     target_dir: &Path,
+    driver_bin: &Path,
+    metadata_out: &Path,
 ) -> anyhow::Result<PathBuf> {
     let triple = req.target.to_string();
     let mut cmd = Command::new("cargo");
@@ -152,6 +188,16 @@ fn run_cargo(
         // Authoritative over any inherited `[build] rustflags`; v0 mangling now
         // so Phase 2's symbol extraction is deterministic.
         .env("RUSTFLAGS", "-C symbol-mangling-version=v0")
+        // Disable any ambient rustc wrapper (e.g. sccache from cargo config): an
+        // empty value overrides config, and a second wrapper would probe
+        // scrap-rustc as if it were the compiler and break. cargo composes
+        // RUSTC_WRAPPER *outside* RUSTC_WORKSPACE_WRAPPER.
+        .env("RUSTC_WRAPPER", "")
+        // Run scrap-rustc as the wrapper for the anchor crate only; it compiles
+        // the anchor and dumps interop metadata for the requested dep crates.
+        .env("RUSTC_WORKSPACE_WRAPPER", driver_bin)
+        .env("SCRAP_RMETA_OUT", metadata_out)
+        .env("SCRAP_RMETA_CRATES", dep_crate_list(req))
         .arg("build");
     if req.release {
         cmd.arg("--release");
