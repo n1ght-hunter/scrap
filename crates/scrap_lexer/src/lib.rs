@@ -30,6 +30,8 @@ pub enum KeyWord {
     Mod,
     #[token("use")]
     Use,
+    #[token("as")]
+    As,
     #[token("extern")]
     Extern,
     #[token("match")]
