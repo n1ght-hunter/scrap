@@ -33,6 +33,11 @@ pub struct Args {
     #[arg(long, value_parser = parse_triple, default_value_t = Triple::host())]
     pub target: Triple,
 
+    /// Path to the Scrap manifest providing `[rust.dependencies]`.
+    /// Defaults to `./Scrap.toml` if present.
+    #[arg(long)]
+    pub manifest: Option<PathBuf>,
+
     #[arg(long)]
     pub cache: Option<PathBuf>,
 

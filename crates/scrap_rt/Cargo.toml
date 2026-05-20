@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+# `rlib` is required so the generated Rust-interop anchor crate can depend on
+# scrap_rt (cargo rejects depending on a pure staticlib). The `.lib`/`.a` is
+# still emitted, so the standalone link path is unaffected.
+crate-type = ["staticlib", "rlib"]
 
 [features]
 gc-debug = []

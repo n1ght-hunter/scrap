@@ -113,16 +113,18 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
         let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix(&args.target)));
 
-        // Find the scrap_rt runtime archive — look for it relative to the
-        // compiler binary, or in the target directory.
-        let rt_lib = find_scrap_rt_lib(&args.target);
+        // Resolve the runtime archive to link. With Rust dependencies declared,
+        // build the interop *anchor* staticlib (which folds scrap_rt in as an
+        // rlib) and link that instead of the standalone scrap_rt.lib — only one
+        // staticlib may bundle std. With no Rust deps, keep the plain path.
+        let runtime_archive = resolve_runtime_archive(args, out_dir)?;
 
         link::link_executable(
             &args.target,
             &args.crate_name,
             &obj_path,
             &exe_path,
-            rt_lib.as_deref(),
+            runtime_archive.as_deref(),
         )?;
 
         eprintln!("Compiled to {}", exe_path.display());
@@ -146,6 +148,61 @@ fn rt_lib_name(target: &target_lexicon::Triple) -> &'static str {
         target_lexicon::BinaryFormat::Coff => "scrap_rt.lib",
         _ => "libscrap_rt.a",
     }
+}
+
+/// Resolve the runtime archive to hand the linker: the Rust-interop anchor
+/// staticlib when `[rust.dependencies]` is non-empty, otherwise the standalone
+/// `scrap_rt` archive (unchanged common path).
+fn resolve_runtime_archive(
+    args: &args::Args,
+    out_dir: &std::path::Path,
+) -> anyhow::Result<Option<std::path::PathBuf>> {
+    let manifest = args
+        .manifest
+        .clone()
+        .unwrap_or_else(|| std::path::PathBuf::from("Scrap.toml"));
+    let rust_deps = scrap_interop::parse_manifest_rust_deps(&manifest)?;
+
+    if rust_deps.is_empty() {
+        return Ok(find_scrap_rt_lib(&args.target));
+    }
+
+    let scrap_rt_crate_dir = find_scrap_rt_crate_dir().ok_or_else(|| {
+        anyhow::anyhow!("could not locate the scrap_rt crate directory for the anchor build")
+    })?;
+
+    let anchor = scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
+        rust_deps: &rust_deps,
+        scrap_rt_crate_dir: &scrap_rt_crate_dir,
+        target: &args.target,
+        toolchain_channel: scrap_interop::PINNED_TOOLCHAIN,
+        out_root: out_dir,
+        release: false,
+    })?;
+
+    Ok(anchor.map(|a| a.archive))
+}
+
+/// Locate the `scrap_rt` *source crate* directory (for the anchor's path dep).
+/// Returns a clean absolute path (no `\\?\` verbatim prefix) so cargo accepts it.
+fn find_scrap_rt_crate_dir() -> Option<std::path::PathBuf> {
+    if let Ok(cwd) = std::env::current_dir() {
+        let cand = cwd.join("crates").join("scrap_rt");
+        if cand.join("Cargo.toml").exists() {
+            return Some(cand);
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cur = exe.parent();
+        while let Some(dir) = cur {
+            let cand = dir.join("crates").join("scrap_rt");
+            if cand.join("Cargo.toml").exists() {
+                return Some(cand);
+            }
+            cur = dir.parent();
+        }
+    }
+    None
 }
 
 /// Find the `scrap_rt` static archive by searching common locations.

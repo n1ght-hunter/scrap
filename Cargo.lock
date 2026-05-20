@@ -1380,6 +1380,7 @@ dependencies = [
  "scrap_codegen",
  "scrap_diagnostics",
  "scrap_errors",
+ "scrap_interop",
  "scrap_ir",
  "scrap_lexer",
  "scrap_parser",
@@ -1416,6 +1417,19 @@ dependencies = [
  "scrap_parser_rowan",
  "scrap_shared",
  "workspace-hack",
+]
+
+[[package]]
+name = "scrap_interop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "target-lexicon",
+ "toml 1.1.2+spec-1.1.0",
+ "workspace-hack",
+ "wyhash",
 ]
 
 [[package]]

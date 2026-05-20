@@ -1,0 +1,17 @@
+[package]
+name = "scrap-rustc-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detached from the scrap workspace on purpose: this crate links against the
+# rustc-private internal crates (rustc_driver, rustc_middle, …) and must not be
+# pulled into the main `cargo build`. Keeping its own [workspace] makes it a
+# standalone workspace root even though it lives inside the scrap repo tree.
+[workspace]
+
+[[bin]]
+name = "scrap-rustc-spike"
+path = "src/main.rs"
+
+[dependencies]

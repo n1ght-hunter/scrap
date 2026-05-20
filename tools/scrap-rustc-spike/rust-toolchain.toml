@@ -1,0 +1,9 @@
+# Pins the spike to the exact nightly whose rustc-private internals we link
+# against. `rustc-dev` provides the internal crates (rustc_driver, rustc_middle,
+# rustc_target, …); `llvm-tools` provides llvm-nm/llvm-cxxfilt for verifying that
+# the symbol names we compute match the archive's actual exports. rustup installs
+# any missing component automatically when this toolchain is used here.
+[toolchain]
+channel = "nightly-2026-02-10"
+components = ["rustc-dev", "llvm-tools", "rust-src"]
+profile = "minimal"

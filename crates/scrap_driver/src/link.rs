@@ -15,8 +15,9 @@ use std::path::Path;
 
 use target_lexicon::{BinaryFormat, Triple};
 
-/// MSVC system libraries required by Rust's std (bundled into the `scrap_rt`
-/// staticlib). `kernel32.lib` is always linked and handled separately.
+/// MSVC system libraries required by Rust's std (bundled into the runtime
+/// staticlib — `scrap_rt`, or the interop anchor that folds it in).
+/// `kernel32.lib` is always linked and handled separately.
 const WINDOWS_SYS_LIBS: &[&str] = &[
     "advapi32.lib",
     "bcrypt.lib",
@@ -37,18 +38,22 @@ const LINUX_SYS_LIBS: &[&str] = &["-lpthread", "-ldl", "-lm", "-lrt", "-lgcc_s"]
 const MACOS_SYS_LIBS: &[&str] = &["-lSystem"];
 
 /// Link the object file into an executable for the given target triple.
+///
+/// `runtime_archive` is the single runtime staticlib to fold in — either the
+/// standalone `scrap_rt` archive or the Rust-interop anchor (which already
+/// contains scrap_rt). Never both: two std-bundling staticlibs would collide.
 pub fn link_executable(
     target: &Triple,
     crate_name: &str,
     obj_path: &Path,
     exe_path: &Path,
-    rt_lib: Option<&Path>,
+    runtime_archive: Option<&Path>,
 ) -> anyhow::Result<()> {
     let _ = crate_name;
     match target.binary_format {
-        BinaryFormat::Coff => link_pe(obj_path, exe_path, rt_lib),
-        BinaryFormat::Elf => link_elf(obj_path, exe_path, rt_lib),
-        BinaryFormat::Macho => link_macho(obj_path, exe_path, rt_lib),
+        BinaryFormat::Coff => link_pe(obj_path, exe_path, runtime_archive),
+        BinaryFormat::Elf => link_elf(obj_path, exe_path, runtime_archive),
+        BinaryFormat::Macho => link_macho(obj_path, exe_path, runtime_archive),
         other => anyhow::bail!("unsupported target binary format for linking: {other:?}"),
     }
 }

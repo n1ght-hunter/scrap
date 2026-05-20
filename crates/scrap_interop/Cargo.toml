@@ -1,0 +1,16 @@
+[package]
+name = "scrap_interop"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+target-lexicon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+wyhash = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[lints]
+workspace = true
