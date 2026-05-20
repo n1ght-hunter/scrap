@@ -22,6 +22,10 @@ pub fn scalar_add(a: i32, b: i32) -> i32 {
     a + b
 }
 
+pub fn add_usize(a: usize, b: usize) -> usize {
+    a + b
+}
+
 pub fn make_point(x: i32, y: i64) -> Point {
     Point { x, y }
 }

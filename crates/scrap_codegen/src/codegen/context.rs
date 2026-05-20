@@ -68,6 +68,10 @@ pub struct CodegenContext<'db> {
     /// Populated from interop metadata before codegen (Phase 4); drives the
     /// memory-backed handling of `ir::Ty::Rust` locals.
     pub(crate) rust_layouts: HashMap<String, RustLayout>,
+    /// Native Rust interop functions: declared `extern "Rust"` name → the real
+    /// v0-mangled symbol (from interop metadata). An `extern` import whose name
+    /// is in this map is linked against the mangled symbol instead of its name.
+    pub(crate) rust_fn_symbols: HashMap<String, String>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
     /// Collected stack map entries across all compiled functions.
@@ -124,6 +128,7 @@ impl<'db> CodegenContext<'db> {
             struct_layouts: HashMap::new(),
             enum_layouts: HashMap::new(),
             rust_layouts: HashMap::new(),
+            rust_fn_symbols: HashMap::new(),
             data_id_counter: 0,
             stack_map_entries: Vec::new(),
         })
@@ -133,6 +138,12 @@ impl<'db> CodegenContext<'db> {
     /// codegen `ir::Ty::Rust` locals. Must be called before `compile_module`.
     pub fn set_rust_layouts(&mut self, layouts: HashMap<String, RustLayout>) {
         self.rust_layouts = layouts;
+    }
+
+    /// Install the `extern "Rust"` name → mangled-symbol map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_fn_symbols(&mut self, symbols: HashMap<String, String>) {
+        self.rust_fn_symbols = symbols;
     }
 
     /// Compile an entire IR module (declare then define).

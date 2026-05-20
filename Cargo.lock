@@ -1384,6 +1384,7 @@ dependencies = [
  "scrap_ir",
  "scrap_lexer",
  "scrap_parser",
+ "scrap_rmeta",
  "scrap_shared",
  "scrap_span",
  "scrap_tycheck",

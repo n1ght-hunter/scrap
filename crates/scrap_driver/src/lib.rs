@@ -98,26 +98,41 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     // Phase 4: Code generation (when no pretty-print mode is active)
     if mode.is_none() {
+        let out_dir = std::path::Path::new("target/scrap");
+        std::fs::create_dir_all(out_dir)?;
+
+        // Build the Rust-interop anchor first (when rust deps are declared): its
+        // metadata (mangled symbols + layouts) feeds codegen, and its archive
+        // (folding scrap_rt in) replaces the standalone scrap_rt.lib at link.
+        let anchor = build_interop_anchor(args, out_dir)?;
+
         let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
 
-        let obj_bytes =
-            scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone());
+        let obj_bytes = if let Some(a) = &anchor {
+            let rust_fn_symbols = rust_fn_symbol_map(a.metadata.as_ref());
+            scrap_codegen::compile_to_object_interop(
+                db,
+                lowered_ir.can(db),
+                args.target.clone(),
+                rust_fn_symbols,
+                std::collections::HashMap::new(),
+            )
+        } else {
+            scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone())
+        };
         handle_diagnostics(db)?;
 
         let obj_bytes = obj_bytes.unwrap(); // safe: handle_diagnostics would have bailed
 
-        let out_dir = std::path::Path::new("target/scrap");
-        std::fs::create_dir_all(out_dir)?;
         let obj_path = out_dir.join(format!("{}.obj", args.crate_name));
         std::fs::write(&obj_path, &obj_bytes)?;
 
         let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix(&args.target)));
 
-        // Resolve the runtime archive to link. With Rust dependencies declared,
-        // build the interop *anchor* staticlib (which folds scrap_rt in as an
-        // rlib) and link that instead of the standalone scrap_rt.lib — only one
-        // staticlib may bundle std. With no Rust deps, keep the plain path.
-        let runtime_archive = resolve_runtime_archive(args, out_dir)?;
+        let runtime_archive = match &anchor {
+            Some(a) => Some(a.archive.clone()),
+            None => find_scrap_rt_lib(&args.target),
+        };
 
         link::link_executable(
             &args.target,
@@ -150,13 +165,13 @@ fn rt_lib_name(target: &target_lexicon::Triple) -> &'static str {
     }
 }
 
-/// Resolve the runtime archive to hand the linker: the Rust-interop anchor
-/// staticlib when `[rust.dependencies]` is non-empty, otherwise the standalone
-/// `scrap_rt` archive (unchanged common path).
-fn resolve_runtime_archive(
+/// Build the Rust-interop anchor when `[rust.dependencies]` is non-empty,
+/// returning its archive + metadata. `None` means no rust deps were declared, so
+/// the caller keeps the standalone `scrap_rt` link path.
+fn build_interop_anchor(
     args: &args::Args,
     out_dir: &std::path::Path,
-) -> anyhow::Result<Option<std::path::PathBuf>> {
+) -> anyhow::Result<Option<scrap_interop::AnchorArtifact>> {
     let manifest = args
         .manifest
         .clone()
@@ -164,7 +179,7 @@ fn resolve_runtime_archive(
     let rust_deps = scrap_interop::parse_manifest_rust_deps(&manifest)?;
 
     if rust_deps.is_empty() {
-        return Ok(find_scrap_rt_lib(&args.target));
+        return Ok(None);
     }
 
     let scrap_rt_crate_dir = find_repo_subdir("crates/scrap_rt").ok_or_else(|| {
@@ -174,7 +189,7 @@ fn resolve_runtime_archive(
         anyhow::anyhow!("could not locate the scrap-rustc driver crate for the anchor build")
     })?;
 
-    let anchor = scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
+    scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
         rust_deps: &rust_deps,
         scrap_rt_crate_dir: &scrap_rt_crate_dir,
         scrap_rustc_crate_dir: &scrap_rustc_crate_dir,
@@ -182,9 +197,27 @@ fn resolve_runtime_archive(
         toolchain_channel: scrap_interop::PINNED_TOOLCHAIN,
         out_root: out_dir,
         release: false,
-    })?;
+    })
+}
 
-    Ok(anchor.map(|a| a.archive))
+/// Build the `extern "Rust"` name → mangled-symbol map from interop metadata,
+/// keyed by each function's last path segment (the name as written in an
+/// `extern "Rust"` block).
+fn rust_fn_symbol_map(
+    metadata: Option<&scrap_rmeta::RustMetadata>,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    if let Some(metadata) = metadata {
+        for krate in &metadata.crates {
+            for f in &krate.fns {
+                if let Some(mono) = &f.mono {
+                    let name = f.path.rsplit("::").next().unwrap_or(&f.path);
+                    map.insert(name.to_string(), mono.symbol.clone());
+                }
+            }
+        }
+    }
+    map
 }
 
 /// Locate a repository subdirectory (e.g. `crates/scrap_rt`, `tools/scrap-rustc`)

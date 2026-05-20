@@ -97,9 +97,16 @@ impl<'db> CodegenContext<'db> {
                     let name_sym = sig.name(self.db);
                     let name = name_sym.text();
                     let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
+                    // Native Rust interop: link against the real v0-mangled symbol
+                    // from metadata, keeping `name` as the call-resolution key.
+                    let link_name = self
+                        .rust_fn_symbols
+                        .get(name)
+                        .map(String::as_str)
+                        .unwrap_or(name);
                     let func_id = self
                         .module
-                        .declare_function(name, Linkage::Import, &cl_sig)
+                        .declare_function(link_name, Linkage::Import, &cl_sig)
                         .or_emit(self.db)?;
                     self.functions.insert(name.to_string(), func_id);
                 }

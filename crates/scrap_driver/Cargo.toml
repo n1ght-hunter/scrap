@@ -16,6 +16,7 @@ scrap_errors.workspace = true
 scrap_codegen.workspace = true
 scrap_diagnostics.workspace = true
 scrap_interop.workspace = true
+scrap_rmeta.workspace = true
 crossbeam-channel = { workspace = true }
 pathdiff = { workspace = true }
 cc = { workspace = true }
