@@ -80,6 +80,9 @@ pub struct FuncTranslator<'a, 'db> {
     pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
     /// IR local index → (StackSlot, Cranelift type) for stack-spilled locals (referenced via &/&mut)
     pub stack_slots: &'a HashMap<usize, (StackSlot, types::Type)>,
+    /// IR local index → (StackSlot, mirrored layout) for native Rust interop
+    /// locals, which live in memory at the exact layout rustc computed.
+    pub rust_slots: &'a HashMap<usize, (StackSlot, super::context::RustLayout)>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -169,6 +172,23 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     builder.def_var(*var, value);
                     return Some(());
                 }
+                // Native Rust interop field: store at the mirrored byte offset.
+                if let ir::Place::Local(local_id) = base.as_ref()
+                    && let Some((slot, layout)) = self.rust_slots.get(&local_id.0)
+                {
+                    let f = match layout.fields.get(*field_idx) {
+                        Some(f) => f,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!("rust field '_{}.{}' out of range", local_id.0, field_idx),
+                            );
+                            return None;
+                        }
+                    };
+                    builder.ins().stack_store(value, *slot, f.offset as i32);
+                    return Some(());
+                }
                 // Struct/tuple field: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
                     let var = match self.tuple_variables.get(&(local_id.0, *field_idx)) {
@@ -233,6 +253,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 match place {
                     ir::Place::Local(local_id) => {
                         if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
+                            Some(builder.ins().stack_addr(types::I64, *slot, 0))
+                        } else if let Some((slot, _)) = self.rust_slots.get(&local_id.0) {
+                            // A Rust interop value already lives in memory.
                             Some(builder.ins().stack_addr(types::I64, *slot, 0))
                         } else {
                             emit_codegen_err(
@@ -532,6 +555,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
         };
 
+        // Native Rust interop value: store each field into the slot at its
+        // mirrored byte offset (field-by-field construction, §5 of the plan).
+        if let Some((slot, layout)) = self.rust_slots.get(&local_id) {
+            let slot = *slot;
+            for (field_idx, operand) in fields.iter().enumerate() {
+                let offset = match layout.fields.get(field_idx) {
+                    Some(f) => f.offset,
+                    None => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("rust field '_{}.{}' out of range", local_id, field_idx),
+                        );
+                        return None;
+                    }
+                };
+                let value = self.lower_operand(operand, builder, module)?;
+                builder.ins().stack_store(value, slot, offset as i32);
+            }
+            return Some(());
+        }
+
         match kind {
             ir::AggregateKind::EnumVariant(_, variant_idx) => {
                 // Set discriminant to variant_idx
@@ -765,6 +809,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     // Stack-spilled local: load from stack
                     return Some(builder.ins().stack_load(*cl_ty, *slot, 0));
                 }
+                if let Some((slot, _)) = self.rust_slots.get(&local_id.0) {
+                    // A Rust interop value is memory-backed; using it as a value
+                    // yields its address (it is passed/handled by pointer).
+                    return Some(builder.ins().stack_addr(types::I64, *slot, 0));
+                }
                 let var = match self.variables.get(&local_id.0) {
                     Some(v) => v,
                     None => {
@@ -797,6 +846,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         }
                     };
                     return Some(builder.use_var(*var));
+                }
+                // Native Rust interop field read: load at the mirrored byte offset.
+                if let ir::Place::Local(local_id) = base.as_ref()
+                    && let Some((slot, layout)) = self.rust_slots.get(&local_id.0)
+                {
+                    let f = match layout.fields.get(*field_idx) {
+                        Some(f) => f,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!("rust field '_{}.{}' out of range", local_id.0, field_idx),
+                            );
+                            return None;
+                        }
+                    };
+                    return Some(match f.cl_ty {
+                        // Scalar field: load it.
+                        Some(cl_ty) => builder.ins().stack_load(cl_ty, *slot, f.offset as i32),
+                        // Aggregate field: its address within the slot.
+                        None => builder.ins().stack_addr(types::I64, *slot, f.offset as i32),
+                    });
                 }
                 // Struct/tuple field read: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {

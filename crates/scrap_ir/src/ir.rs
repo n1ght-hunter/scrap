@@ -145,6 +145,11 @@ pub enum Ty<'db> {
     Ref(Box<Ty<'db>>, Mutability),
     /// A GC-managed pointer type: `*T`.
     Ptr(Box<Ty<'db>>),
+    /// A native Rust interop type, referenced by its fully-qualified path
+    /// (e.g. `serde_json::Value`). Unlike [`Ty::Adt`], a Rust value lives in real
+    /// memory at the exact layout rustc computed (mirrored from interop
+    /// metadata) rather than being decomposed into per-field SSA variables.
+    Rust(TypeId<'db>),
 }
 
 #[salsa::tracked(debug, persist)]

@@ -539,6 +539,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "*").unwrap();
                 self.print_type(inner);
             }
+            Ty::Rust(type_id) => write!(self.output, "rust({})", type_id.name(self.db)).unwrap(),
         }
     }
 

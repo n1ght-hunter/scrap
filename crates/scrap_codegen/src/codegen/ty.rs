@@ -60,6 +60,12 @@ pub fn ir_ty_to_cl(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<Option<type
             // They have no single Cranelift type representation.
             Some(None)
         }
+        ir::Ty::Rust(_) => {
+            // Rust interop values are memory-backed (a stack slot at the mirrored
+            // layout); they have no single scalar Cranelift type. Handled like
+            // ADTs here, then given a `StackSlot` in `function.rs`.
+            Some(None)
+        }
     }
 }
 
@@ -131,6 +137,12 @@ fn expand_param_types(
             }
             Some(())
         }
+        // A Rust value is passed by pointer for now; the full `extern "Rust"`
+        // ABI lowering (Pair/Indirect/Cast) is Phase 5.
+        ir::Ty::Rust(_) => {
+            params.push(AbiParam::new(types::I64));
+            Some(())
+        }
         _ => {
             let cl_ty = ir_ty_to_cl_required(db, ty)?;
             params.push(AbiParam::new(cl_ty));
@@ -187,6 +199,12 @@ fn expand_param_types_with_layouts(
             for field_ty in fields {
                 expand_param_types_with_layouts(db, field_ty, params, struct_layouts)?;
             }
+            Some(())
+        }
+        // A Rust value is passed by pointer for now; the full `extern "Rust"`
+        // ABI lowering (Pair/Indirect/Cast) is Phase 5.
+        ir::Ty::Rust(_) => {
+            params.push(AbiParam::new(types::I64));
             Some(())
         }
         _ => {

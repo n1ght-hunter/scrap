@@ -19,6 +19,35 @@ pub(crate) struct UnwindEntry {
     pub unwind_bytes: Vec<u8>,
 }
 
+/// Mirrored in-memory layout of a native Rust interop type, keyed by its
+/// fully-qualified path. Sourced from interop metadata: codegen places a value
+/// of this type in a stack slot of this size/align and reads/writes its fields
+/// at these byte offsets (rather than decomposing it into SSA variables).
+#[derive(Debug, Clone)]
+pub struct RustLayout {
+    pub size: u32,
+    pub align: u32,
+    pub fields: Vec<RustFieldLayout>,
+}
+
+/// One field of a [`RustLayout`].
+#[derive(Debug, Clone)]
+pub struct RustFieldLayout {
+    /// Byte offset of the field within the value.
+    pub offset: u32,
+    /// Cranelift type of the field when it is a scalar, or `None` when the field
+    /// is itself an aggregate (addressed by `base + offset`).
+    pub cl_ty: Option<types::Type>,
+}
+
+impl RustLayout {
+    /// Stack-slot alignment shift (log2 of the byte alignment) Cranelift's
+    /// `StackSlotData` expects.
+    pub fn align_shift(&self) -> u8 {
+        self.align.max(1).trailing_zeros() as u8
+    }
+}
+
 /// The main code generation context.
 pub struct CodegenContext<'db> {
     pub(crate) db: &'db dyn scrap_shared::Db,
@@ -35,6 +64,10 @@ pub struct CodegenContext<'db> {
     pub(crate) struct_layouts: HashMap<String, Vec<ir::Ty<'db>>>,
     /// Enum layout: enum name → per-variant field types (Vec of variants, each a Vec of field types).
     pub(crate) enum_layouts: HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
+    /// Mirrored layouts of native Rust interop types, by fully-qualified path.
+    /// Populated from interop metadata before codegen (Phase 4); drives the
+    /// memory-backed handling of `ir::Ty::Rust` locals.
+    pub(crate) rust_layouts: HashMap<String, RustLayout>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
     /// Collected stack map entries across all compiled functions.
@@ -90,9 +123,16 @@ impl<'db> CodegenContext<'db> {
             gc_shapes: HashMap::new(),
             struct_layouts: HashMap::new(),
             enum_layouts: HashMap::new(),
+            rust_layouts: HashMap::new(),
             data_id_counter: 0,
             stack_map_entries: Vec::new(),
         })
+    }
+
+    /// Install the mirrored Rust interop layouts (from interop metadata) used to
+    /// codegen `ir::Ty::Rust` locals. Must be called before `compile_module`.
+    pub fn set_rust_layouts(&mut self, layouts: HashMap<String, RustLayout>) {
+        self.rust_layouts = layouts;
     }
 
     /// Compile an entire IR module (declare then define).

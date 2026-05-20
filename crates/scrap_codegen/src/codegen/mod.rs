@@ -5,6 +5,9 @@ pub mod cranelift_ir;
 pub mod function;
 pub mod ty;
 
+#[cfg(test)]
+mod rust_interop_tests;
+
 pub use context::CodegenContext;
 
 use scrap_diagnostics::Level;

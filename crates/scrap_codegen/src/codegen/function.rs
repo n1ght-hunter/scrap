@@ -172,6 +172,11 @@ impl<'db> CodegenContext<'db> {
                 (usize, usize, usize),
                 Variable,
             > = std::collections::HashMap::new();
+            // Rust interop locals: memory-backed in a stack slot at the mirrored layout.
+            let mut rust_slots: std::collections::HashMap<
+                usize,
+                (StackSlot, super::context::RustLayout),
+            > = std::collections::HashMap::new();
             for (i, decl) in local_decls.iter().enumerate() {
                 let ty = decl.ty(self.db);
                 if let ir::Ty::Tuple(ref fields) = ty {
@@ -203,6 +208,23 @@ impl<'db> CodegenContext<'db> {
                         }
                     } else {
                         emit_codegen_err(self.db, format!("ADT '{}' layout not found", adt_name));
+                        return None;
+                    }
+                } else if let ir::Ty::Rust(type_id) = &ty {
+                    // Rust interop value: a stack slot of the mirrored size/align.
+                    let path = type_id.name(self.db);
+                    if let Some(layout) = self.rust_layouts.get(path.as_str()) {
+                        let slot = builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            layout.size,
+                            layout.align_shift(),
+                        ));
+                        rust_slots.insert(i, (slot, layout.clone()));
+                    } else {
+                        emit_codegen_err(
+                            self.db,
+                            format!("Rust interop layout for '{}' not found", path),
+                        );
                         return None;
                     }
                 } else if referenced_locals.contains(&i) {
@@ -294,6 +316,7 @@ impl<'db> CodegenContext<'db> {
                 enum_discriminants: &enum_discriminants,
                 enum_variant_variables: &enum_variant_variables,
                 stack_slots: &stack_slots,
+                rust_slots: &rust_slots,
             };
 
             // Lower each basic block
