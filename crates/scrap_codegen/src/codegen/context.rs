@@ -72,6 +72,11 @@ pub struct CodegenContext<'db> {
     /// v0-mangled symbol (from interop metadata). An `extern` import whose name
     /// is in this map is linked against the mangled symbol instead of its name.
     pub(crate) rust_fn_symbols: HashMap<String, String>,
+    /// Native Rust interop functions: declared `extern "Rust"` name → its
+    /// per-arg/return ABI (from interop metadata). When present, the Cranelift
+    /// call signature + arg/return marshalling are built from this `FnAbiInfo`
+    /// rather than the IR types (Phase 5).
+    pub(crate) rust_fn_abis: HashMap<String, scrap_rmeta::FnAbiInfo>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
     /// Collected stack map entries across all compiled functions.
@@ -129,6 +134,7 @@ impl<'db> CodegenContext<'db> {
             enum_layouts: HashMap::new(),
             rust_layouts: HashMap::new(),
             rust_fn_symbols: HashMap::new(),
+            rust_fn_abis: HashMap::new(),
             data_id_counter: 0,
             stack_map_entries: Vec::new(),
         })
@@ -144,6 +150,12 @@ impl<'db> CodegenContext<'db> {
     /// metadata). Must be called before `compile_module`.
     pub fn set_rust_fn_symbols(&mut self, symbols: HashMap<String, String>) {
         self.rust_fn_symbols = symbols;
+    }
+
+    /// Install the `extern "Rust"` name → `FnAbiInfo` map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_fn_abis(&mut self, abis: HashMap<String, scrap_rmeta::FnAbiInfo>) {
+        self.rust_fn_abis = abis;
     }
 
     /// Compile an entire IR module (declare then define).

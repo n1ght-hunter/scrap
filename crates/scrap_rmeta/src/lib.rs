@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Schema version. Bumped when the shape below changes incompatibly so scrapc
 /// can reject a stale dump rather than misread it.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The full dump emitted for one anchor compilation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,16 +69,29 @@ pub struct ArgAbi {
     pub mode: PassMode,
 }
 
-/// The ABI pass mode, mirroring rustc's `PassMode` (the cases the Cranelift
-/// lowering in Phase 5 must handle).
+/// A scalar ABI component, mappable to a Cranelift type. Pointers are recorded
+/// as `Ptr` so codegen can use the target's pointer width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Scalar {
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
+    Ptr,
+}
+
+/// The ABI pass mode, mirroring rustc's `PassMode`. `Direct`/`Pair` carry their
+/// scalar component types so codegen can build the exact Cranelift signature.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PassMode {
     /// Zero-sized; passed as nothing.
     Ignore,
     /// A single scalar in a register.
-    Direct,
+    Direct(Scalar),
     /// Two scalars in two registers (`ScalarPair`).
-    Pair,
+    Pair(Scalar, Scalar),
     /// Passed/returned through memory by pointer (`sret` for returns).
     Indirect { on_stack: bool },
     /// Coerced to a differently-shaped scalar/array before passing.

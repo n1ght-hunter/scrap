@@ -51,3 +51,32 @@ impl Secret {
         self.hidden
     }
 }
+
+/// A 16-byte all-`pub` struct — passed/returned by value as a `ScalarPair`.
+pub struct Pair {
+    pub a: usize,
+    pub b: usize,
+}
+
+/// Returns a `Pair` by value (ScalarPair return).
+pub fn make_pair(a: usize, b: usize) -> Pair {
+    Pair { a, b }
+}
+
+/// Takes a `Pair` by value (ScalarPair argument), returns a scalar.
+pub fn pair_sum(p: Pair) -> usize {
+    p.a + p.b
+}
+
+/// A 32-byte struct — passed/returned by value via `Indirect` (sret), which is
+/// not yet ABI-lowered (used to exercise the "unsupported mode" diagnostic).
+pub struct Big {
+    pub a: usize,
+    pub b: usize,
+    pub c: usize,
+    pub d: usize,
+}
+
+pub fn id_big(x: Big) -> Big {
+    x
+}

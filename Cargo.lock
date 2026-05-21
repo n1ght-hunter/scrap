@@ -1333,6 +1333,7 @@ dependencies = [
  "scrap_errors",
  "scrap_ir",
  "scrap_lexer",
+ "scrap_rmeta",
  "scrap_shared",
  "scrap_span",
  "target-lexicon",

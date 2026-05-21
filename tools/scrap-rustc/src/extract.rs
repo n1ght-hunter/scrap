@@ -3,14 +3,15 @@
 
 use std::collections::HashSet;
 
+use rustc_abi::{BackendRepr, Float, Integer, Primitive};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
-use rustc_middle::ty::{self, Instance, TyCtxt, TypingEnv};
+use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypingEnv};
 use rustc_target::callconv::{ArgAbi, FnAbi, PassMode as RPassMode};
 
 use scrap_rmeta::{
     AdtKind, ArgAbi as SArgAbi, FnAbiInfo, LayoutInfo, MonoFn, PassMode, RustCrate, RustField,
-    RustFn, RustMetadata, RustTyRef, RustType, RustVariant, SCHEMA_VERSION,
+    RustFn, RustMetadata, RustTyRef, RustType, RustVariant, SCHEMA_VERSION, Scalar as SScalar,
 };
 
 /// Build the full metadata dump for the `want_crates` set.
@@ -93,16 +94,8 @@ fn extract_fn(tcx: TyCtxt<'_>, def_id: DefId) -> RustFn {
     let generic_params = type_param_names(tcx, def_id);
 
     let sig = tcx.fn_sig(def_id).instantiate_identity().skip_binder();
-    let params = sig
-        .inputs()
-        .iter()
-        .map(|t| RustTyRef {
-            display: t.to_string(),
-        })
-        .collect();
-    let ret = RustTyRef {
-        display: sig.output().to_string(),
-    };
+    let params = sig.inputs().iter().map(|t| ty_ref(tcx, *t)).collect();
+    let ret = ty_ref(tcx, sig.output());
 
     let mono = if is_generic(tcx, def_id) {
         None
@@ -127,7 +120,17 @@ fn extract_fn(tcx: TyCtxt<'_>, def_id: DefId) -> RustFn {
     }
 }
 
-fn fn_abi_info(fn_abi: &FnAbi<'_, rustc_middle::ty::Ty<'_>>) -> FnAbiInfo {
+/// Build a type reference, using the canonical `def_path_str` for ADTs so it
+/// matches the type-catalog key scrapc resolves `use rust::…::Type;` against.
+fn ty_ref(tcx: TyCtxt<'_>, t: Ty<'_>) -> RustTyRef {
+    let display = match t.kind() {
+        ty::TyKind::Adt(adt, _) => tcx.def_path_str(adt.did()),
+        _ => t.to_string(),
+    };
+    RustTyRef { display }
+}
+
+fn fn_abi_info(fn_abi: &FnAbi<'_, Ty<'_>>) -> FnAbiInfo {
     FnAbiInfo {
         conv: format!("{:?}", fn_abi.conv),
         args: fn_abi.args.iter().map(arg_abi).collect(),
@@ -135,20 +138,44 @@ fn fn_abi_info(fn_abi: &FnAbi<'_, rustc_middle::ty::Ty<'_>>) -> FnAbiInfo {
     }
 }
 
-fn arg_abi(a: &ArgAbi<'_, rustc_middle::ty::Ty<'_>>) -> SArgAbi {
+fn arg_abi(a: &ArgAbi<'_, Ty<'_>>) -> SArgAbi {
     SArgAbi {
         ty: RustTyRef {
             display: a.layout.ty.to_string(),
         },
-        mode: pass_mode(&a.mode),
+        mode: pass_mode(a),
     }
 }
 
-fn pass_mode(m: &RPassMode) -> PassMode {
-    match m {
+/// Map a rustc `Scalar` to a Cranelift-mappable scalar kind. Unsupported widths
+/// (i128/f16/f128) fall back to the nearest 64-bit kind.
+fn map_scalar(s: rustc_abi::Scalar) -> SScalar {
+    match s.primitive() {
+        Primitive::Int(i, _) => match i {
+            Integer::I8 => SScalar::I8,
+            Integer::I16 => SScalar::I16,
+            Integer::I32 => SScalar::I32,
+            Integer::I64 | Integer::I128 => SScalar::I64,
+        },
+        Primitive::Float(f) => match f {
+            Float::F16 | Float::F32 => SScalar::F32,
+            Float::F64 | Float::F128 => SScalar::F64,
+        },
+        Primitive::Pointer(_) => SScalar::Ptr,
+    }
+}
+
+fn pass_mode(a: &ArgAbi<'_, Ty<'_>>) -> PassMode {
+    match &a.mode {
         RPassMode::Ignore => PassMode::Ignore,
-        RPassMode::Direct(_) => PassMode::Direct,
-        RPassMode::Pair(_, _) => PassMode::Pair,
+        RPassMode::Direct(_) => match a.layout.backend_repr {
+            BackendRepr::Scalar(s) => PassMode::Direct(map_scalar(s)),
+            _ => PassMode::Direct(SScalar::Ptr),
+        },
+        RPassMode::Pair(_, _) => match a.layout.backend_repr {
+            BackendRepr::ScalarPair(s0, s1) => PassMode::Pair(map_scalar(s0), map_scalar(s1)),
+            _ => PassMode::Pair(SScalar::Ptr, SScalar::Ptr),
+        },
         RPassMode::Cast { .. } => PassMode::Cast,
         RPassMode::Indirect { on_stack, .. } => PassMode::Indirect {
             on_stack: *on_stack,

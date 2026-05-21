@@ -74,6 +74,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let mut rust_fn_symbols = std::collections::HashMap::new();
     let mut rust_vis: Vec<scrap_tycheck::RustTypeVis> = Vec::new();
     let mut rust_layouts = std::collections::HashMap::new();
+    let mut rust_fn_abis = std::collections::HashMap::new();
     if let Some(meta) = anchor.as_ref().and_then(|a| a.metadata.as_ref()) {
         let catalog = rust_use::build_catalog(meta);
         let type_catalog = rust_use::build_type_catalog(meta);
@@ -84,6 +85,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
             rust_fn_symbols = outcome.fn_symbols;
             rust_vis = outcome.rust_vis;
             rust_layouts = outcome.rust_layouts;
+            rust_fn_abis = outcome.rust_fn_abis;
             if !outcome.ast_items.is_empty() {
                 can_for_check = rust_use::rebuild_can(db, resolved_can, outcome.ast_items);
             }
@@ -149,6 +151,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                 args.target.clone(),
                 rust_fn_symbols,
                 rust_layouts,
+                rust_fn_abis,
             )
         } else {
             scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone())

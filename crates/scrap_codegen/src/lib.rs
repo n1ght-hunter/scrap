@@ -84,10 +84,12 @@ pub fn compile_to_object_interop<'db>(
     target: target_lexicon::Triple,
     rust_fn_symbols: std::collections::HashMap<String, String>,
     rust_layouts: std::collections::HashMap<String, codegen::context::RustLayout>,
+    rust_fn_abis: std::collections::HashMap<String, scrap_rmeta::FnAbiInfo>,
 ) -> Option<Vec<u8>> {
     let mut ctx = codegen::CodegenContext::new(db, &target)?;
     ctx.set_rust_fn_symbols(rust_fn_symbols);
     ctx.set_rust_layouts(rust_layouts);
+    ctx.set_rust_fn_abis(rust_fn_abis);
 
     for module in ir.modules(db) {
         ctx.compile_module(*module)?;

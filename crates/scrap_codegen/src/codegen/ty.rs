@@ -80,6 +80,73 @@ pub fn ir_ty_to_cl_required(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<ty
     }
 }
 
+/// Map an interop ABI [`scrap_rmeta::Scalar`] to a Cranelift type. `Ptr` uses
+/// the target's pointer width (passed in by the caller).
+pub(crate) fn scalar_to_cl(s: scrap_rmeta::Scalar, ptr: types::Type) -> types::Type {
+    use scrap_rmeta::Scalar;
+    match s {
+        Scalar::I8 => types::I8,
+        Scalar::I16 => types::I16,
+        Scalar::I32 => types::I32,
+        Scalar::I64 => types::I64,
+        Scalar::F32 => types::F32,
+        Scalar::F64 => types::F64,
+        Scalar::Ptr => ptr,
+    }
+}
+
+/// Build a Cranelift signature for a native Rust function directly from its
+/// `FnAbiInfo` (Phase 5). Handles `Ignore`/`Direct`/`Pair`; `Indirect`/`Cast`
+/// are not yet lowered and emit a diagnostic (returns `None`).
+pub fn build_cl_signature_from_abi<M: Module>(
+    module: &M,
+    abi: &scrap_rmeta::FnAbiInfo,
+    db: &dyn scrap_shared::Db,
+) -> Option<Signature> {
+    use scrap_rmeta::PassMode;
+    let mut sig = module.make_signature();
+    sig.call_conv = module.target_config().default_call_conv;
+    let ptr = module.target_config().pointer_type();
+
+    for arg in &abi.args {
+        match &arg.mode {
+            PassMode::Ignore => {}
+            PassMode::Direct(s) => sig.params.push(AbiParam::new(scalar_to_cl(*s, ptr))),
+            PassMode::Pair(a, b) => {
+                sig.params.push(AbiParam::new(scalar_to_cl(*a, ptr)));
+                sig.params.push(AbiParam::new(scalar_to_cl(*b, ptr)));
+            }
+            PassMode::Indirect { .. } | PassMode::Cast => {
+                emit_codegen_err(
+                    db,
+                    "unsupported Rust ABI argument mode (Indirect/Cast); only Direct/Pair are \
+                     lowered so far (Phase 5 follow-up)",
+                );
+                return None;
+            }
+        }
+    }
+
+    match &abi.ret.mode {
+        PassMode::Ignore => {}
+        PassMode::Direct(s) => sig.returns.push(AbiParam::new(scalar_to_cl(*s, ptr))),
+        PassMode::Pair(a, b) => {
+            sig.returns.push(AbiParam::new(scalar_to_cl(*a, ptr)));
+            sig.returns.push(AbiParam::new(scalar_to_cl(*b, ptr)));
+        }
+        PassMode::Indirect { .. } | PassMode::Cast => {
+            emit_codegen_err(
+                db,
+                "unsupported Rust ABI return mode (Indirect/Cast); only Direct/Pair are lowered \
+                 so far (Phase 5 follow-up)",
+            );
+            return None;
+        }
+    }
+
+    Some(sig)
+}
+
 /// Build a Cranelift function signature from an IR signature.
 /// ADT (struct) parameters are expanded into their constituent field types.
 pub fn build_cl_signature<M: Module>(

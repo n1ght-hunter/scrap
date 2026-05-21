@@ -11,6 +11,27 @@ use std::collections::HashMap;
 use super::ResultExt;
 use super::emit_codegen_err;
 
+/// Byte size of an interop ABI scalar (`Ptr` uses the target pointer width).
+fn scalar_bytes(s: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
+    use scrap_rmeta::Scalar;
+    match s {
+        Scalar::I8 => 1,
+        Scalar::I16 => 2,
+        Scalar::I32 => 4,
+        Scalar::I64 | Scalar::F64 => 8,
+        Scalar::F32 => 4,
+        Scalar::Ptr => ptr_bytes,
+    }
+}
+
+/// Byte offset of the second component of a `ScalarPair`, mirroring rustc's
+/// `scalar_pair_calculate_b_offset`: `size(a)` rounded up to `align(b)`.
+fn pair_b_offset(a: scrap_rmeta::Scalar, b: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
+    let size_a = scalar_bytes(a, ptr_bytes);
+    let align_b = scalar_bytes(b, ptr_bytes);
+    size_a.div_ceil(align_b) * align_b
+}
+
 /// Compute the (size, align, pointer_offsets) for a GC-allocated type.
 fn compute_type_layout(_db: &dyn scrap_shared::Db, ty: &ir::Ty) -> (u64, u64, Vec<u64>) {
     match ty {
@@ -83,6 +104,8 @@ pub struct FuncTranslator<'a, 'db> {
     /// IR local index → (StackSlot, mirrored layout) for native Rust interop
     /// locals, which live in memory at the exact layout rustc computed.
     pub rust_slots: &'a HashMap<usize, (StackSlot, super::context::RustLayout)>,
+    /// `extern "Rust"` name → ABI, for marshalling native Rust calls (Phase 5).
+    pub rust_fn_abis: &'a HashMap<String, scrap_rmeta::FnAbiInfo>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -762,6 +785,105 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         }
     }
 
+    /// The stack slot backing a Rust-interop local, if `lid` is one.
+    fn rust_slot_of_local(&self, lid: usize) -> Option<StackSlot> {
+        self.rust_slots.get(&lid).map(|(slot, _)| *slot)
+    }
+
+    /// Marshal a call to a native Rust function per its `FnAbiInfo` (Phase 5):
+    /// `Direct` → one register value, `Pair` → two register values loaded from /
+    /// stored to the value's stack slot at the ScalarPair offsets, `Ignore` →
+    /// nothing. `Indirect`/`Cast` are not yet supported (diagnostic).
+    fn lower_rust_abi_call(
+        &self,
+        abi: &scrap_rmeta::FnAbiInfo,
+        func_ref: cranelift::codegen::ir::FuncRef,
+        args: &[ir::Operand<'db>],
+        destination: &ir::Place<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<()> {
+        use scrap_rmeta::PassMode;
+        let ptr = module.target_config().pointer_type();
+        let ptr_bytes = ptr.bytes();
+
+        let mut arg_vals = Vec::new();
+        for (arg_abi, operand) in abi.args.iter().zip(args.iter()) {
+            let operand_slot = match operand {
+                ir::Operand::Place(ir::Place::Local(lid)) => self.rust_slot_of_local(lid.0),
+                _ => None,
+            };
+            match &arg_abi.mode {
+                PassMode::Ignore => {}
+                PassMode::Direct(s) => {
+                    if let Some(slot) = operand_slot {
+                        let ty = super::ty::scalar_to_cl(*s, ptr);
+                        arg_vals.push(builder.ins().stack_load(ty, slot, 0));
+                    } else {
+                        arg_vals.push(self.lower_operand(operand, builder, module)?);
+                    }
+                }
+                PassMode::Pair(a, b) => {
+                    let Some(slot) = operand_slot else {
+                        emit_codegen_err(
+                            self.db,
+                            "Rust ABI `Pair` argument must be a memory-backed value",
+                        );
+                        return None;
+                    };
+                    let ta = super::ty::scalar_to_cl(*a, ptr);
+                    let tb = super::ty::scalar_to_cl(*b, ptr);
+                    let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
+                    arg_vals.push(builder.ins().stack_load(ta, slot, 0));
+                    arg_vals.push(builder.ins().stack_load(tb, slot, boff));
+                }
+                PassMode::Indirect { .. } | PassMode::Cast => {
+                    emit_codegen_err(
+                        self.db,
+                        "unsupported Rust ABI argument mode (Indirect/Cast); Phase 5 follow-up",
+                    );
+                    return None;
+                }
+            }
+        }
+
+        let call = builder.ins().call(func_ref, &arg_vals);
+        let results = builder.inst_results(call).to_vec();
+
+        match &abi.ret.mode {
+            PassMode::Ignore => {}
+            PassMode::Direct(_) => {
+                if let Some(v) = results.first() {
+                    self.assign_to_place(destination, *v, builder, module)?;
+                }
+            }
+            PassMode::Pair(a, b) => {
+                let dest_slot = match destination {
+                    ir::Place::Local(lid) => self.rust_slot_of_local(lid.0),
+                    _ => None,
+                };
+                let Some(slot) = dest_slot else {
+                    emit_codegen_err(
+                        self.db,
+                        "Rust ABI `Pair` return must target a memory-backed Rust value",
+                    );
+                    return None;
+                };
+                let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
+                builder.ins().stack_store(results[0], slot, 0);
+                builder.ins().stack_store(results[1], slot, boff);
+            }
+            PassMode::Indirect { .. } | PassMode::Cast => {
+                emit_codegen_err(
+                    self.db,
+                    "unsupported Rust ABI return mode (Indirect/Cast); Phase 5 follow-up",
+                );
+                return None;
+            }
+        }
+        Some(())
+    }
+
     /// Lower an operand for use as a function call argument.
     /// If the operand is a struct (ADT), expand it into individual field values.
     fn lower_operand_expanding_structs(
@@ -1187,16 +1309,17 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 target,
                 unwind: _,
             } => {
-                let func_id = match func {
+                let (func_id, rust_abi) = match func {
                     ir::Operand::FunctionRef(fid) => {
                         let name = fid.text(self.db);
-                        match self.functions.get(name).copied() {
+                        let id = match self.functions.get(name).copied() {
                             Some(id) => id,
                             None => {
                                 emit_codegen_err(self.db, format!("function '{name}' not found"));
                                 return None;
                             }
-                        }
+                        };
+                        (id, self.rust_fn_abis.get(name).cloned())
                     }
                     _ => {
                         emit_codegen_err(self.db, "indirect function call is not supported");
@@ -1206,17 +1329,21 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let func_ref = module.declare_func_in_func(func_id, builder.func);
 
-                let mut arg_vals = Vec::new();
-                for a in args.iter() {
-                    self.lower_operand_expanding_structs(a, builder, module, &mut arg_vals)?;
-                }
+                if let Some(abi) = rust_abi {
+                    self.lower_rust_abi_call(&abi, func_ref, args, destination, builder, module)?;
+                } else {
+                    let mut arg_vals = Vec::new();
+                    for a in args.iter() {
+                        self.lower_operand_expanding_structs(a, builder, module, &mut arg_vals)?;
+                    }
 
-                let call = builder.ins().call(func_ref, &arg_vals);
+                    let call = builder.ins().call(func_ref, &arg_vals);
 
-                let results = builder.inst_results(call);
-                if !results.is_empty() {
-                    let result_val = results[0];
-                    self.assign_to_place(destination, result_val, builder, module)?;
+                    let results = builder.inst_results(call);
+                    if !results.is_empty() {
+                        let result_val = results[0];
+                        self.assign_to_place(destination, result_val, builder, module)?;
+                    }
                 }
 
                 if let Some(target_bb) = target {
