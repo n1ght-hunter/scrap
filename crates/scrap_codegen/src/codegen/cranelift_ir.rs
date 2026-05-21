@@ -808,6 +808,24 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         let ptr_bytes = ptr.bytes();
 
         let mut arg_vals = Vec::new();
+
+        // `sret`: pass a pointer to the destination's slot as the leading arg;
+        // the callee writes the return value through it.
+        let indirect_ret = matches!(abi.ret.mode, PassMode::Indirect { .. });
+        if indirect_ret {
+            let Some(slot) = (match destination {
+                ir::Place::Local(lid) => self.rust_slot_of_local(lid.0),
+                _ => None,
+            }) else {
+                emit_codegen_err(
+                    self.db,
+                    "Rust ABI `Indirect` return must target a memory-backed Rust value",
+                );
+                return None;
+            };
+            arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+        }
+
         for (arg_abi, operand) in abi.args.iter().zip(args.iter()) {
             let operand_slot = match operand {
                 ir::Operand::Place(ir::Place::Local(lid)) => self.rust_slot_of_local(lid.0),
@@ -837,10 +855,22 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     arg_vals.push(builder.ins().stack_load(ta, slot, 0));
                     arg_vals.push(builder.ins().stack_load(tb, slot, boff));
                 }
-                PassMode::Indirect { .. } | PassMode::Cast => {
+                PassMode::Indirect { .. } => {
+                    // Pass a pointer to the value's memory; Cranelift copies it
+                    // for a `StructArgument` param.
+                    let Some(slot) = operand_slot else {
+                        emit_codegen_err(
+                            self.db,
+                            "Rust ABI `Indirect` argument must be a memory-backed value",
+                        );
+                        return None;
+                    };
+                    arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+                }
+                PassMode::Cast => {
                     emit_codegen_err(
                         self.db,
-                        "unsupported Rust ABI argument mode (Indirect/Cast); Phase 5 follow-up",
+                        "unsupported Rust ABI argument mode (Cast); Phase 5 follow-up",
                     );
                     return None;
                 }
@@ -873,10 +903,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 builder.ins().stack_store(results[0], slot, 0);
                 builder.ins().stack_store(results[1], slot, boff);
             }
-            PassMode::Indirect { .. } | PassMode::Cast => {
+            // Indirect: the callee already wrote the value through the sret pointer.
+            PassMode::Indirect { .. } => {}
+            PassMode::Cast => {
                 emit_codegen_err(
                     self.db,
-                    "unsupported Rust ABI return mode (Indirect/Cast); Phase 5 follow-up",
+                    "unsupported Rust ABI return mode (Cast); Phase 5 follow-up",
                 );
                 return None;
             }

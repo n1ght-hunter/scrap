@@ -179,6 +179,7 @@ fn pass_mode(a: &ArgAbi<'_, Ty<'_>>) -> PassMode {
         RPassMode::Cast { .. } => PassMode::Cast,
         RPassMode::Indirect { on_stack, .. } => PassMode::Indirect {
             on_stack: *on_stack,
+            size: a.layout.size.bytes(),
         },
     }
 }

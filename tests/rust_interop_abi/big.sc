@@ -5,7 +5,7 @@ extern "C" {
 use rust::rmeta_fixture::id_big;
 
 fn main() {
-    let x = Big { a: 1, b: 2, c: 3, d: 4 };
+    let x = Big { a: 42, b: 1, c: 2, d: 3 };
     let y = id_big(x);
     __scrap_exit(y.a);
 }

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Schema version. Bumped when the shape below changes incompatibly so scrapc
 /// can reject a stale dump rather than misread it.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// The full dump emitted for one anchor compilation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,8 +92,9 @@ pub enum PassMode {
     Direct(Scalar),
     /// Two scalars in two registers (`ScalarPair`).
     Pair(Scalar, Scalar),
-    /// Passed/returned through memory by pointer (`sret` for returns).
-    Indirect { on_stack: bool },
+    /// Passed/returned through memory by pointer (`sret` for returns). `size` is
+    /// the value's byte size, needed to build a `StructArgument` ABI param.
+    Indirect { on_stack: bool, size: u64 },
     /// Coerced to a differently-shaped scalar/array before passing.
     Cast,
 }

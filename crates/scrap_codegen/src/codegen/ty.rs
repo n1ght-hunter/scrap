@@ -108,6 +108,15 @@ pub fn build_cl_signature_from_abi<M: Module>(
     sig.call_conv = module.target_config().default_call_conv;
     let ptr = module.target_config().pointer_type();
 
+    use cranelift::codegen::ir::ArgumentPurpose;
+
+    // An `sret` return is a hidden leading pointer parameter the callee writes
+    // through; the call then has no Cranelift return value.
+    if matches!(abi.ret.mode, PassMode::Indirect { .. }) {
+        sig.params
+            .push(AbiParam::special(ptr, ArgumentPurpose::StructReturn));
+    }
+
     for arg in &abi.args {
         match &arg.mode {
             PassMode::Ignore => {}
@@ -116,11 +125,21 @@ pub fn build_cl_signature_from_abi<M: Module>(
                 sig.params.push(AbiParam::new(scalar_to_cl(*a, ptr)));
                 sig.params.push(AbiParam::new(scalar_to_cl(*b, ptr)));
             }
-            PassMode::Indirect { .. } | PassMode::Cast => {
+            PassMode::Indirect { on_stack, size } => {
+                if *on_stack {
+                    sig.params.push(AbiParam::special(
+                        ptr,
+                        ArgumentPurpose::StructArgument(*size as u32),
+                    ));
+                } else {
+                    sig.params.push(AbiParam::new(ptr));
+                }
+            }
+            PassMode::Cast => {
                 emit_codegen_err(
                     db,
-                    "unsupported Rust ABI argument mode (Indirect/Cast); only Direct/Pair are \
-                     lowered so far (Phase 5 follow-up)",
+                    "unsupported Rust ABI argument mode (Cast); Direct/Pair/Indirect are lowered \
+                     (Cast is a follow-up)",
                 );
                 return None;
             }
@@ -134,11 +153,13 @@ pub fn build_cl_signature_from_abi<M: Module>(
             sig.returns.push(AbiParam::new(scalar_to_cl(*a, ptr)));
             sig.returns.push(AbiParam::new(scalar_to_cl(*b, ptr)));
         }
-        PassMode::Indirect { .. } | PassMode::Cast => {
+        // Indirect: handled by the prepended StructReturn param above (no returns).
+        PassMode::Indirect { .. } => {}
+        PassMode::Cast => {
             emit_codegen_err(
                 db,
-                "unsupported Rust ABI return mode (Indirect/Cast); only Direct/Pair are lowered \
-                 so far (Phase 5 follow-up)",
+                "unsupported Rust ABI return mode (Cast); Direct/Pair/Indirect are lowered \
+                 (Cast is a follow-up)",
             );
             return None;
         }
