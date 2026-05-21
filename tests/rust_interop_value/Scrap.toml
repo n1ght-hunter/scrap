@@ -1,0 +1,6 @@
+[package]
+name = "rust_interop_value"
+version = "0.1.0"
+
+[rust.dependencies]
+rmeta_fixture = { path = "E:/programming/rust/scrap/tools/rmeta-fixture" }

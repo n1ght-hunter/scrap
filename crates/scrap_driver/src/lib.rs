@@ -72,13 +72,18 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let mut can_for_check = resolved_can;
     let mut extern_modules: Vec<scrap_ir::Module> = Vec::new();
     let mut rust_fn_symbols = std::collections::HashMap::new();
+    let mut rust_vis: Vec<scrap_tycheck::RustTypeVis> = Vec::new();
+    let mut rust_layouts = std::collections::HashMap::new();
     if let Some(meta) = anchor.as_ref().and_then(|a| a.metadata.as_ref()) {
         let catalog = rust_use::build_catalog(meta);
+        let type_catalog = rust_use::build_type_catalog(meta);
         let use_refs = rust_use::scan_rust_uses(db, resolved_can);
         if !use_refs.is_empty() {
-            let outcome = rust_use::resolve_uses(db, &use_refs, &catalog);
+            let outcome = rust_use::resolve_uses(db, &use_refs, &catalog, &type_catalog);
             handle_diagnostics(db)?;
             rust_fn_symbols = outcome.fn_symbols;
+            rust_vis = outcome.rust_vis;
+            rust_layouts = outcome.rust_layouts;
             if !outcome.ast_items.is_empty() {
                 can_for_check = rust_use::rebuild_can(db, resolved_can, outcome.ast_items);
             }
@@ -104,7 +109,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     }
 
     // Phase 2: Type checking
-    let _type_table = scrap_tycheck::check_types(db, can_for_check, entry_file.file(db));
+    let _type_table =
+        scrap_tycheck::check_types(db, can_for_check, entry_file.file(db), rust_vis.clone());
     handle_diagnostics(db)?;
 
     // Phase 3: Lower to IR with type information
@@ -114,6 +120,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         other_files.to_vec(),
         can_for_check,
         entry_file.file(db),
+        rust_vis,
     );
 
     handle_diagnostics(db)?;
@@ -141,7 +148,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                 lowered_ir.can(db),
                 args.target.clone(),
                 rust_fn_symbols,
-                std::collections::HashMap::new(),
+                rust_layouts,
             )
         } else {
             scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone())

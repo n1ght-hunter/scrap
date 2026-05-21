@@ -650,6 +650,32 @@ impl<'db> TypeContext<'db> {
             }
         };
 
+        // Native Rust interop types follow Rust's own construction rules: every
+        // field must be `pub` and the type must not be `#[non_exhaustive]`.
+        if let Some(meta) = self.rust_type_meta(struct_name).cloned() {
+            let sn = struct_name.text();
+            if meta.non_exhaustive {
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!("`{sn}` is `#[non_exhaustive]`; construct it through a Rust function"),
+                    span,
+                );
+                return InferTy::Error;
+            }
+            if let Some((fname, _)) = meta.fields.iter().find(|(_, is_pub)| !is_pub) {
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!(
+                        "field `{fname}` is private; construct `{sn}` through a Rust function"
+                    ),
+                    span,
+                );
+                return InferTy::Error;
+            }
+        }
+
         // Check for unknown fields (provided but not in struct def)
         let mut has_error = false;
         for field_init in fields.iter() {
@@ -747,6 +773,25 @@ impl<'db> TypeContext<'db> {
                 };
 
                 let field_name = field_ident.name;
+                // For Rust interop types, reading a private field is forbidden.
+                if let Some(meta) = self.rust_type_meta(*struct_name).cloned()
+                    && meta
+                        .fields
+                        .iter()
+                        .any(|(n, is_pub)| n == field_name.text() && !is_pub)
+                {
+                    self.emit_rust_visibility(
+                        format!(
+                            "field `{}` of `{}` is private",
+                            field_name.text(),
+                            struct_name.text()
+                        ),
+                        "private field".to_string(),
+                        "only `pub` fields of a Rust interop type can be accessed".to_string(),
+                        span,
+                    );
+                    return InferTy::Error;
+                }
                 if let Some((_, field_ty)) = struct_def
                     .fields
                     .iter()

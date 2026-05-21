@@ -156,11 +156,21 @@ fn lower_one_file<'db>(
     file: scrap_parser::ParsedFile<'db>,
     can: scrap_ast::Can<'db>,
     input_file: scrap_shared::salsa::InputFile<'db>,
+    rust_types: Vec<scrap_tycheck::RustTypeVis>,
 ) -> Option<scrap_ir::Module<'db>> {
-    let type_table = scrap_tycheck::check_types(db, can, input_file);
+    let type_table = scrap_tycheck::check_types(db, can, input_file, rust_types.clone());
     let module = file.ast(db).to_module(db);
     let module_id = module.id(db);
-    scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table)
+    // Lowering only needs the field order (to resolve field indices); visibility
+    // is enforced in tycheck. Derive the lowering view from the same facts.
+    let lower_info: Vec<scrap_ast_lowering::RustTypeLowerInfo> = rust_types
+        .iter()
+        .map(|t| scrap_ast_lowering::RustTypeLowerInfo {
+            name: t.name.clone(),
+            fields: t.fields.iter().map(|(n, _)| n.clone()).collect(),
+        })
+        .collect();
+    scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table, &lower_info)
 }
 
 pub fn lower_input_files_to_ir<'db>(
@@ -169,19 +179,20 @@ pub fn lower_input_files_to_ir<'db>(
     other_files: Vec<scrap_parser::ParsedFile<'db>>,
     can: scrap_ast::Can<'db>,
     input_file: scrap_shared::salsa::InputFile<'db>,
+    rust_types: Vec<scrap_tycheck::RustTypeVis>,
 ) -> (Option<scrap_ir::Module<'db>>, Vec<scrap_ir::Module<'db>>) {
     use salsa::plumbing::{AsId, FromId};
 
-    let entry_ir = lower_one_file(db, entry_file, can, input_file);
+    let entry_ir = lower_one_file(db, entry_file, can, input_file, rust_types.clone());
 
     // Workers compute lowered modules in parallel; salsa storage is shared
     // via clone, so we can return raw `salsa::Id`s and reconstruct
     // `Module<'db>` on the main thread against the outer `db`.
     let ids: Vec<salsa::Id> = other_files
         .into_par_iter()
-        .map_with(db.fork(), |db, file| {
+        .map_with((db.fork(), rust_types), |(db, rust_types), file| {
             let db: &dyn scrap_shared::Db = db;
-            lower_one_file(db, file, can, input_file).map(|m| m.as_id())
+            lower_one_file(db, file, can, input_file, rust_types.clone()).map(|m| m.as_id())
         })
         .flatten()
         .collect();

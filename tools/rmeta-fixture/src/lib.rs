@@ -33,3 +33,21 @@ pub fn make_point(x: i32, y: i64) -> Point {
 pub fn identity<T>(x: T) -> T {
     x
 }
+
+/// All-`pub` scalar struct — constructible field-by-field from Scrap.
+pub struct Counter {
+    pub n: usize,
+    pub step: usize,
+}
+
+/// Has a private field — Scrap may read `visible` but not construct it.
+pub struct Secret {
+    pub visible: usize,
+    hidden: usize,
+}
+
+impl Secret {
+    pub fn hidden(&self) -> usize {
+        self.hidden
+    }
+}

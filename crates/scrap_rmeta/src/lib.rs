@@ -112,6 +112,9 @@ pub struct RustType {
     pub fields: Vec<RustField>,
     /// Variants of an enum, or the empty list otherwise.
     pub variants: Vec<RustVariant>,
+    /// Whether the type (or its field/variant list) is `#[non_exhaustive]` —
+    /// field-by-field construction from Scrap is forbidden when set.
+    pub non_exhaustive: bool,
     /// Concrete layout, present only for non-generic types.
     pub layout: Option<LayoutInfo>,
 }

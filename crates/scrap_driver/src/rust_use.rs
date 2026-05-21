@@ -15,20 +15,26 @@
 
 use std::collections::HashMap;
 
+use scrap_ast::enumdef::VariantData;
+use scrap_ast::field::FieldDef;
 use scrap_ast::fndef::Param;
 use scrap_ast::foreign::{ForeignItem, ForeignMod};
+use scrap_ast::generics::Generics;
 use scrap_ast::item::{Item, ItemKind, UseTreeKind};
 use scrap_ast::pat::{Pat, PatKind};
+use scrap_ast::structdef::StructDef;
 use scrap_ast::typedef::{Ty as AstTy, TyKind};
 use scrap_ast::{Visibility, VisibilityKind};
+use scrap_codegen::codegen::context::RustLayout;
 use scrap_diagnostics::Level;
 use scrap_ir as ir;
-use scrap_rmeta::RustMetadata;
+use scrap_rmeta::{RustMetadata, RustType};
 use scrap_shared::NodeId;
 use scrap_shared::ident::{Ident, Symbol};
 use scrap_shared::path::Path;
 use scrap_shared::types::{FloatTy, IntTy, UintTy};
 use scrap_span::Span;
+use scrap_tycheck::RustTypeVis;
 use thin_vec::ThinVec;
 
 /// A non-generic Rust function from the catalog, by fully-qualified path.
@@ -53,6 +59,20 @@ pub fn build_catalog(meta: &RustMetadata) -> HashMap<String, CatalogFn> {
                         ret: f.ret.display.clone(),
                     },
                 );
+            }
+        }
+    }
+    map
+}
+
+/// Build the type catalog (full path → type) from interop metadata. Only
+/// non-generic types (those with a concrete layout) are included.
+pub fn build_type_catalog(meta: &RustMetadata) -> HashMap<String, &RustType> {
+    let mut map = HashMap::new();
+    for krate in &meta.crates {
+        for t in &krate.types {
+            if t.layout.is_some() {
+                map.insert(t.path.clone(), t);
             }
         }
     }
@@ -111,12 +131,17 @@ pub struct ResolvedImport<'db> {
 
 /// The product of resolving `use rust::…` imports against the catalog.
 pub struct ResolveOutcome<'db> {
-    /// `extern "Rust"` AST items to inject into the `Can` for type checking.
+    /// `extern "Rust"` foreign-fn and synthesized `struct` AST items to inject
+    /// into the `Can` for type checking.
     pub ast_items: ThinVec<Box<Item<'db>>>,
     /// Imports to synthesize as IR `ExternFn`s for codegen.
     pub imports: Vec<ResolvedImport<'db>>,
     /// Local name → mangled symbol, for codegen import linking.
     pub fn_symbols: HashMap<String, String>,
+    /// Visibility facts for imported Rust types, for tycheck construction gating.
+    pub rust_vis: Vec<RustTypeVis>,
+    /// Mirrored layouts of imported Rust types (by local name), for codegen.
+    pub rust_layouts: HashMap<String, RustLayout>,
 }
 
 /// Map a Rust primitive type display name to an `ir::Ty`. Primitives carry no
@@ -148,6 +173,26 @@ fn prim_ast_ty(display: &str) -> AstTy {
     }
 }
 
+/// Whether a Rust type display name is a scalar primitive we can mirror as a
+/// loadable field today (non-scalar fields are out of scope for this slice).
+fn is_scalar(display: &str) -> bool {
+    matches!(
+        display,
+        "i8" | "i16"
+            | "i32"
+            | "i64"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "usize"
+            | "f32"
+            | "f64"
+            | "bool"
+    )
+}
+
 fn dummy_pat() -> Box<Pat> {
     Box::new(Pat {
         id: NodeId::dummy(),
@@ -171,81 +216,39 @@ pub fn resolve_uses<'db>(
     db: &'db dyn scrap_shared::Db,
     use_refs: &[RustUseRef],
     catalog: &HashMap<String, CatalogFn>,
+    type_catalog: &HashMap<String, &RustType>,
 ) -> ResolveOutcome<'db> {
     let mut foreign_items = ThinVec::new();
+    let mut struct_items: ThinVec<Box<Item<'db>>> = ThinVec::new();
     let mut imports = Vec::new();
     let mut fn_symbols = HashMap::new();
+    let mut rust_vis = Vec::new();
+    let mut rust_layouts = HashMap::new();
+    let mut type_locals: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for u in use_refs {
-        let Some(cat) = catalog.get(&u.path) else {
+        let dup = fn_symbols.contains_key(&u.local) || type_locals.contains(&u.local);
+        if let Some(cat) = catalog.get(&u.path) {
+            if dup {
+                emit_dup(db, &u.local);
+                continue;
+            }
+            resolve_fn_import(db, u, cat, &mut foreign_items, &mut imports, &mut fn_symbols);
+        } else if let Some(ty) = type_catalog.get(&u.path) {
+            if dup {
+                emit_dup(db, &u.local);
+                continue;
+            }
+            if resolve_type_import(db, u, ty, &mut struct_items, &mut rust_vis, &mut rust_layouts) {
+                type_locals.insert(u.local.clone());
+            }
+        } else {
             emit_err(
                 db,
                 format!("no Rust item `{}`", u.path),
                 "not found in the interop catalog (or it is generic — not yet supported)",
             );
-            continue;
-        };
-        if fn_symbols.contains_key(&u.local) {
-            emit_err(
-                db,
-                format!("`{}` is imported more than once", u.local),
-                "import one with `use rust::… as other_name;`",
-            );
-            continue;
         }
-
-        // Map the signature to primitives; bail on anything else for now.
-        let mut param_ir = Vec::with_capacity(cat.params.len());
-        let mut param_ast = ThinVec::new();
-        let mut unsupported = false;
-        for (i, p) in cat.params.iter().enumerate() {
-            match prim_ir(p) {
-                Some(ty) => {
-                    param_ir.push(ty);
-                    param_ast.push(Param {
-                        id: NodeId::dummy(),
-                        ident: Ident::dummy_with_name(&format!("arg{i}")),
-                        ty: Box::new(prim_ast_ty(p)),
-                        pat: dummy_pat(),
-                        span: Span::default(),
-                    });
-                }
-                None => unsupported = true,
-            }
-        }
-        let (ret_ir, ret_ast) = if cat.ret == "()" {
-            (ir::Ty::Void, None)
-        } else {
-            match prim_ir(&cat.ret) {
-                Some(ty) => (ty, Some(prim_ast_ty(&cat.ret))),
-                None => {
-                    unsupported = true;
-                    (ir::Ty::Void, None)
-                }
-            }
-        };
-        if unsupported {
-            emit_err(
-                db,
-                format!("`{}` uses non-primitive Rust types", u.path),
-                "only primitive scalar params/returns are supported so far",
-            );
-            continue;
-        }
-
-        foreign_items.push(ForeignItem {
-            id: NodeId::dummy(),
-            ident: Ident::dummy_with_name(&u.local),
-            args: param_ast,
-            ret_type: ret_ast,
-            span: Span::default(),
-        });
-        imports.push(ResolvedImport {
-            local: u.local.clone(),
-            params: param_ir,
-            ret: ret_ir,
-        });
-        fn_symbols.insert(u.local.clone(), cat.symbol.clone());
     }
 
     let mut ast_items = ThinVec::new();
@@ -265,12 +268,174 @@ pub fn resolve_uses<'db>(
             },
         }));
     }
+    ast_items.extend(struct_items);
 
     ResolveOutcome {
         ast_items,
         imports,
         fn_symbols,
+        rust_vis,
+        rust_layouts,
     }
+}
+
+fn emit_dup(db: &dyn scrap_shared::Db, local: &str) {
+    emit_err(
+        db,
+        format!("`{}` is imported more than once", local),
+        "import one with `use rust::… as other_name;`",
+    );
+}
+
+/// Resolve a `use rust::…::fn;` import: map its scalar signature and record the
+/// foreign fn + IR import + mangled symbol. Bails (with a diagnostic) on
+/// non-primitive signatures.
+fn resolve_fn_import<'db>(
+    db: &'db dyn scrap_shared::Db,
+    u: &RustUseRef,
+    cat: &CatalogFn,
+    foreign_items: &mut ThinVec<ForeignItem>,
+    imports: &mut Vec<ResolvedImport<'db>>,
+    fn_symbols: &mut HashMap<String, String>,
+) {
+    let mut param_ir = Vec::with_capacity(cat.params.len());
+    let mut param_ast = ThinVec::new();
+    let mut unsupported = false;
+    for (i, p) in cat.params.iter().enumerate() {
+        match prim_ir(p) {
+            Some(ty) => {
+                param_ir.push(ty);
+                param_ast.push(Param {
+                    id: NodeId::dummy(),
+                    ident: Ident::dummy_with_name(&format!("arg{i}")),
+                    ty: Box::new(prim_ast_ty(p)),
+                    pat: dummy_pat(),
+                    span: Span::default(),
+                });
+            }
+            None => unsupported = true,
+        }
+    }
+    let (ret_ir, ret_ast) = if cat.ret == "()" {
+        (ir::Ty::Void, None)
+    } else {
+        match prim_ir(&cat.ret) {
+            Some(ty) => (ty, Some(prim_ast_ty(&cat.ret))),
+            None => {
+                unsupported = true;
+                (ir::Ty::Void, None)
+            }
+        }
+    };
+    if unsupported {
+        emit_err(
+            db,
+            format!("`{}` uses non-primitive Rust types", u.path),
+            "only primitive scalar params/returns are supported so far",
+        );
+        return;
+    }
+
+    foreign_items.push(ForeignItem {
+        id: NodeId::dummy(),
+        ident: Ident::dummy_with_name(&u.local),
+        args: param_ast,
+        ret_type: ret_ast,
+        span: Span::default(),
+    });
+    imports.push(ResolvedImport {
+        local: u.local.clone(),
+        params: param_ir,
+        ret: ret_ir,
+    });
+    fn_symbols.insert(u.local.clone(), cat.symbol.clone());
+}
+
+/// Resolve a `use rust::…::Type;` import: synthesize a Scrap `struct` (for
+/// tycheck), record the mirrored layout (for codegen) and visibility facts (for
+/// construction gating). Returns `false` (with a diagnostic) for an unsupported
+/// shape — currently only structs whose fields are all scalar primitives.
+fn resolve_type_import<'db>(
+    db: &'db dyn scrap_shared::Db,
+    u: &RustUseRef,
+    ty: &RustType,
+    struct_items: &mut ThinVec<Box<Item<'db>>>,
+    rust_vis: &mut Vec<RustTypeVis>,
+    rust_layouts: &mut HashMap<String, RustLayout>,
+) -> bool {
+    use scrap_rmeta::AdtKind;
+
+    if ty.kind != AdtKind::Struct {
+        emit_err(
+            db,
+            format!("`{}` is not a struct", u.path),
+            "only struct types are supported so far (enums/unions are not yet)",
+        );
+        return false;
+    }
+    let layout = ty
+        .layout
+        .as_ref()
+        .expect("type catalog only holds types with a layout");
+
+    if let Some(f) = ty.fields.iter().find(|f| !is_scalar(&f.ty.display)) {
+        emit_err(
+            db,
+            format!("`{}` has a non-scalar field `{}`", u.path, f.name),
+            "only Rust types whose fields are all scalar primitives are supported so far",
+        );
+        return false;
+    }
+
+    let mut fields_ast = ThinVec::new();
+    let mut vis_fields = Vec::with_capacity(ty.fields.len());
+    let mut offsets_displays: Vec<(u64, String)> = Vec::with_capacity(ty.fields.len());
+    for (i, f) in ty.fields.iter().enumerate() {
+        let offset = layout.field_offsets.get(i).copied().unwrap_or(0);
+        offsets_displays.push((offset, f.ty.display.clone()));
+        vis_fields.push((f.name.clone(), f.public));
+        fields_ast.push(FieldDef {
+            id: NodeId::dummy(),
+            span: Span::default(),
+            vis: Visibility {
+                kind: VisibilityKind::Public,
+                span: Span::default(),
+            },
+            ident: Some(Ident::dummy_with_name(&f.name)),
+            ty: Box::new(prim_ast_ty(&f.ty.display)),
+        });
+    }
+
+    let struct_def = StructDef {
+        id: NodeId::dummy(),
+        ident: Ident::dummy_with_name(&u.local),
+        generics: Generics::default(),
+        data: VariantData::Struct { fields: fields_ast },
+    };
+    struct_items.push(Box::new(Item {
+        kind: ItemKind::Struct(struct_def),
+        span: Span::default(),
+        id: NodeId::dummy(),
+        vis: Visibility {
+            kind: VisibilityKind::Inherited,
+            span: Span::default(),
+        },
+    }));
+
+    let offset_refs: Vec<(u64, &str)> = offsets_displays
+        .iter()
+        .map(|(o, d)| (*o, d.as_str()))
+        .collect();
+    rust_layouts.insert(
+        u.local.clone(),
+        scrap_codegen::rust_layout_from_metadata(layout.size, layout.align, &offset_refs),
+    );
+    rust_vis.push(RustTypeVis {
+        name: u.local.clone(),
+        fields: vis_fields,
+        non_exhaustive: ty.non_exhaustive,
+    });
+    true
 }
 
 /// Append synthesized `extern "Rust"` items to a `Can` (tracked: it creates a

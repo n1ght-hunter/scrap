@@ -195,6 +195,12 @@ fn extract_adt(tcx: TyCtxt<'_>, def_id: DefId) -> RustType {
         adt_layout(tcx, def_id)
     };
 
+    let non_exhaustive = if adt.is_enum() {
+        adt.is_variant_list_non_exhaustive()
+    } else {
+        adt.non_enum_variant().is_field_list_non_exhaustive()
+    };
+
     RustType {
         path,
         kind,
@@ -202,6 +208,7 @@ fn extract_adt(tcx: TyCtxt<'_>, def_id: DefId) -> RustType {
         generic_params,
         fields,
         variants,
+        non_exhaustive,
         layout,
     }
 }
