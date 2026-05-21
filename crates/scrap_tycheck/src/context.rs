@@ -35,17 +35,30 @@ pub struct StructDef {
     pub fields: Vec<(Symbol, InferTy)>,
 }
 
+/// One field of a [`RustTypeVis`].
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct RustFieldVis {
+    pub name: String,
+    /// Whether the field is `pub` (gates field access + construction).
+    pub public: bool,
+    /// Whether the field is a scalar primitive. A non-scalar (opaque) field can
+    /// neither be read directly from Scrap nor used in field-by-field construction.
+    pub scalar: bool,
+}
+
 /// Visibility facts about a native Rust interop type, used to gate field-by-field
 /// construction and field access exactly as Rust's own rules would (a field must
-/// be `pub`, and the type must not be `#[non_exhaustive]`).
+/// be `pub` and scalar, and the type must not be `#[non_exhaustive]`).
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
 )]
 pub struct RustTypeVis {
     /// The type's name as used in Scrap source.
     pub name: String,
-    /// `(field name, is_pub)` in declaration order.
-    pub fields: Vec<(String, bool)>,
+    /// Fields in declaration order.
+    pub fields: Vec<RustFieldVis>,
     /// Whether the type is `#[non_exhaustive]` (forbids construction).
     pub non_exhaustive: bool,
 }

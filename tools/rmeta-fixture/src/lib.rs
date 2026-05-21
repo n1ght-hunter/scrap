@@ -80,3 +80,18 @@ pub struct Big {
 pub fn id_big(x: Big) -> Big {
     x
 }
+
+/// Holds a non-scalar field (`inner: Pair`) plus a scalar — importable as an
+/// opaque-field type, passed/returned by value.
+pub struct Wrapper {
+    pub inner: Pair,
+    pub tag: usize,
+}
+
+pub fn wrap(p: Pair, tag: usize) -> Wrapper {
+    Wrapper { inner: p, tag }
+}
+
+pub fn wrapper_tag(w: Wrapper) -> usize {
+    w.tag
+}

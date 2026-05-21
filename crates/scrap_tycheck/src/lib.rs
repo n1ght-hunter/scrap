@@ -29,7 +29,7 @@ mod table;
 mod types;
 mod unify;
 
-pub use context::{RustTypeVis, TypeContext};
+pub use context::{RustFieldVis, RustTypeVis, TypeContext};
 pub use resolved::ResolvedTy;
 use scrap_shared::InputFile;
 pub use table::TypeTable;

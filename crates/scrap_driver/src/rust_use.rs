@@ -34,7 +34,7 @@ use scrap_shared::ident::{Ident, Symbol};
 use scrap_shared::path::Path;
 use scrap_shared::types::{FloatTy, IntTy, UintTy};
 use scrap_span::Span;
-use scrap_tycheck::RustTypeVis;
+use scrap_tycheck::{RustFieldVis, RustTypeVis};
 use thin_vec::ThinVec;
 
 /// A non-generic Rust function from the catalog, by fully-qualified path.
@@ -420,22 +420,28 @@ fn ensure_type_imported<'db>(
         .as_ref()
         .expect("type catalog only holds types with a layout");
 
-    if let Some(f) = ty.fields.iter().find(|f| !is_scalar(&f.ty.display)) {
-        emit_err(
-            db,
-            format!("`{path}` has a non-scalar field `{}`", f.name),
-            "only Rust types whose fields are all scalar primitives are supported so far",
-        );
-        return None;
-    }
-
+    // Non-scalar fields are imported as opaque memory (offset only): the type can
+    // be passed/returned by value, but such fields can't be read or constructed
+    // from Scrap (gated in tycheck via the `scalar` flag below).
     let mut fields_ast = ThinVec::new();
     let mut vis_fields = Vec::with_capacity(ty.fields.len());
     let mut offsets_displays: Vec<(u64, String)> = Vec::with_capacity(ty.fields.len());
     for (i, f) in ty.fields.iter().enumerate() {
         let offset = layout.field_offsets.get(i).copied().unwrap_or(0);
+        let scalar = is_scalar(&f.ty.display);
         offsets_displays.push((offset, f.ty.display.clone()));
-        vis_fields.push((f.name.clone(), f.public));
+        vis_fields.push(RustFieldVis {
+            name: f.name.clone(),
+            public: f.public,
+            scalar,
+        });
+        // Scalar fields keep their real type; opaque fields get a pointer-width
+        // placeholder (never read/constructed, only present so indices line up).
+        let field_ast_ty = if scalar {
+            prim_ast_ty(&f.ty.display)
+        } else {
+            prim_ast_ty("usize")
+        };
         fields_ast.push(FieldDef {
             id: NodeId::dummy(),
             span: Span::default(),
@@ -444,7 +450,7 @@ fn ensure_type_imported<'db>(
                 span: Span::default(),
             },
             ident: Some(Ident::dummy_with_name(&f.name)),
-            ty: Box::new(prim_ast_ty(&f.ty.display)),
+            ty: Box::new(field_ast_ty),
         });
     }
 

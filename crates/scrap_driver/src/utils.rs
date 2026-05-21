@@ -167,7 +167,7 @@ fn lower_one_file<'db>(
         .iter()
         .map(|t| scrap_ast_lowering::RustTypeLowerInfo {
             name: t.name.clone(),
-            fields: t.fields.iter().map(|(n, _)| n.clone()).collect(),
+            fields: t.fields.iter().map(|f| f.name.clone()).collect(),
         })
         .collect();
     scrap_ast_lowering::lower_parsed_file(db, file, module_id, type_table, &lower_info)

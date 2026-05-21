@@ -663,12 +663,25 @@ impl<'db> TypeContext<'db> {
                 );
                 return InferTy::Error;
             }
-            if let Some((fname, _)) = meta.fields.iter().find(|(_, is_pub)| !is_pub) {
+            if let Some(f) = meta.fields.iter().find(|f| !f.public) {
+                let fname = &f.name;
                 self.emit_rust_visibility(
                     format!("cannot construct `{sn}`"),
                     "construction not allowed here".to_string(),
                     format!(
                         "field `{fname}` is private; construct `{sn}` through a Rust function"
+                    ),
+                    span,
+                );
+                return InferTy::Error;
+            }
+            if let Some(f) = meta.fields.iter().find(|f| !f.scalar) {
+                let fname = &f.name;
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!(
+                        "field `{fname}` is not a scalar; construct `{sn}` through a Rust function"
                     ),
                     span,
                 );
@@ -773,24 +786,36 @@ impl<'db> TypeContext<'db> {
                 };
 
                 let field_name = field_ident.name;
-                // For Rust interop types, reading a private field is forbidden.
+                // For Rust interop types, only `pub` scalar fields can be read.
                 if let Some(meta) = self.rust_type_meta(*struct_name).cloned()
-                    && meta
-                        .fields
-                        .iter()
-                        .any(|(n, is_pub)| n == field_name.text() && !is_pub)
+                    && let Some(f) = meta.fields.iter().find(|f| f.name == field_name.text())
                 {
-                    self.emit_rust_visibility(
-                        format!(
-                            "field `{}` of `{}` is private",
-                            field_name.text(),
-                            struct_name.text()
-                        ),
-                        "private field".to_string(),
-                        "only `pub` fields of a Rust interop type can be accessed".to_string(),
-                        span,
-                    );
-                    return InferTy::Error;
+                    if !f.public {
+                        self.emit_rust_visibility(
+                            format!(
+                                "field `{}` of `{}` is private",
+                                field_name.text(),
+                                struct_name.text()
+                            ),
+                            "private field".to_string(),
+                            "only `pub` fields of a Rust interop type can be accessed".to_string(),
+                            span,
+                        );
+                        return InferTy::Error;
+                    }
+                    if !f.scalar {
+                        self.emit_rust_visibility(
+                            format!(
+                                "field `{}` of `{}` is not a scalar",
+                                field_name.text(),
+                                struct_name.text()
+                            ),
+                            "opaque field".to_string(),
+                            "a non-scalar Rust interop field can't be read directly".to_string(),
+                            span,
+                        );
+                        return InferTy::Error;
+                    }
                 }
                 if let Some((_, field_ty)) = struct_def
                     .fields
