@@ -106,6 +106,9 @@ pub struct FuncTranslator<'a, 'db> {
     pub rust_slots: &'a HashMap<usize, (StackSlot, super::context::RustLayout)>,
     /// `extern "Rust"` name → ABI, for marshalling native Rust calls (Phase 5).
     pub rust_fn_abis: &'a HashMap<String, scrap_rmeta::FnAbiInfo>,
+    /// Droppable Rust local id → its `i8` drop-flag variable (1 = owned, 0 =
+    /// moved/uninit). Drives RAII drop-at-scope-exit (Phase 6).
+    pub drop_flags: &'a HashMap<usize, Variable>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -138,6 +141,16 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
                 self.assign_to_place(&place, value, builder, module)?;
+
+                // RAII bookkeeping: moving a Rust value out (`let e = d;`)
+                // consumes it; the assigned-to local becomes owned. A borrow
+                // (`Rvalue::Ref`) is not a move, so it's deliberately excluded.
+                if let ir::Rvalue::Use(ir::Operand::Place(ir::Place::Local(m))) = &rvalue {
+                    self.set_drop_flag(m.0, false, builder);
+                }
+                if let ir::Place::Local(l) = &place {
+                    self.set_drop_flag(l.0, true, builder);
+                }
             }
         }
         Some(())
@@ -593,9 +606,14 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         return None;
                     }
                 };
+                if let ir::Operand::Place(ir::Place::Local(m)) = operand {
+                    self.set_drop_flag(m.0, false, builder); // field value moved in
+                }
                 let value = self.lower_operand(operand, builder, module)?;
                 builder.ins().stack_store(value, slot, offset as i32);
             }
+            // The constructed Rust value is now owned.
+            self.set_drop_flag(local_id, true, builder);
             return Some(());
         }
 
@@ -790,6 +808,65 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         self.rust_slots.get(&lid).map(|(slot, _)| *slot)
     }
 
+    /// Set a droppable local's drop flag (`1` = owned, `0` = moved/uninit).
+    /// No-op if the local isn't droppable.
+    fn set_drop_flag(&self, lid: usize, owned: bool, builder: &mut FunctionBuilder) {
+        if let Some(&flag) = self.drop_flags.get(&lid) {
+            let v = builder.ins().iconst(types::I8, if owned { 1 } else { 0 });
+            builder.def_var(flag, v);
+        }
+    }
+
+    /// Mark drop flags for a `Terminator::Call`: the destination local becomes
+    /// owned; any droppable local passed by value as an argument is consumed.
+    fn update_drop_flags_for_call(
+        &self,
+        args: &[ir::Operand<'db>],
+        destination: &ir::Place<'db>,
+        builder: &mut FunctionBuilder,
+    ) {
+        for a in args {
+            if let ir::Operand::Place(ir::Place::Local(m)) = a {
+                self.set_drop_flag(m.0, false, builder);
+            }
+        }
+        if let ir::Place::Local(l) = destination {
+            self.set_drop_flag(l.0, true, builder);
+        }
+    }
+
+    /// Before a `Return`, drop every still-owned droppable local by calling its
+    /// drop wrapper (`__scrap_drop__<T>`) under its flag.
+    fn emit_drops_before_return(&self, builder: &mut FunctionBuilder, module: &mut ObjectModule) {
+        let ptr = module.target_config().pointer_type();
+        // Deterministic order (HashMap iteration isn't); drops are independent.
+        let mut locals: Vec<usize> = self.drop_flags.keys().copied().collect();
+        locals.sort_unstable();
+        for lid in locals {
+            let flag = self.drop_flags[&lid];
+            let ir::Ty::Rust(tid) = self.local_decls[lid].ty(self.db) else {
+                continue;
+            };
+            let key = format!("__scrap_drop__{}", tid.name(self.db));
+            let Some(&fid) = self.functions.get(&key) else {
+                continue;
+            };
+            let Some((slot, _)) = self.rust_slots.get(&lid) else {
+                continue;
+            };
+            let cond = builder.use_var(flag);
+            let drop_block = builder.create_block();
+            let cont = builder.create_block();
+            builder.ins().brif(cond, drop_block, &[], cont, &[]);
+            builder.switch_to_block(drop_block);
+            let addr = builder.ins().stack_addr(ptr, *slot, 0);
+            let fref = module.declare_func_in_func(fid, builder.func);
+            builder.ins().call(fref, &[addr]);
+            builder.ins().jump(cont, &[]);
+            builder.switch_to_block(cont);
+        }
+    }
+
     /// Marshal a call to a native Rust function per its `FnAbiInfo` (Phase 5):
     /// `Direct` → one register value, `Pair` → two register values loaded from /
     /// stored to the value's stack slot at the ScalarPair offsets, `Ignore` →
@@ -884,7 +961,15 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             PassMode::Ignore => {}
             PassMode::Direct(_) => {
                 if let Some(v) = results.first() {
-                    self.assign_to_place(destination, *v, builder, module)?;
+                    // A single-scalar Rust value (e.g. a one-field struct) lands
+                    // in its slot at offset 0; otherwise bind the scalar normally.
+                    if let ir::Place::Local(lid) = destination
+                        && let Some(slot) = self.rust_slot_of_local(lid.0)
+                    {
+                        builder.ins().stack_store(*v, slot, 0);
+                    } else {
+                        self.assign_to_place(destination, *v, builder, module)?;
+                    }
                 }
             }
             PassMode::Pair(a, b) => {
@@ -1270,6 +1355,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<()> {
         match term {
             ir::Terminator::Return => {
+                self.emit_drops_before_return(builder, module);
                 if self.returns_void {
                     builder.ins().return_(&[]);
                 } else {
@@ -1377,6 +1463,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         self.assign_to_place(destination, result_val, builder, module)?;
                     }
                 }
+
+                // RAII bookkeeping: the result is now owned; by-value Rust args
+                // were moved out. (Emitted in this block, before the jump below.)
+                self.update_drop_flags_for_call(args, destination, builder);
 
                 if let Some(target_bb) = target {
                     let target_block = match self.block_map.get(&target_bb.0) {

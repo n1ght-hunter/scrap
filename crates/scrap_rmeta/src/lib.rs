@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Schema version. Bumped when the shape below changes incompatibly so scrapc
 /// can reject a stale dump rather than misread it.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// The full dump emitted for one anchor compilation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,4 +161,7 @@ pub struct LayoutInfo {
     pub field_offsets: Vec<u64>,
     /// Whether the type is `Copy` (never dropped by Scrap's RAII model).
     pub is_copy: bool,
+    /// Whether the type has non-trivial drop glue (`Drop` impl or a droppable
+    /// field). Only such types get a drop wrapper + RAII drop in Scrap.
+    pub needs_drop: bool,
 }

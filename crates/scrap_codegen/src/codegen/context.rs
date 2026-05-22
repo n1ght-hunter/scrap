@@ -77,6 +77,10 @@ pub struct CodegenContext<'db> {
     /// call signature + arg/return marshalling are built from this `FnAbiInfo`
     /// rather than the IR types (Phase 5).
     pub(crate) rust_fn_abis: HashMap<String, scrap_rmeta::FnAbiInfo>,
+    /// Native Rust interop types that need dropping: Scrap type name → the
+    /// mangled symbol of the anchor's drop wrapper (`drop_in_place::<T>` glue).
+    /// A `Ty::Rust` local of such a type gets RAII drop at scope exit.
+    pub(crate) rust_drop_syms: HashMap<String, String>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
     /// Collected stack map entries across all compiled functions.
@@ -135,6 +139,7 @@ impl<'db> CodegenContext<'db> {
             rust_layouts: HashMap::new(),
             rust_fn_symbols: HashMap::new(),
             rust_fn_abis: HashMap::new(),
+            rust_drop_syms: HashMap::new(),
             data_id_counter: 0,
             stack_map_entries: Vec::new(),
         })
@@ -156,6 +161,12 @@ impl<'db> CodegenContext<'db> {
     /// metadata). Must be called before `compile_module`.
     pub fn set_rust_fn_abis(&mut self, abis: HashMap<String, scrap_rmeta::FnAbiInfo>) {
         self.rust_fn_abis = abis;
+    }
+
+    /// Install the droppable-type name → drop-wrapper-symbol map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_drop_syms(&mut self, syms: HashMap<String, String>) {
+        self.rust_drop_syms = syms;
     }
 
     /// Compile an entire IR module (declare then define).

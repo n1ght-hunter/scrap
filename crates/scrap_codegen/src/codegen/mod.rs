@@ -2,6 +2,7 @@
 
 pub mod context;
 pub mod cranelift_ir;
+mod drop_check;
 pub mod function;
 pub mod ty;
 

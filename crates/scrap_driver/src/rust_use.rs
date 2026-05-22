@@ -147,6 +147,9 @@ pub struct ResolveOutcome<'db> {
     pub rust_layouts: HashMap<String, RustLayout>,
     /// Local fn name → ABI, for codegen call marshalling (Phase 5).
     pub rust_fn_abis: HashMap<String, scrap_rmeta::FnAbiInfo>,
+    /// Imported types that need dropping: `(Scrap local name, full Rust path)`.
+    /// Drives drop-wrapper generation (anchor) + RAII drop (codegen).
+    pub droppable: Vec<(String, String)>,
 }
 
 /// Mutable accumulators shared across import resolution. Bundled so the fn/type
@@ -162,6 +165,8 @@ struct Acc<'db> {
     rust_fn_abis: HashMap<String, scrap_rmeta::FnAbiInfo>,
     /// Full path → Scrap-visible local name, for idempotent type imports.
     imported_types: HashMap<String, String>,
+    /// Droppable imported types: `(local name, full path)`.
+    droppable: Vec<(String, String)>,
 }
 
 /// Map a Rust primitive type display name to an `ir::Ty`. Primitives carry no
@@ -288,8 +293,18 @@ pub fn resolve_uses<'db>(
         rust_vis: acc.rust_vis,
         rust_layouts: acc.rust_layouts,
         rust_fn_abis: acc.rust_fn_abis,
+        droppable: acc.droppable,
     }
 }
+
+/// Sanitize a full Rust type path into a unique identifier suffix for the
+/// generated drop-wrapper fn name (e.g. `a::B<c>` → `a__B_c_`).
+pub fn sanitize_path(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
 
 fn emit_dup(db: &dyn scrap_shared::Db, local: &str) {
     emit_err(
@@ -483,6 +498,9 @@ fn ensure_type_imported<'db>(
         fields: vis_fields,
         non_exhaustive: ty.non_exhaustive,
     });
+    if layout.needs_drop {
+        acc.droppable.push((local.to_string(), path.to_string()));
+    }
     acc.imported_types.insert(path.to_string(), local.to_string());
     Some(local.to_string())
 }

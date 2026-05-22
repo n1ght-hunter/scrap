@@ -95,3 +95,31 @@ pub fn wrap(p: Pair, tag: usize) -> Wrapper {
 pub fn wrapper_tag(w: Wrapper) -> usize {
     w.tag
 }
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static DROP_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// A type whose `Drop` bumps a process-global counter, so Scrap RAII drops are
+/// observable via `dropped_count()`.
+pub struct Dropper {
+    pub tag: usize,
+}
+
+impl Drop for Dropper {
+    fn drop(&mut self) {
+        DROP_COUNT.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+pub fn make_dropper(tag: usize) -> Dropper {
+    Dropper { tag }
+}
+
+/// Consumes (and thus drops) a `Dropper` — used to verify a moved value is not
+/// also dropped by the caller.
+pub fn take_dropper(_d: Dropper) {}
+
+pub fn dropped_count() -> usize {
+    DROP_COUNT.load(Ordering::SeqCst)
+}

@@ -68,13 +68,14 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     // imports into synthesized `extern "Rust"` bindings: AST items injected into
     // the `Can` for tycheck, IR `ExternFn`s for codegen, and a name → mangled
     // symbol map for linking.
-    let anchor = build_interop_anchor(args, out_dir)?;
+    let mut anchor = build_interop_anchor(args, out_dir, &[])?;
     let mut can_for_check = resolved_can;
     let mut extern_modules: Vec<scrap_ir::Module> = Vec::new();
     let mut rust_fn_symbols = std::collections::HashMap::new();
     let mut rust_vis: Vec<scrap_tycheck::RustTypeVis> = Vec::new();
     let mut rust_layouts = std::collections::HashMap::new();
     let mut rust_fn_abis = std::collections::HashMap::new();
+    let mut rust_drop_syms = std::collections::HashMap::new();
     if let Some(meta) = anchor.as_ref().and_then(|a| a.metadata.as_ref()) {
         let catalog = rust_use::build_catalog(meta);
         let type_catalog = rust_use::build_type_catalog(meta);
@@ -95,6 +96,29 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                     resolved_can,
                     outcome.imports,
                 ));
+            }
+            // Second anchor build: generate v0-mangled drop wrappers for the
+            // droppable imported types so their `drop_in_place` glue is linked,
+            // then resolve each wrapper's symbol for codegen.
+            if !outcome.droppable.is_empty() {
+                let wrappers: Vec<scrap_interop::DropWrapper> = outcome
+                    .droppable
+                    .iter()
+                    .map(|(_, path)| scrap_interop::DropWrapper {
+                        sanitized: rust_use::sanitize_path(path),
+                        full_path: path.clone(),
+                    })
+                    .collect();
+                let anchor2 = build_interop_anchor(args, out_dir, &wrappers)?;
+                // The wrapper's symbol is its explicit export name (derived from
+                // the full path), known here without a metadata walk.
+                for (local, path) in &outcome.droppable {
+                    rust_drop_syms.insert(
+                        local.clone(),
+                        format!("__scrap_drop_in_place__{}", rust_use::sanitize_path(path)),
+                    );
+                }
+                anchor = anchor2; // link the v2 archive (it carries the drop glue)
             }
         }
     }
@@ -152,6 +176,7 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
                 rust_fn_symbols,
                 rust_layouts,
                 rust_fn_abis,
+                rust_drop_syms,
             )
         } else {
             scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone())
@@ -207,6 +232,7 @@ fn rt_lib_name(target: &target_lexicon::Triple) -> &'static str {
 fn build_interop_anchor(
     args: &args::Args,
     out_dir: &std::path::Path,
+    drop_wrappers: &[scrap_interop::DropWrapper],
 ) -> anyhow::Result<Option<scrap_interop::AnchorArtifact>> {
     let manifest = args
         .manifest
@@ -227,6 +253,7 @@ fn build_interop_anchor(
 
     scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
         rust_deps: &rust_deps,
+        drop_wrappers,
         scrap_rt_crate_dir: &scrap_rt_crate_dir,
         scrap_rustc_crate_dir: &scrap_rustc_crate_dir,
         target: &args.target,

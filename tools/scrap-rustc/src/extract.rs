@@ -278,5 +278,6 @@ fn adt_layout(tcx: TyCtxt<'_>, def_id: DefId) -> Option<LayoutInfo> {
         align: layout.align.abi.bytes(),
         field_offsets,
         is_copy: tcx.type_is_copy_modulo_regions(typing_env, ty),
+        needs_drop: ty.needs_drop(tcx, typing_env),
     })
 }

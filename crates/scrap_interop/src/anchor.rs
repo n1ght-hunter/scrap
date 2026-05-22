@@ -15,10 +15,23 @@ use target_lexicon::{BinaryFormat, Triple};
 use crate::cache::cache_key;
 use crate::schema::RustDeps;
 
+/// A generated drop wrapper to emit into the anchor: a v0-mangled `pub fn` that
+/// forces `drop_in_place::<T>` glue into the archive and gives it an externally
+/// linkable symbol (resolved from the v2 metadata, not `#[no_mangle]`).
+pub struct DropWrapper {
+    /// Unique sanitized suffix derived from the full type path.
+    pub sanitized: String,
+    /// The full Rust type path, e.g. `rmeta_fixture::Wrapper`.
+    pub full_path: String,
+}
+
 /// Inputs for one anchor build.
 pub struct AnchorRequest<'a> {
     /// The user's declared Rust dependencies. Empty → no anchor is built.
     pub rust_deps: &'a RustDeps,
+    /// Per-type drop wrappers to generate (empty on the first/metadata-only build;
+    /// populated on the second build once the droppable type set is known).
+    pub drop_wrappers: &'a [DropWrapper],
     /// Absolute path to the `scrap_rt` crate directory (depended on as an rlib).
     pub scrap_rt_crate_dir: &'a Path,
     /// Absolute path to the `tools/scrap-rustc` driver crate directory. The
@@ -57,6 +70,7 @@ pub fn build_anchor(req: &AnchorRequest) -> anyhow::Result<Option<AnchorArtifact
         &req.target.to_string(),
         req.toolchain_channel,
         req.release,
+        req.drop_wrappers,
     );
     // Absolute so cargo's `current_dir` + `--manifest-path` stay consistent and
     // the generated `rust-toolchain.toml` is discovered from the anchor dir.
@@ -172,6 +186,18 @@ fn lib_rs(req: &AnchorRequest) -> String {
     // Keep at least one symbol so the staticlib is never empty.
     out.push_str("\n#[used]\nstatic _ANCHOR_KEEP: extern \"C\" fn() = scrap_anchor_keep;\n");
     out.push_str("extern \"C\" fn scrap_anchor_keep() {}\n");
+    // Drop wrappers force `drop_in_place::<T>` glue into the archive and export
+    // it. A staticlib only exports `#[export_name]`/`#[no_mangle]`/extern symbols
+    // (a plain `pub fn` is internalized), so we set an explicit export name —
+    // derived from the FULL crate path, so it is unique per type and cannot
+    // collide (the concern that rules out a fixed `#[no_mangle]` name).
+    for w in req.drop_wrappers {
+        out.push_str(&format!(
+            "#[unsafe(export_name = \"__scrap_drop_in_place__{name}\")]\n\
+             pub extern \"C\" fn __scrap_drop_in_place__{name}(p: *mut {path}) {{ unsafe {{ core::ptr::drop_in_place(p) }} }}\n",
+            name = w.sanitized, path = w.full_path
+        ));
+    }
     out
 }
 

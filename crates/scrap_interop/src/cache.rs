@@ -8,18 +8,22 @@
 
 use std::hash::{Hash, Hasher};
 
+use crate::anchor::DropWrapper;
 use crate::schema::{RustDepSpec, RustDeps};
 
 /// Bump whenever the generated anchor files or build command change shape, so
 /// stale caches from an older scrapc are invalidated.
-const GENERATOR_VERSION: u32 = 1;
+const GENERATOR_VERSION: u32 = 4;
 
-/// Compute the stable cache hash for an anchor build, as a hex string.
+/// Compute the stable cache hash for an anchor build, as a hex string. The drop
+/// wrapper set is included so the metadata-only build and the wrapper build are
+/// distinct cache entries.
 pub(crate) fn cache_key(
     deps: &RustDeps,
     target: &str,
     toolchain_channel: &str,
     release: bool,
+    drop_wrappers: &[DropWrapper],
 ) -> String {
     let mut hasher = wyhash::WyHash::with_seed(0);
     GENERATOR_VERSION.hash(&mut hasher);
@@ -31,6 +35,11 @@ pub(crate) fn cache_key(
     for (name, spec) in &deps.0 {
         name.hash(&mut hasher);
         hash_spec(spec, &mut hasher);
+    }
+    // Drop wrappers are produced in a deterministic order by the driver.
+    for w in drop_wrappers {
+        w.sanitized.hash(&mut hasher);
+        w.full_path.hash(&mut hasher);
     }
 
     format!("{:016x}", hasher.finish())
@@ -80,21 +89,27 @@ mod tests {
             ("serde", RustDepSpec::Version("1".into())),
             ("regex", RustDepSpec::Version("1".into())),
         ]);
-        let ka = cache_key(&a, "x86_64-pc-windows-msvc", "nightly", false);
-        let kb = cache_key(&b, "x86_64-pc-windows-msvc", "nightly", false);
+        let ka = cache_key(&a, "x86_64-pc-windows-msvc", "nightly", false, &[]);
+        let kb = cache_key(&b, "x86_64-pc-windows-msvc", "nightly", false, &[]);
         assert_eq!(ka, kb);
-        assert_eq!(ka, cache_key(&a, "x86_64-pc-windows-msvc", "nightly", false));
+        assert_eq!(
+            ka,
+            cache_key(&a, "x86_64-pc-windows-msvc", "nightly", false, &[])
+        );
     }
 
     #[test]
     fn key_changes_with_inputs() {
         let base = deps_with(&[("regex", RustDepSpec::Version("1".into()))]);
-        let key = cache_key(&base, "x86_64-pc-windows-msvc", "nightly", false);
+        let key = cache_key(&base, "x86_64-pc-windows-msvc", "nightly", false, &[]);
         assert_ne!(
             key,
-            cache_key(&base, "x86_64-unknown-linux-gnu", "nightly", false)
+            cache_key(&base, "x86_64-unknown-linux-gnu", "nightly", false, &[])
         );
-        assert_ne!(key, cache_key(&base, "x86_64-pc-windows-msvc", "nightly", true));
+        assert_ne!(
+            key,
+            cache_key(&base, "x86_64-pc-windows-msvc", "nightly", true, &[])
+        );
         let changed = deps_with(&[(
             "regex",
             RustDepSpec::Detailed(DetailedDep {
@@ -104,7 +119,7 @@ mod tests {
         )]);
         assert_ne!(
             key,
-            cache_key(&changed, "x86_64-pc-windows-msvc", "nightly", false)
+            cache_key(&changed, "x86_64-pc-windows-msvc", "nightly", false, &[])
         );
     }
 }

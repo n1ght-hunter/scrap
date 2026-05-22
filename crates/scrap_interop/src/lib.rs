@@ -11,7 +11,7 @@ mod cache;
 mod driver;
 mod schema;
 
-pub use anchor::{AnchorArtifact, AnchorRequest, build_anchor};
+pub use anchor::{AnchorArtifact, AnchorRequest, DropWrapper, build_anchor};
 pub use schema::{DetailedDep, RustDepSpec, RustDeps, parse_manifest_rust_deps};
 
 /// The nightly toolchain the interop build pins to. Must match the workspace
