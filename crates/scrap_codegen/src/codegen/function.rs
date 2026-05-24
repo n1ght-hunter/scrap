@@ -182,7 +182,7 @@ impl<'db> CodegenContext<'db> {
             })
             .map(|(i, _)| i)
             .collect();
-        super::drop_check::check_use_after_move(self.db, body, &droppable);
+        super::drop_check::check_use_after_move(self.db, body, &droppable, &self.rust_fn_abis);
 
         // Set up the function context
         let cl_sig =

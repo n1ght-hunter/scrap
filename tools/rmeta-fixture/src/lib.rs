@@ -112,6 +112,17 @@ impl Drop for Dropper {
     }
 }
 
+impl Dropper {
+    /// `&self` borrow — must not consume the receiver (it's still dropped).
+    pub fn value(&self) -> usize {
+        self.tag
+    }
+    /// `self` by value — consumes the receiver.
+    pub fn consume(self) -> usize {
+        self.tag
+    }
+}
+
 pub fn make_dropper(tag: usize) -> Dropper {
     Dropper { tag }
 }
@@ -122,4 +133,25 @@ pub fn take_dropper(_d: Dropper) {}
 
 pub fn dropped_count() -> usize {
     DROP_COUNT.load(Ordering::SeqCst)
+}
+
+/// A type exercising inherent methods (all receiver forms) + an associated fn.
+/// Field is private, so it's obtained via `new()` and used through methods.
+pub struct Tally {
+    n: usize,
+}
+
+impl Tally {
+    pub fn new() -> Tally {
+        Tally { n: 0 }
+    }
+    pub fn get(&self) -> usize {
+        self.n
+    }
+    pub fn inc(&mut self) {
+        self.n += 1;
+    }
+    pub fn into_n(self) -> usize {
+        self.n
+    }
 }

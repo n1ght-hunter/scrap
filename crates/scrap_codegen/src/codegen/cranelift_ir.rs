@@ -11,6 +11,12 @@ use std::collections::HashMap;
 use super::ResultExt;
 use super::emit_codegen_err;
 
+/// Whether an ABI type's display denotes a reference (`&T`/`&mut T`) — a thin
+/// pointer that borrows rather than moves its referent.
+fn is_reference(display: &str) -> bool {
+    display.starts_with('&')
+}
+
 /// Byte size of an interop ABI scalar (`Ptr` uses the target pointer width).
 fn scalar_bytes(s: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
     use scrap_rmeta::Scalar;
@@ -818,16 +824,24 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     }
 
     /// Mark drop flags for a `Terminator::Call`: the destination local becomes
-    /// owned; any droppable local passed by value as an argument is consumed.
+    /// owned; an argument passed **by value** is consumed (moved). An argument
+    /// whose ABI type is a reference (`&self`/`&T`) is a borrow, not a move, so
+    /// its flag is left set.
     fn update_drop_flags_for_call(
         &self,
         args: &[ir::Operand<'db>],
         destination: &ir::Place<'db>,
+        abi: Option<&scrap_rmeta::FnAbiInfo>,
         builder: &mut FunctionBuilder,
     ) {
-        for a in args {
+        for (i, a) in args.iter().enumerate() {
             if let ir::Operand::Place(ir::Place::Local(m)) = a {
-                self.set_drop_flag(m.0, false, builder);
+                let by_ref = abi
+                    .and_then(|abi| abi.args.get(i))
+                    .is_some_and(|arg| is_reference(&arg.ty.display));
+                if !by_ref {
+                    self.set_drop_flag(m.0, false, builder);
+                }
             }
         }
         if let ir::Place::Local(l) = destination {
@@ -912,8 +926,14 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 PassMode::Ignore => {}
                 PassMode::Direct(s) => {
                     if let Some(slot) = operand_slot {
-                        let ty = super::ty::scalar_to_cl(*s, ptr);
-                        arg_vals.push(builder.ins().stack_load(ty, slot, 0));
+                        if is_reference(&arg_abi.ty.display) {
+                            // `&self`/`&T`: a thin reference — pass a pointer to
+                            // the value's slot (a borrow), not its loaded content.
+                            arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+                        } else {
+                            let ty = super::ty::scalar_to_cl(*s, ptr);
+                            arg_vals.push(builder.ins().stack_load(ty, slot, 0));
+                        }
                     } else {
                         arg_vals.push(self.lower_operand(operand, builder, module)?);
                     }
@@ -1447,8 +1467,8 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let func_ref = module.declare_func_in_func(func_id, builder.func);
 
-                if let Some(abi) = rust_abi {
-                    self.lower_rust_abi_call(&abi, func_ref, args, destination, builder, module)?;
+                if let Some(ref abi) = rust_abi {
+                    self.lower_rust_abi_call(abi, func_ref, args, destination, builder, module)?;
                 } else {
                     let mut arg_vals = Vec::new();
                     for a in args.iter() {
@@ -1465,8 +1485,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 }
 
                 // RAII bookkeeping: the result is now owned; by-value Rust args
-                // were moved out. (Emitted in this block, before the jump below.)
-                self.update_drop_flags_for_call(args, destination, builder);
+                // were moved out (reference args are borrows). Emitted in this
+                // block, before the jump below.
+                self.update_drop_flags_for_call(args, destination, rust_abi.as_ref(), builder);
 
                 if let Some(target_bb) = target {
                     let target_block = match self.block_map.get(&target_bb.0) {

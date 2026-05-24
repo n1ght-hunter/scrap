@@ -34,6 +34,23 @@ impl<'db> ExprLowerer<'db> {
                 arg_ops.push(self.lower_expr(arg)?);
             }
             Ok((func_op, arg_ops))
+        } else if let scrap_ast::expr::ExprKind::Path(path) = &callee.kind
+            && path.segments.len() == 2
+        {
+            // Associated-fn call `Type::assoc(args)` → call the mangled
+            // `Type::assoc` (e.g. a synthesized Rust interop `Counter::new`).
+            // (Enum-variant constructors are intercepted earlier in `lower_call`.)
+            let mangled = format!(
+                "{}::{}",
+                path.segments[0].ident.name.text(),
+                path.segments[1].ident.name.text()
+            );
+            let func_op = ir::Operand::FunctionRef(ir::FunctionId::new(self.db, mangled));
+            let mut arg_ops = Vec::new();
+            for arg in args {
+                arg_ops.push(self.lower_expr(arg)?);
+            }
+            Ok((func_op, arg_ops))
         } else {
             self.lower_call_parts(call_expr)
         }

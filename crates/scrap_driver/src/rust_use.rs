@@ -502,7 +502,117 @@ fn ensure_type_imported<'db>(
         acc.droppable.push((local.to_string(), path.to_string()));
     }
     acc.imported_types.insert(path.to_string(), local.to_string());
+
+    // Auto-synthesize a callable extern per supported inherent method, named
+    // `L::method` so the existing method-call path (`recv.method(args)`) resolves
+    // it. The receiver is `params[0]` (its `&self`/`&mut self`/`self` ABI is
+    // applied at codegen). Methods with non-scalar/non-imported signatures are
+    // skipped (calling one is then a normal "undefined function" error).
+    synth_methods(db, local, ty, acc);
+
     Some(local.to_string())
+}
+
+/// Map a method param/return display to `(ir::Ty, AST type)` using only scalars
+/// and already-imported Rust types (no auto-import / no diagnostics — an
+/// unsupported method is silently skipped).
+fn method_sig_ty<'db>(
+    db: &'db dyn scrap_shared::Db,
+    display: &str,
+    acc: &Acc<'db>,
+) -> Option<(ir::Ty<'db>, AstTy)> {
+    if let Some(ty) = prim_ir(display) {
+        return Some((ty, prim_ast_ty(display)));
+    }
+    if let Some(l) = acc.imported_types.get(display) {
+        return Some((ir::Ty::Rust(ir::TypeId::new(db, l.clone())), prim_ast_ty(l)));
+    }
+    None
+}
+
+fn synth_methods<'db>(
+    db: &'db dyn scrap_shared::Db,
+    local: &str,
+    ty: &RustType,
+    acc: &mut Acc<'db>,
+) {
+    for m in &ty.methods {
+        let Some(mono) = &m.mono else { continue }; // generic → no symbol
+        let mname = m.path.rsplit("::").next().unwrap_or(m.path.as_str());
+        // `L::name`, callable as `recv.name(..)` (method) or `L::name(..)` (assoc fn).
+        let fn_local = format!("{local}::{mname}");
+        if acc.fn_symbols.contains_key(&fn_local) {
+            continue; // already synthesized (idempotent re-import)
+        }
+
+        // A `self`-method's `params[0]` is the receiver (mapped to this type; its
+        // &/&mut-ness lives in the ABI). An associated fn has no receiver.
+        let mut param_ir = Vec::new();
+        let mut param_ast = ThinVec::new();
+        let rest = if m.has_self {
+            if m.params.is_empty() {
+                continue;
+            }
+            param_ir.push(ir::Ty::Rust(ir::TypeId::new(db, local.to_string())));
+            param_ast.push(Param {
+                id: NodeId::dummy(),
+                ident: Ident::dummy_with_name("self"),
+                ty: Box::new(prim_ast_ty(local)),
+                pat: dummy_pat(),
+                span: Span::default(),
+            });
+            &m.params[1..]
+        } else {
+            &m.params[..]
+        };
+
+        let mut supported = true;
+        for (i, p) in rest.iter().enumerate() {
+            match method_sig_ty(db, &p.display, acc) {
+                Some((t, ast_ty)) => {
+                    param_ir.push(t);
+                    param_ast.push(Param {
+                        id: NodeId::dummy(),
+                        ident: Ident::dummy_with_name(&format!("arg{i}")),
+                        ty: Box::new(ast_ty),
+                        pat: dummy_pat(),
+                        span: Span::default(),
+                    });
+                }
+                None => {
+                    supported = false;
+                    break;
+                }
+            }
+        }
+        if !supported {
+            continue;
+        }
+
+        let (ret_ir, ret_ast) = if m.ret.display == "()" {
+            (ir::Ty::Void, None)
+        } else {
+            match method_sig_ty(db, &m.ret.display, acc) {
+                Some((t, a)) => (t, Some(a)),
+                None => continue,
+            }
+        };
+
+        acc.foreign_items.push(ForeignItem {
+            id: NodeId::dummy(),
+            ident: Ident::dummy_with_name(&fn_local),
+            args: param_ast,
+            ret_type: ret_ast,
+            span: Span::default(),
+        });
+        acc.imports.push(ResolvedImport {
+            local: fn_local.clone(),
+            params: param_ir,
+            ret: ret_ir,
+        });
+        acc.fn_symbols.insert(fn_local.clone(), mono.symbol.clone());
+        acc.rust_fn_abis.insert(fn_local, mono.abi.clone());
+    }
 }
 
 /// Append synthesized `extern "Rust"` items to a `Can` (tracked: it creates a

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Schema version. Bumped when the shape below changes incompatibly so scrapc
 /// can reject a stale dump rather than misread it.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// The full dump emitted for one anchor compilation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +40,9 @@ pub struct RustFn {
     pub generic_params: Vec<String>,
     pub params: Vec<RustTyRef>,
     pub ret: RustTyRef,
+    /// Whether this is a method with a `self` receiver (`params[0]` is the
+    /// receiver). `false` for free functions and associated fns.
+    pub has_self: bool,
     /// The concrete symbol + ABI, present only for non-generic functions (a
     /// generic function has no symbol until instantiated — see Phase 4).
     pub mono: Option<MonoFn>,
@@ -126,6 +129,10 @@ pub struct RustType {
     pub fields: Vec<RustField>,
     /// Variants of an enum, or the empty list otherwise.
     pub variants: Vec<RustVariant>,
+    /// Inherent methods (associated fns with a `self` receiver), by full path
+    /// `crate::Type::method`. Associated fns *without* a receiver live in the
+    /// crate's `fns` list instead (importable by path like a free fn).
+    pub methods: Vec<RustFn>,
     /// Whether the type (or its field/variant list) is `#[non_exhaustive]` —
     /// field-by-field construction from Scrap is forbidden when set.
     pub non_exhaustive: bool,

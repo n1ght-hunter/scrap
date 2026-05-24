@@ -69,6 +69,25 @@ fn walk_module(
     }
 }
 
+/// Walk a type's inherent impls, collecting all public associated fns (both
+/// `self`-methods and associated fns) into `methods`, each flagged via
+/// `has_self`. The driver synthesizes `Type::name` callables for them.
+fn extract_inherent(tcx: TyCtxt<'_>, def_id: DefId, methods: &mut Vec<RustFn>) {
+    for &impl_id in tcx.inherent_impls(def_id) {
+        for assoc in tcx.associated_items(impl_id).in_definition_order() {
+            let ty::AssocKind::Fn { has_self, .. } = assoc.kind else {
+                continue;
+            };
+            if !tcx.visibility(assoc.def_id).is_public() {
+                continue;
+            }
+            let mut f = extract_fn(tcx, assoc.def_id);
+            f.has_self = has_self;
+            methods.push(f);
+        }
+    }
+}
+
 fn type_param_names(tcx: TyCtxt<'_>, def_id: DefId) -> Vec<String> {
     tcx.generics_of(def_id)
         .own_params
@@ -116,6 +135,7 @@ fn extract_fn(tcx: TyCtxt<'_>, def_id: DefId) -> RustFn {
         generic_params,
         params,
         ret,
+        has_self: false,
         mono,
     }
 }
@@ -188,6 +208,9 @@ fn extract_adt(tcx: TyCtxt<'_>, def_id: DefId) -> RustType {
     let path = tcx.def_path_str(def_id);
     let adt = tcx.adt_def(def_id);
 
+    let mut methods = Vec::new();
+    extract_inherent(tcx, def_id, &mut methods);
+
     let kind = if adt.is_enum() {
         AdtKind::Enum
     } else if adt.is_union() {
@@ -236,6 +259,7 @@ fn extract_adt(tcx: TyCtxt<'_>, def_id: DefId) -> RustType {
         generic_params,
         fields,
         variants,
+        methods,
         non_exhaustive,
         layout,
     }

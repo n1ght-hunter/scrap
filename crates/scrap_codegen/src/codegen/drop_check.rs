@@ -6,11 +6,16 @@
 //! destructor — a double free. This forward dataflow rejects such programs (a
 //! compile error, exactly as Rust does), which is what makes RAII drop sound.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use scrap_ir as ir;
 
 use super::emit_codegen_err;
+
+/// Whether an ABI type display is a reference (`&T`/`&mut T`) — a borrow, not a move.
+fn is_reference(display: &str) -> bool {
+    display.starts_with('&')
+}
 
 /// Emit a "use of moved value" diagnostic for every use of a droppable Rust
 /// local that may already have been moved on some path to that use.
@@ -18,6 +23,7 @@ pub(crate) fn check_use_after_move<'db>(
     db: &'db dyn scrap_shared::Db,
     body: ir::Body<'db>,
     droppable: &HashSet<usize>,
+    rust_fn_abis: &HashMap<String, scrap_rmeta::FnAbiInfo>,
 ) {
     if droppable.is_empty() {
         return;
@@ -43,7 +49,7 @@ pub(crate) fn check_use_after_move<'db>(
         for b in 0..n {
             let mut entry = HashSet::new();
             for &p in &preds[b] {
-                let out = transfer(db, blocks[p], &moved_in[p], droppable, None);
+                let out = transfer(db, blocks[p], &moved_in[p], droppable, rust_fn_abis, None);
                 entry.extend(out);
             }
             if entry != moved_in[b] {
@@ -55,7 +61,7 @@ pub(crate) fn check_use_after_move<'db>(
 
     // Final pass: re-run the transfer with diagnostics enabled.
     for b in 0..n {
-        transfer(db, blocks[b], &moved_in[b], droppable, Some((db, body)));
+        transfer(db, blocks[b], &moved_in[b], droppable, rust_fn_abis, Some((db, body)));
     }
 }
 
@@ -96,6 +102,7 @@ fn transfer<'db>(
     block: ir::BasicBlock<'db>,
     moved_in: &HashSet<usize>,
     droppable: &HashSet<usize>,
+    rust_fn_abis: &HashMap<String, scrap_rmeta::FnAbiInfo>,
     diag: Option<(&'db dyn scrap_shared::Db, ir::Body<'db>)>,
 ) -> HashSet<usize> {
     let mut moved = moved_in.clone();
@@ -131,15 +138,29 @@ fn transfer<'db>(
 
     match block.terminator(db) {
         ir::Terminator::Call {
-            args, destination, ..
+            func,
+            args,
+            destination,
+            ..
         } => {
+            // Only a native-Rust call moves Rust values; and only its
+            // by-value (non-reference) args are consumes.
+            let abi = match &func {
+                ir::Operand::FunctionRef(fid) => rust_fn_abis.get(fid.text(db)),
+                _ => None,
+            };
             let mut uses = Vec::new();
             let mut consumes = Vec::new();
-            for a in &args {
+            for (i, a) in args.iter().enumerate() {
                 if let ir::Operand::Place(p) = a {
                     if let Some(l) = bare_local(p) {
                         uses.push(l);
-                        consumes.push(l); // by-value move into the callee
+                        let by_ref = abi
+                            .and_then(|abi| abi.args.get(i))
+                            .is_some_and(|arg| is_reference(&arg.ty.display));
+                        if abi.is_some() && !by_ref {
+                            consumes.push(l);
+                        }
                     } else {
                         uses.extend(place_proj_uses(p));
                     }

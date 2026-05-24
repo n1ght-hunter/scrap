@@ -370,6 +370,26 @@ impl<'db> TypeContext<'db> {
                     }
                     return InferTy::Adt(enum_name);
                 }
+
+                // Associated-fn call `Type::assoc(args)` — resolve the mangled
+                // `Type::assoc` function (e.g. a Rust interop `Counter::new`).
+                let mangled = Symbol::new(format!("{}::{}", enum_name.text(), variant_name.text()));
+                if let Some(sig) = self.lookup_function(mangled).cloned() {
+                    if args.len() != sig.params.len() {
+                        self.emit_arity_mismatch(sig.params.len(), args.len(), span);
+                        return InferTy::Error;
+                    }
+                    for (arg, (_, param_ty)) in args.iter().zip(sig.params.iter()) {
+                        let arg_ty = self.infer_expr(arg);
+                        self.constrain_eq_with_kind(
+                            arg_ty,
+                            param_ty.clone(),
+                            arg.span,
+                            ConstraintKind::FunctionArg,
+                        );
+                    }
+                    return sig.return_ty.clone();
+                }
             }
         }
 
