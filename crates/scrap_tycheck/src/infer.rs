@@ -688,9 +688,7 @@ impl<'db> TypeContext<'db> {
                 self.emit_rust_visibility(
                     format!("cannot construct `{sn}`"),
                     "construction not allowed here".to_string(),
-                    format!(
-                        "field `{fname}` is private; construct `{sn}` through a Rust function"
-                    ),
+                    format!("field `{fname}` is private; construct `{sn}` through a Rust function"),
                     span,
                 );
                 return InferTy::Error;

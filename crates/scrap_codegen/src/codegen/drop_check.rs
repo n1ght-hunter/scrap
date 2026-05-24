@@ -61,7 +61,14 @@ pub(crate) fn check_use_after_move<'db>(
 
     // Final pass: re-run the transfer with diagnostics enabled.
     for b in 0..n {
-        transfer(db, blocks[b], &moved_in[b], droppable, rust_fn_abis, Some((db, body)));
+        transfer(
+            db,
+            blocks[b],
+            &moved_in[b],
+            droppable,
+            rust_fn_abis,
+            Some((db, body)),
+        );
     }
 }
 
@@ -107,23 +114,27 @@ fn transfer<'db>(
 ) -> HashSet<usize> {
     let mut moved = moved_in.clone();
 
-    let step = |uses: Vec<usize>, consumes: &[usize], def: Option<usize>, moved: &mut HashSet<usize>| {
-        for u in uses {
-            if droppable.contains(&u) && moved.contains(&u) && let Some((db, body)) = diag {
-                report(db, body, u);
+    let step =
+        |uses: Vec<usize>, consumes: &[usize], def: Option<usize>, moved: &mut HashSet<usize>| {
+            for u in uses {
+                if droppable.contains(&u)
+                    && moved.contains(&u)
+                    && let Some((db, body)) = diag
+                {
+                    report(db, body, u);
+                }
             }
-        }
-        for &c in consumes {
-            if droppable.contains(&c) {
-                moved.insert(c);
+            for &c in consumes {
+                if droppable.contains(&c) {
+                    moved.insert(c);
+                }
             }
-        }
-        if let Some(d) = def
-            && droppable.contains(&d)
-        {
-            moved.remove(&d); // re-initialized → owned again
-        }
-    };
+            if let Some(d) = def
+                && droppable.contains(&d)
+            {
+                moved.remove(&d); // re-initialized → owned again
+            }
+        };
 
     for stmt in block.statements(db) {
         let ir::StatementKind::Assign(place, rvalue) = stmt.kind(db);
@@ -198,7 +209,9 @@ fn report<'db>(db: &'db dyn scrap_shared::Db, body: ir::Body<'db>, local: usize)
         .unwrap_or_else(|| format!("_{local}"));
     emit_codegen_err(
         db,
-        format!("use of moved Rust value `{name}`: it was already moved out (e.g. passed by value to a Rust function)"),
+        format!(
+            "use of moved Rust value `{name}`: it was already moved out (e.g. passed by value to a Rust function)"
+        ),
     );
 }
 

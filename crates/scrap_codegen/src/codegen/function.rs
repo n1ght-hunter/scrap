@@ -99,7 +99,9 @@ impl<'db> CodegenContext<'db> {
                     // Native Rust interop functions get their Cranelift signature
                     // from the real `FnAbiInfo` (Phase 5); others use the IR types.
                     let cl_sig = match self.rust_fn_abis.get(name) {
-                        Some(abi) => super::ty::build_cl_signature_from_abi(&self.module, abi, self.db)?,
+                        Some(abi) => {
+                            super::ty::build_cl_signature_from_abi(&self.module, abi, self.db)?
+                        }
                         None => build_cl_signature(&self.module, sig, self.db)?,
                     };
                     // Native Rust interop: link against the real v0-mangled symbol

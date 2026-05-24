@@ -69,7 +69,9 @@ pub fn parse_manifest_rust_deps(manifest: &Path) -> anyhow::Result<RustDeps> {
         .with_context(|| format!("failed to read manifest {}", manifest.display()))?;
     let root: ManifestRoot = toml::from_str(&text)
         .with_context(|| format!("failed to parse manifest {}", manifest.display()))?;
-    Ok(RustDeps(root.rust.map(|r| r.dependencies).unwrap_or_default()))
+    Ok(RustDeps(
+        root.rust.map(|r| r.dependencies).unwrap_or_default(),
+    ))
 }
 
 impl RustDepSpec {

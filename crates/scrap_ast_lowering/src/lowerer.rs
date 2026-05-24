@@ -106,7 +106,11 @@ impl<'db> ExprLowerer<'db> {
     pub(crate) fn lookup_and_convert_type(&self, node_id: scrap_shared::NodeId) -> ir::Ty<'db> {
         self.lookup_expr_type(node_id)
             .map(|resolved| {
-                crate::ty_convert::resolved_to_ir_with_rust(self.db, resolved, &self.rust_type_names)
+                crate::ty_convert::resolved_to_ir_with_rust(
+                    self.db,
+                    resolved,
+                    &self.rust_type_names,
+                )
             })
             .unwrap_or(ir::Ty::Bool) // Fallback for tests
     }
@@ -119,7 +123,11 @@ impl<'db> ExprLowerer<'db> {
     ) -> ir::Ty<'db> {
         self.lookup_local_type(node_id)
             .map(|resolved| {
-                crate::ty_convert::resolved_to_ir_with_rust(self.db, resolved, &self.rust_type_names)
+                crate::ty_convert::resolved_to_ir_with_rust(
+                    self.db,
+                    resolved,
+                    &self.rust_type_names,
+                )
             })
             .unwrap_or(ir::Ty::Bool) // Fallback for tests
     }

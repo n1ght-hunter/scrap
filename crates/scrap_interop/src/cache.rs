@@ -13,7 +13,7 @@ use crate::schema::{RustDepSpec, RustDeps};
 
 /// Bump whenever the generated anchor files or build command change shape, so
 /// stale caches from an older scrapc are invalidated.
-const GENERATOR_VERSION: u32 = 4;
+const GENERATOR_VERSION: u32 = 1;
 
 /// Compute the stable cache hash for an anchor build, as a hex string. The drop
 /// wrapper set is included so the metadata-only build and the wrapper build are

@@ -1,10 +1,13 @@
 //! Build orchestration for Scrap's native Rust interop.
 //!
-//! Phase 1 scope: parse the `[rust.dependencies]` table from a Scrap manifest,
-//! generate the *anchor crate* (the single `staticlib` that depends on the
-//! user's Rust crates and on `scrap_rt` as an rlib), build it with the pinned
-//! toolchain, and hand the resulting archive back to the driver to link into the
-//! compiled Scrap executable. No metadata/ABI extraction yet — that is Phase 2.
+//! Parses the `[rust.dependencies]` table from a Scrap manifest, generates the
+//! *anchor crate* (the single `staticlib` that depends on the user's Rust crates
+//! and on `scrap_rt` as an rlib), builds it with the pinned toolchain via the
+//! `scrap-rustc` driver (which also dumps the [`scrap_rmeta`] metadata describing
+//! the anchor's public API, layouts, and ABI), and hands the resulting archive
+//! plus metadata back to the driver to link into the compiled Scrap executable.
+//! Builds are content-addressed (see `cache`) so an unchanged dependency set
+//! reuses a previously built archive.
 
 mod anchor;
 mod cache;

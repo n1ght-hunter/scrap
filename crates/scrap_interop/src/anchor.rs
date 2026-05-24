@@ -93,8 +93,12 @@ pub fn build_anchor(req: &AnchorRequest) -> anyhow::Result<Option<AnchorArtifact
 
     let driver_bin = crate::driver::ensure_driver(req.scrap_rustc_crate_dir)?;
 
-    generate_files(req, &anchor_dir)
-        .with_context(|| format!("failed to generate anchor crate at {}", anchor_dir.display()))?;
+    generate_files(req, &anchor_dir).with_context(|| {
+        format!(
+            "failed to generate anchor crate at {}",
+            anchor_dir.display()
+        )
+    })?;
 
     let archive = run_cargo(req, &anchor_dir, &target_dir, &driver_bin, &metadata_path)?;
     write_stamp(&stamp_path, &key, &archive)?;
@@ -138,10 +142,7 @@ fn generate_files(req: &AnchorRequest, anchor_dir: &Path) -> anyhow::Result<()> 
     std::fs::write(anchor_dir.join("Cargo.toml"), cargo_toml(req))?;
     std::fs::write(
         anchor_dir.join("rust-toolchain.toml"),
-        format!(
-            "[toolchain]\nchannel = \"{}\"\n",
-            req.toolchain_channel
-        ),
+        format!("[toolchain]\nchannel = \"{}\"\n", req.toolchain_channel),
     )?;
     std::fs::write(src_dir.join("lib.rs"), lib_rs(req))?;
     Ok(())

@@ -619,7 +619,11 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
                 // If it has a finalizer, hand it to the finalizer thread (which
                 // runs the destructor then frees it); otherwise free immediately.
                 let shape = (*current).shape;
-                let finalizer = if shape.is_null() { 0 } else { (*shape).finalizer };
+                let finalizer = if shape.is_null() {
+                    0
+                } else {
+                    (*shape).finalizer
+                };
                 if finalizer != 0 {
                     let f: extern "C" fn(*mut u8) = std::mem::transmute(finalizer as *const ());
                     enqueue_finalizable(f, current);

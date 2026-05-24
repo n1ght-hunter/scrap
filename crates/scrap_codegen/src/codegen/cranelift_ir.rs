@@ -1629,7 +1629,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             match slot {
                 Some((_, layout)) => Some((layout.size as u64, layout.align as u64)),
                 None => {
-                    emit_codegen_err(self.db, "box of a Rust value requires a memory-backed operand");
+                    emit_codegen_err(
+                        self.db,
+                        "box of a Rust value requires a memory-backed operand",
+                    );
                     return None;
                 }
             }
@@ -1645,19 +1648,19 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             if let Some(&id) = shapes.get(&key) {
                 id
             } else {
-                let (size, align, pointer_offsets, drop_func) =
-                    if let ir::Ty::Rust(tid) = inner_ty {
-                        let (size, align) = rust_info.unwrap();
-                        let name = tid.name(self.db);
-                        let drop_func = self
-                            .functions
-                            .get(&format!("__scrap_drop__{name}"))
-                            .copied();
-                        (size, align, Vec::<u64>::new(), drop_func)
-                    } else {
-                        let (s, a, offs) = compute_type_layout(self.db, inner_ty);
-                        (s, a, offs, None)
-                    };
+                let (size, align, pointer_offsets, drop_func) = if let ir::Ty::Rust(tid) = inner_ty
+                {
+                    let (size, align) = rust_info.unwrap();
+                    let name = tid.name(self.db);
+                    let drop_func = self
+                        .functions
+                        .get(&format!("__scrap_drop__{name}"))
+                        .copied();
+                    (size, align, Vec::<u64>::new(), drop_func)
+                } else {
+                    let (s, a, offs) = compute_type_layout(self.db, inner_ty);
+                    (s, a, offs, None)
+                };
                 let num_pointers = pointer_offsets.len() as u64;
                 let mut data = Vec::new();
                 data.extend_from_slice(&size.to_le_bytes());

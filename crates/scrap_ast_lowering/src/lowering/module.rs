@@ -29,8 +29,7 @@ pub fn lower_module<'db>(
     let mut items = Vec::new();
 
     // Names of native Rust interop types — route these to `ir::Ty::Rust`.
-    let rust_type_names: HashSet<String> =
-        rust_types.iter().map(|t| t.name.clone()).collect();
+    let rust_type_names: HashSet<String> = rust_types.iter().map(|t| t.name.clone()).collect();
 
     // Collect struct field maps for expression lowering (field name → index)
     let mut struct_field_maps: HashMap<String, HashMap<Symbol, usize>> = HashMap::new();

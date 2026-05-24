@@ -66,7 +66,12 @@ fn build_and_compile<'db>(db: &'db dyn scrap_shared::Db, _seed: Seed) -> bool {
     let bb0 = ir::BasicBlock::new(db, vec![construct, read], ir::Terminator::Return);
 
     let body = ir::Body::new(db, vec![bb0], vec![l0, l1], 0);
-    let sig = ir::Signature::new(db, Symbol::new("use_point"), vec![], ir::Ty::Int(IntTy::I32));
+    let sig = ir::Signature::new(
+        db,
+        Symbol::new("use_point"),
+        vec![],
+        ir::Ty::Int(IntTy::I32),
+    );
     let func = ir::Function::new(db, sig, body);
 
     let module_id = ModuleId::from_path(db, &Path::from_segment("test"));

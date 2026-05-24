@@ -305,7 +305,6 @@ pub fn sanitize_path(path: &str) -> String {
         .collect()
 }
 
-
 fn emit_dup(db: &dyn scrap_shared::Db, local: &str) {
     emit_err(
         db,
@@ -501,7 +500,8 @@ fn ensure_type_imported<'db>(
     if layout.needs_drop {
         acc.droppable.push((local.to_string(), path.to_string()));
     }
-    acc.imported_types.insert(path.to_string(), local.to_string());
+    acc.imported_types
+        .insert(path.to_string(), local.to_string());
 
     // Auto-synthesize a callable extern per supported inherent method, named
     // `L::method` so the existing method-call path (`recv.method(args)`) resolves
@@ -649,6 +649,7 @@ pub fn synth_extern_module<'db>(
             ir::Items::ExternFunction(ir::ExternFn::new(db, Symbol::new("Rust"), sig))
         })
         .collect();
-    let module_id = scrap_shared::id::ModuleId::from_path(db, &Path::from_segment("__rust_interop"));
+    let module_id =
+        scrap_shared::id::ModuleId::from_path(db, &Path::from_segment("__rust_interop"));
     ir::Module::new(db, module_id, items)
 }

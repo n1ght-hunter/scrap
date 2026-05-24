@@ -30,6 +30,7 @@ pub enum SyntaxKind {
     WHILE_KW,
     BREAK_KW,
     CONTINUE_KW,
+    AS_KW,
 
     // Literals
     STRING_LIT,
@@ -180,6 +181,7 @@ impl From<Token> for SyntaxKind {
             Token::While => SyntaxKind::WHILE_KW,
             Token::Break => SyntaxKind::BREAK_KW,
             Token::Continue => SyntaxKind::CONTINUE_KW,
+            Token::As => SyntaxKind::AS_KW,
 
             // Literals
             Token::Str => SyntaxKind::STRING_LIT,

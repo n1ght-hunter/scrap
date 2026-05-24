@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Schema version. Bumped when the shape below changes incompatibly so scrapc
 /// can reject a stale dump rather than misread it.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 1;
 
 /// The full dump emitted for one anchor compilation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,9 +129,11 @@ pub struct RustType {
     pub fields: Vec<RustField>,
     /// Variants of an enum, or the empty list otherwise.
     pub variants: Vec<RustVariant>,
-    /// Inherent methods (associated fns with a `self` receiver), by full path
-    /// `crate::Type::method`. Associated fns *without* a receiver live in the
-    /// crate's `fns` list instead (importable by path like a free fn).
+    /// Public inherent associated fns, by full path `crate::Type::method`. Holds
+    /// both `self`-methods and receiverless associated fns (`new`, etc.),
+    /// distinguished by `RustFn::has_self`. When the type is imported, scrapc
+    /// exposes them as `Type::assoc()` / `recv.method()`. (Free functions live in
+    /// the crate's `fns` list.)
     pub methods: Vec<RustFn>,
     /// Whether the type (or its field/variant list) is `#[non_exhaustive]` —
     /// field-by-field construction from Scrap is forbidden when set.
