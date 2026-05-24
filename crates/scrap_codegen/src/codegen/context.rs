@@ -429,6 +429,7 @@ impl<'db> CodegenContext<'db> {
         data.extend_from_slice(&size.to_le_bytes());
         data.extend_from_slice(&align.to_le_bytes());
         data.extend_from_slice(&num_pointers.to_le_bytes());
+        data.extend_from_slice(&0u64.to_le_bytes()); // finalizer (none)
         for offset in &pointer_offsets {
             data.extend_from_slice(&offset.to_le_bytes());
         }

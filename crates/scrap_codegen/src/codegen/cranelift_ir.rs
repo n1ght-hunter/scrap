@@ -148,10 +148,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
                 self.assign_to_place(&place, value, builder, module)?;
 
-                // RAII bookkeeping: moving a Rust value out (`let e = d;`)
-                // consumes it; the assigned-to local becomes owned. A borrow
-                // (`Rvalue::Ref`) is not a move, so it's deliberately excluded.
-                if let ir::Rvalue::Use(ir::Operand::Place(ir::Place::Local(m))) = &rvalue {
+                // RAII bookkeeping: moving a Rust value out (`let e = d;`, or
+                // `box(d)` into the GC heap) consumes it; the assigned-to local
+                // becomes owned. A borrow (`Rvalue::Ref`) is not a move.
+                if let ir::Rvalue::Use(ir::Operand::Place(ir::Place::Local(m)))
+                | ir::Rvalue::Box(_, ir::Operand::Place(ir::Place::Local(m))) = &rvalue
+                {
                     self.set_drop_flag(m.0, false, builder);
                 }
                 if let ir::Place::Local(l) = &place {
@@ -1616,20 +1618,52 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         builder: &mut FunctionBuilder,
         module: &mut ObjectModule,
     ) -> Option<Value> {
-        // 1. Get or create GcShape for inner_ty
+        // A native Rust value is opaque to the GC (num_pointers = 0) and carries
+        // a finalizer (its drop wrapper); its bytes are copied into the heap.
+        // Its size/align come from the operand's stack slot.
+        let rust_info: Option<(u64, u64)> = if let ir::Ty::Rust(_) = inner_ty {
+            let slot = match value_op {
+                ir::Operand::Place(ir::Place::Local(l)) => self.rust_slots.get(&l.0),
+                _ => None,
+            };
+            match slot {
+                Some((_, layout)) => Some((layout.size as u64, layout.align as u64)),
+                None => {
+                    emit_codegen_err(self.db, "box of a Rust value requires a memory-backed operand");
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+
+        // 1. Get or create GcShape for inner_ty. Layout:
+        //    [size: u64, align: u64, num_pointers: u64, finalizer: u64, offsets…]
         let shape_data_id = {
             let key = format!("{:?}", inner_ty);
             let mut shapes = self.gc_shapes.borrow_mut();
             if let Some(&id) = shapes.get(&key) {
                 id
             } else {
-                // Compute the shape inline (mirrors CodegenContext::compute_type_layout)
-                let (size, align, pointer_offsets) = compute_type_layout(self.db, inner_ty);
+                let (size, align, pointer_offsets, drop_func) =
+                    if let ir::Ty::Rust(tid) = inner_ty {
+                        let (size, align) = rust_info.unwrap();
+                        let name = tid.name(self.db);
+                        let drop_func = self
+                            .functions
+                            .get(&format!("__scrap_drop__{name}"))
+                            .copied();
+                        (size, align, Vec::<u64>::new(), drop_func)
+                    } else {
+                        let (s, a, offs) = compute_type_layout(self.db, inner_ty);
+                        (s, a, offs, None)
+                    };
                 let num_pointers = pointer_offsets.len() as u64;
                 let mut data = Vec::new();
                 data.extend_from_slice(&size.to_le_bytes());
                 data.extend_from_slice(&align.to_le_bytes());
                 data.extend_from_slice(&num_pointers.to_le_bytes());
+                data.extend_from_slice(&0u64.to_le_bytes()); // finalizer (relocated below)
                 for offset in &pointer_offsets {
                     data.extend_from_slice(&offset.to_le_bytes());
                 }
@@ -1641,6 +1675,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let mut desc = DataDescription::new();
                 desc.define(data.into_boxed_slice());
                 desc.set_align(8);
+                // Point the finalizer field (offset 24) at the drop wrapper.
+                if let Some(fid) = drop_func {
+                    let fref = module.declare_func_in_data(fid, &mut desc);
+                    desc.write_function_addr(24, fref);
+                }
                 module.define_data(data_id, &desc).or_emit(self.db)?;
 
                 shapes.insert(key, data_id);
@@ -1664,13 +1703,25 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         let call_inst = builder.ins().call(alloc_ref, &[shape_addr]);
         let ptr = builder.inst_results(call_inst)[0];
 
-        // 4. Lower the value operand
-        let value = self.lower_operand(value_op, builder, module)?;
+        // 4. Store the value into the allocation.
+        if let Some((size, _align)) = rust_info {
+            // A Rust value lives in a stack slot — copy its bytes into the heap.
+            let src = self.lower_operand(value_op, builder, module)?;
+            builder.emit_small_memory_copy(
+                module.target_config(),
+                ptr,
+                src,
+                size,
+                1,
+                1,
+                true,
+                MemFlags::new(),
+            );
+        } else {
+            let value = self.lower_operand(value_op, builder, module)?;
+            builder.ins().store(MemFlags::new(), value, ptr, 0);
+        }
 
-        // 5. Store value at the allocated pointer
-        builder.ins().store(MemFlags::new(), value, ptr, 0);
-
-        // 6. Return the pointer
         Some(ptr)
     }
 

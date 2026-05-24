@@ -274,6 +274,8 @@ fn rvalue_consumes(rv: &ir::Rvalue) -> Vec<usize> {
         }
     };
     match rv {
+        // `box(value)` moves the value into the GC heap (consumes it); the GC
+        // finalizer now owns the drop.
         ir::Rvalue::Use(o) | ir::Rvalue::Box(_, o) => add(o),
         ir::Rvalue::Aggregate(_, ops) => ops.iter().for_each(&mut add),
         _ => {}

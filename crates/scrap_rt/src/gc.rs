@@ -28,6 +28,10 @@ pub struct GcShape {
     pub size: u64,
     pub align: u64,
     pub num_pointers: u64,
+    /// Address of an `extern "C" fn(*mut u8)` drop function, or 0 for none.
+    /// Run by the finalizer thread before the object is freed (native Rust
+    /// interop values carry their `drop_in_place` wrapper here).
+    pub finalizer: u64,
     // Flexible array of pointer offsets follows in memory.
     // pointer_offsets: [u64; num_pointers]
 }
@@ -259,6 +263,74 @@ static HEAP: Mutex<HeapState> = Mutex::new(HeapState {
     threshold: INITIAL_HEAP_THRESHOLD,
 });
 
+/// An unreachable object awaiting finalization, owned exclusively by the
+/// finalizer queue (already unlinked from `all_objects`).
+struct Finalizable {
+    finalizer: extern "C" fn(*mut u8),
+    header: *mut ObjHeader,
+}
+// SAFETY: the object is unreachable and exclusively owned by the queue, so
+// moving the raw pointer to the finalizer thread is sound.
+unsafe impl Send for Finalizable {}
+
+struct FinalizerState {
+    queue: Vec<Finalizable>,
+    /// Enqueued-but-not-yet-finalized count; reaches 0 when the queue is drained.
+    pending: usize,
+}
+
+static FINALIZER: Mutex<FinalizerState> = Mutex::new(FinalizerState {
+    queue: Vec::new(),
+    pending: 0,
+});
+/// Signals the finalizer thread that work is available.
+static FINALIZER_WORK: Condvar = Condvar::new();
+/// Signals waiters (explicit `__scrap_gc_collect`) that `pending` reached 0.
+static FINALIZER_DRAINED: Condvar = Condvar::new();
+
+/// The finalizer worker loop: drain the queue, running each finalizer then
+/// freeing the object. Runs off the GC thread (after collection releases the
+/// `HEAP` lock), so a finalizer may safely allocate / lock the heap.
+fn finalizer_thread() {
+    loop {
+        let item = {
+            let mut st = mutex_lock!(FINALIZER);
+            while st.queue.is_empty() {
+                condvar_wait!(FINALIZER_WORK, st);
+            }
+            st.queue.pop().unwrap()
+        };
+        unsafe {
+            (item.finalizer)((*item.header).data_ptr());
+            let total = std::mem::size_of::<ObjHeader>() + (*item.header).size as usize;
+            let layout = std::alloc::Layout::from_size_align(total, 8).unwrap();
+            std::alloc::dealloc(item.header as *mut u8, layout);
+        }
+        let mut st = mutex_lock!(FINALIZER);
+        st.pending -= 1;
+        if st.pending == 0 {
+            FINALIZER_DRAINED.notify_all();
+        }
+    }
+}
+
+/// Enqueue an unreachable, finalizable object (called from the sweep, under the
+/// `HEAP` lock). The object must already be unlinked from `all_objects`.
+unsafe fn enqueue_finalizable(finalizer: extern "C" fn(*mut u8), header: *mut ObjHeader) {
+    let mut st = mutex_lock!(FINALIZER);
+    st.pending += 1;
+    st.queue.push(Finalizable { finalizer, header });
+}
+
+/// Block until the finalizer queue is fully drained (all enqueued finalizers
+/// have run and their objects freed). Must NOT be called holding `HEAP`.
+fn wait_for_finalizers() {
+    let mut st = mutex_lock!(FINALIZER);
+    while st.pending != 0 {
+        condvar_wait!(FINALIZER_DRAINED, st);
+    }
+}
+
 /// Initialize the GC. Called from `_start` before `main`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __scrap_gc_init() {
@@ -276,6 +348,10 @@ pub extern "C" fn __scrap_gc_init() {
 
     // Mark this as the main thread
     IS_MAIN_THREAD.with(|c| c.set(true));
+
+    // Spawn the finalizer thread (runs Rust `Drop` glue for collected GC values
+    // off the GC thread, so finalizers may allocate without deadlocking).
+    std::thread::spawn(finalizer_thread);
 
     gc_log!("init: complete, threshold={} bytes", INITIAL_HEAP_THRESHOLD);
 }
@@ -362,8 +438,14 @@ unsafe fn init_obj_header(
 #[unsafe(no_mangle)]
 pub extern "C" fn __scrap_gc_collect() {
     gc_log!("collect: forced collection requested");
-    let mut heap = mutex_lock!(HEAP);
-    collect(&mut heap);
+    {
+        let mut heap = mutex_lock!(HEAP);
+        collect(&mut heap);
+    }
+    // Released the HEAP lock first: a finalizer may allocate / lock the heap, so
+    // we must not hold it while waiting. Explicit collection is a sync point —
+    // block until all finalizers from this cycle have run.
+    wait_for_finalizers();
 }
 
 /// Run a full GC cycle. Caller must hold the HEAP mutex.
@@ -513,6 +595,7 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
     unsafe {
         let mut prev: *mut *mut ObjHeader = &raw mut heap.all_objects;
         let mut current = heap.all_objects;
+        let mut enqueued = false;
         #[cfg(feature = "gc-debug")]
         let mut freed: usize = 0;
         #[cfg(feature = "gc-debug")]
@@ -524,7 +607,7 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
             let next = (*current).next;
 
             if (*current).mark.load(Ordering::Relaxed) == MARK_WHITE {
-                // Unreachable — free it
+                // Unreachable — unlink and account for it now.
                 *prev = next;
                 let total = std::mem::size_of::<ObjHeader>() + (*current).size as usize;
                 heap.bytes_allocated -= total;
@@ -533,8 +616,18 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
                     freed += 1;
                     freed_bytes += total;
                 }
-                let layout = std::alloc::Layout::from_size_align(total, 8).unwrap();
-                std::alloc::dealloc(current as *mut u8, layout);
+                // If it has a finalizer, hand it to the finalizer thread (which
+                // runs the destructor then frees it); otherwise free immediately.
+                let shape = (*current).shape;
+                let finalizer = if shape.is_null() { 0 } else { (*shape).finalizer };
+                if finalizer != 0 {
+                    let f: extern "C" fn(*mut u8) = std::mem::transmute(finalizer as *const ());
+                    enqueue_finalizable(f, current);
+                    enqueued = true;
+                } else {
+                    let layout = std::alloc::Layout::from_size_align(total, 8).unwrap();
+                    std::alloc::dealloc(current as *mut u8, layout);
+                }
             } else {
                 // Reachable — reset mark for next cycle
                 (*current).mark.store(MARK_WHITE, Ordering::Relaxed);
@@ -546,6 +639,10 @@ unsafe fn sweep_phase(heap: &mut HeapState) {
             }
 
             current = next;
+        }
+
+        if enqueued {
+            FINALIZER_WORK.notify_all();
         }
 
         gc_log!(
