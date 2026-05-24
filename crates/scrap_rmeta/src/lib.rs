@@ -80,8 +80,13 @@ pub enum Scalar {
     I16,
     I32,
     I64,
+    /// 128-bit integer. Recorded faithfully, but not yet lowerable — codegen
+    /// rejects it rather than silently truncating to 64 bits.
+    I128,
     F32,
     F64,
+    /// 128-bit float. Recorded faithfully, but not yet lowerable (see `I128`).
+    F128,
     Ptr,
 }
 

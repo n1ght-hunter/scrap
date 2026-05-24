@@ -78,11 +78,11 @@ fn main() {
         let mut args: Vec<String> = std::iter::once("scrap-rustc".to_string())
             .chain(rustc_args.iter().cloned())
             .collect();
-        if !args.iter().any(|a| a == "--sysroot" || a.starts_with("--sysroot=")) {
-            if let Some(sysroot) = detect_sysroot() {
-                args.push("--sysroot".to_string());
-                args.push(sysroot);
-            }
+        if !args.iter().any(|a| a == "--sysroot" || a.starts_with("--sysroot="))
+            && let Some(sysroot) = detect_sysroot()
+        {
+            args.push("--sysroot".to_string());
+            args.push(sysroot);
         }
 
         let mut callbacks = DumpCallbacks {

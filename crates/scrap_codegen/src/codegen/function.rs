@@ -202,6 +202,27 @@ impl<'db> CodegenContext<'db> {
             let _param_count = body.param_count(self.db);
             let ir_blocks = body.blocks(self.db);
 
+            // A native Rust value passed/returned *by value* in a user Scrap
+            // function's signature has no Scrap-side ABI lowering yet: the entry
+            // prologue can't fill its param slot and a `Ty::Rust` return emits no
+            // value. Reject it cleanly (pass `&T` instead) rather than silently
+            // miscompiling. Rust functions/methods still take them by value via
+            // their own `FnAbiInfo`.
+            for (idx, decl) in local_decls.iter().enumerate().take(_param_count + 1) {
+                if let ir::Ty::Rust(tid) = decl.ty(self.db) {
+                    let what = if idx == 0 { "return" } else { "parameter" };
+                    let name = tid.name(self.db);
+                    emit_codegen_err(
+                        self.db,
+                        format!(
+                            "native Rust value `{name}` cannot be a by-value {what} of a Scrap \
+                             function yet; pass it by reference (`&{name}`) instead"
+                        ),
+                    );
+                    return None;
+                }
+            }
+
             // Create Cranelift blocks for each IR basic block
             let mut block_map = std::collections::HashMap::new();
             for i in 0..ir_blocks.len() {

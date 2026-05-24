@@ -4,13 +4,13 @@ use scrap_ast::typedef::{Ty, TyKind};
 use scrap_ir as ir;
 use scrap_shared::types::{FloatTy, IntTy, UintTy};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::MResult;
 
 /// Lower a type from AST to IR
 pub fn lower_type<'db>(db: &'db dyn scrap_shared::Db, ast_type: &Ty) -> MResult<ir::Ty<'db>> {
-    lower_type_with_subst(db, ast_type, &HashMap::new())
+    lower_type_with_subst_and_rust(db, ast_type, &HashMap::new(), &HashSet::new())
 }
 
 /// Lower a type from AST to IR, substituting generic type parameters.
@@ -18,6 +18,28 @@ pub fn lower_type_with_subst<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_type: &Ty,
     subst: &HashMap<scrap_shared::ident::Symbol, ir::Ty<'db>>,
+) -> MResult<ir::Ty<'db>> {
+    lower_type_with_subst_and_rust(db, ast_type, subst, &HashSet::new())
+}
+
+/// Lower a type from AST to IR, routing path types named in `rust_type_names` to
+/// the memory-backed [`ir::Ty::Rust`] (native Rust interop) instead of
+/// [`ir::Ty::Adt`].
+pub fn lower_type_with_rust<'db>(
+    db: &'db dyn scrap_shared::Db,
+    ast_type: &Ty,
+    rust_type_names: &HashSet<String>,
+) -> MResult<ir::Ty<'db>> {
+    lower_type_with_subst_and_rust(db, ast_type, &HashMap::new(), rust_type_names)
+}
+
+/// Lower a type from AST to IR, substituting generic type parameters and routing
+/// path types named in `rust_type_names` to [`ir::Ty::Rust`].
+pub fn lower_type_with_subst_and_rust<'db>(
+    db: &'db dyn scrap_shared::Db,
+    ast_type: &Ty,
+    subst: &HashMap<scrap_shared::ident::Symbol, ir::Ty<'db>>,
+    rust_type_names: &HashSet<String>,
 ) -> MResult<ir::Ty<'db>> {
     match &ast_type.kind {
         TyKind::Path(path) => {
@@ -60,16 +82,20 @@ pub fn lower_type_with_subst<'db>(
                         return Ok(concrete.clone());
                     }
                     let type_id = ir::TypeId::new(db, type_name);
-                    Ok(ir::Ty::Adt(type_id))
+                    if rust_type_names.contains(type_name) {
+                        Ok(ir::Ty::Rust(type_id))
+                    } else {
+                        Ok(ir::Ty::Adt(type_id))
+                    }
                 }
             }
         }
         TyKind::Ref(inner, mutability) => {
-            let inner_ty = lower_type_with_subst(db, inner, subst)?;
+            let inner_ty = lower_type_with_subst_and_rust(db, inner, subst, rust_type_names)?;
             Ok(ir::Ty::Ref(Box::new(inner_ty), *mutability))
         }
         TyKind::Ptr(inner) => {
-            let inner_ty = lower_type_with_subst(db, inner, subst)?;
+            let inner_ty = lower_type_with_subst_and_rust(db, inner, subst, rust_type_names)?;
             Ok(ir::Ty::Ptr(Box::new(inner_ty)))
         }
         TyKind::Never => Ok(ir::Ty::Never),

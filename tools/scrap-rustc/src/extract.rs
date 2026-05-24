@@ -19,7 +19,7 @@ pub fn extract(tcx: TyCtxt<'_>, want_crates: &[String], target: String) -> RustM
     let mut crates = Vec::new();
     for &cnum in tcx.crates(()) {
         let name = tcx.crate_name(cnum).to_string();
-        if !want_crates.iter().any(|w| *w == name) {
+        if !want_crates.contains(&name) {
             continue;
         }
         let root = DefId {
@@ -167,19 +167,22 @@ fn arg_abi(a: &ArgAbi<'_, Ty<'_>>) -> SArgAbi {
     }
 }
 
-/// Map a rustc `Scalar` to a Cranelift-mappable scalar kind. Unsupported widths
-/// (i128/f16/f128) fall back to the nearest 64-bit kind.
+/// Map a rustc `Scalar` to a Cranelift-mappable scalar kind. 128-bit scalars are
+/// recorded faithfully (`I128`/`F128`) so codegen can reject them instead of
+/// silently truncating. (`f16` still maps to `F32` — not a normal ABI scalar.)
 fn map_scalar(s: rustc_abi::Scalar) -> SScalar {
     match s.primitive() {
         Primitive::Int(i, _) => match i {
             Integer::I8 => SScalar::I8,
             Integer::I16 => SScalar::I16,
             Integer::I32 => SScalar::I32,
-            Integer::I64 | Integer::I128 => SScalar::I64,
+            Integer::I64 => SScalar::I64,
+            Integer::I128 => SScalar::I128,
         },
         Primitive::Float(f) => match f {
             Float::F16 | Float::F32 => SScalar::F32,
-            Float::F64 | Float::F128 => SScalar::F64,
+            Float::F64 => SScalar::F64,
+            Float::F128 => SScalar::F128,
         },
         Primitive::Pointer(_) => SScalar::Ptr,
     }

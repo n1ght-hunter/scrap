@@ -26,6 +26,12 @@ pub fn add_usize(a: usize, b: usize) -> usize {
     a + b
 }
 
+/// Takes/returns an `i128` — exercises the "unsupported 128-bit scalar" codegen
+/// diagnostic (the scalar is recorded faithfully, not truncated).
+pub fn id_i128(x: i128) -> i128 {
+    x
+}
+
 pub fn make_point(x: i32, y: i64) -> Point {
     Point { x, y }
 }

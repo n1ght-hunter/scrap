@@ -121,10 +121,16 @@ fn dep_crate_list(req: &AnchorRequest) -> String {
 }
 
 /// Read back a metadata dump, returning `None` (rather than failing the build)
-/// if it is absent or unreadable — Phase 1/early Phase 2 still link fine without it.
+/// if it is absent or unreadable. A dump whose `schema_version` doesn't match the
+/// one we compile against is rejected (treated as absent) rather than misread —
+/// fields may have shifted meaning between versions.
 fn read_metadata(path: &Path) -> Option<scrap_rmeta::RustMetadata> {
     let text = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&text).ok()
+    let metadata: scrap_rmeta::RustMetadata = serde_json::from_str(&text).ok()?;
+    if metadata.schema_version != scrap_rmeta::SCHEMA_VERSION {
+        return None;
+    }
+    Some(metadata)
 }
 
 /// The anchor's static-archive filename for the target format.
@@ -335,4 +341,37 @@ fn write_stamp(stamp_path: &Path, key: &str, archive: &Path) -> anyhow::Result<(
     };
     std::fs::write(stamp_path, serde_json::to_string_pretty(&stamp)?)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_temp(name: &str, contents: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("scrap_rmeta_test_{name}.json"));
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn read_metadata_accepts_current_schema() {
+        let json = format!(
+            r#"{{"schema_version":{},"target":"x86_64-pc-windows-msvc","crates":[]}}"#,
+            scrap_rmeta::SCHEMA_VERSION
+        );
+        let path = write_temp("current", &json);
+        assert!(read_metadata(&path).is_some());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn read_metadata_rejects_stale_schema() {
+        let json = format!(
+            r#"{{"schema_version":{},"target":"x86_64-pc-windows-msvc","crates":[]}}"#,
+            scrap_rmeta::SCHEMA_VERSION.wrapping_add(1)
+        );
+        let path = write_temp("stale", &json);
+        assert!(read_metadata(&path).is_none());
+        let _ = std::fs::remove_file(&path);
+    }
 }

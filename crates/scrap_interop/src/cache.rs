@@ -1,10 +1,14 @@
 //! Content-addressed cache key for an anchor build.
 //!
 //! The key folds everything that changes the produced archive: the dependency
-//! set, target triple, toolchain channel, profile, and a generator version that
-//! is bumped whenever the anchor-generation logic itself changes. An unchanged
-//! key lets the driver reuse a previously built archive instead of re-running
-//! cargo.
+//! set, target triple, toolchain channel, profile, the metadata schema version,
+//! and a generator version that is bumped whenever the anchor-generation logic
+//! itself changes. An unchanged key lets the driver reuse a previously built
+//! archive instead of re-running cargo.
+//!
+//! It does *not* hash extractor logic or path-dependency source content, so
+//! editing either still needs a manual `target/scrap/anchor` clear (or a
+//! `GENERATOR_VERSION` bump).
 
 use std::hash::{Hash, Hasher};
 
@@ -27,6 +31,9 @@ pub(crate) fn cache_key(
 ) -> String {
     let mut hasher = wyhash::WyHash::with_seed(0);
     GENERATOR_VERSION.hash(&mut hasher);
+    // A schema bump must bust the archive+metadata cache so a fresh dump is
+    // produced rather than reusing one the current scrapc would reject.
+    scrap_rmeta::SCHEMA_VERSION.hash(&mut hasher);
     target.hash(&mut hasher);
     toolchain_channel.hash(&mut hasher);
     release.hash(&mut hasher);

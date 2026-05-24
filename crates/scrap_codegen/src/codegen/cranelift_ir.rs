@@ -26,6 +26,7 @@ fn scalar_bytes(s: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
         Scalar::I32 => 4,
         Scalar::I64 | Scalar::F64 => 8,
         Scalar::F32 => 4,
+        Scalar::I128 | Scalar::F128 => 16,
         Scalar::Ptr => ptr_bytes,
     }
 }
@@ -933,7 +934,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                             // the value's slot (a borrow), not its loaded content.
                             arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
                         } else {
-                            let ty = super::ty::scalar_to_cl(*s, ptr);
+                            let ty = super::ty::scalar_to_cl(*s, ptr, self.db)?;
                             arg_vals.push(builder.ins().stack_load(ty, slot, 0));
                         }
                     } else {
@@ -948,8 +949,8 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         );
                         return None;
                     };
-                    let ta = super::ty::scalar_to_cl(*a, ptr);
-                    let tb = super::ty::scalar_to_cl(*b, ptr);
+                    let ta = super::ty::scalar_to_cl(*a, ptr, self.db)?;
+                    let tb = super::ty::scalar_to_cl(*b, ptr, self.db)?;
                     let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
                     arg_vals.push(builder.ins().stack_load(ta, slot, 0));
                     arg_vals.push(builder.ins().stack_load(tb, slot, boff));

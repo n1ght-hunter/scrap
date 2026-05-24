@@ -26,5 +26,6 @@ into the compiled Scrap executable.
 
 - `PINNED_TOOLCHAIN` must match the workspace-root `rust-toolchain.toml` and the `scrap-rustc`
   driver's `rustc_private` build.
-- The cache key currently does not hash path-dependency *source* content; after editing a local
-  path-dep, clear `target/scrap/anchor` to force a rebuild.
+- The cache key currently hashes neither path-dependency *source* content nor the extractor's logic;
+  after editing a local path-dep or `scrap-rustc`, clear `target/scrap/anchor` to force a rebuild. A
+  `SCHEMA_VERSION` bump is hashed, so it busts the cache on its own.

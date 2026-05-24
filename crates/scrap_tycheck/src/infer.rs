@@ -925,6 +925,7 @@ impl<'db> TypeContext<'db> {
                                 InferTy::Param(sym)
                             } else if self.lookup_struct(sym).is_some()
                                 || self.lookup_enum(sym).is_some()
+                                || self.rust_type_meta(sym).is_some()
                             {
                                 InferTy::Adt(sym)
                             } else {

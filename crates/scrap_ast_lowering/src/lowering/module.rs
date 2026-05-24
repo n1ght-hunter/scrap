@@ -15,7 +15,10 @@ use scrap_ir as ir;
 use scrap_shared::id::ModuleId;
 use scrap_shared::ident::Symbol;
 
-use crate::{MResult, lowerer::ExprLowerer, lowering::lower_type, lowering::lower_type_with_subst};
+use crate::{
+    MResult, lowerer::ExprLowerer, lowering::lower_type, lowering::lower_type_with_subst,
+    lowering::ty::lower_type_with_rust, lowering::ty::lower_type_with_subst_and_rust,
+};
 
 /// Lower a module with its items
 pub fn lower_module<'db>(
@@ -360,12 +363,12 @@ fn lower_monomorphized_function<'db>(
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_ty = lower_type_with_subst(db, &arg.ty, type_subst)?;
+        let param_ty = lower_type_with_subst_and_rust(db, &arg.ty, type_subst, rust_type_names)?;
         params.push(param_ty);
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
-        Some(ty) => lower_type_with_subst(db, ty, type_subst)?,
+        Some(ty) => lower_type_with_subst_and_rust(db, ty, type_subst, rust_type_names)?,
         None => ir::Ty::Void,
     };
 
@@ -397,7 +400,7 @@ pub fn lower_function<'db>(
     enum_info_maps: &HashMap<String, crate::lowerer::EnumInfo<'db>>,
     rust_type_names: &HashSet<String>,
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
-    let signature = lower_signature(db, ast_function, type_table)?;
+    let signature = lower_signature(db, ast_function, type_table, rust_type_names)?;
     let return_ty = signature.return_ty(db);
     let (body, extras) = lower_body(
         db,
@@ -413,27 +416,32 @@ pub fn lower_function<'db>(
     Ok((ir::Function::new(db, signature, body), extras))
 }
 
-/// Lower function signature
+/// Lower function signature. `rust_type_names` routes a Rust-interop type named
+/// in a parameter or return position to [`ir::Ty::Rust`] (matching how the body
+/// and call sites treat such values).
 pub fn lower_signature<'db>(
     db: &'db dyn scrap_shared::Db,
     ast_function: FnDef<'db>,
     type_table: &'db scrap_tycheck::TypeTable,
+    rust_type_names: &HashSet<String>,
 ) -> MResult<ir::Signature<'db>> {
     let name = ast_function.ident(db).name;
 
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &arg.ty)?;
+        let param_ty = lower_type_with_rust(db, &arg.ty, rust_type_names)?;
         params.push(param_ty);
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
-        Some(ty) => lower_type(db, ty)?,
+        Some(ty) => lower_type_with_rust(db, ty, rust_type_names)?,
         None => {
             // No explicit return type — check if the type checker inferred one
             type_table
                 .fn_return_type(name)
-                .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
+                .map(|resolved| {
+                    crate::ty_convert::resolved_to_ir_with_rust(db, resolved, rust_type_names)
+                })
                 .unwrap_or(ir::Ty::Void)
         }
     };
@@ -476,7 +484,8 @@ pub fn lower_method<'db>(
 ) -> MResult<(ir::Function<'db>, Vec<ir::Items<'db>>)> {
     let method_name = ast_function.ident(db).name;
     let mangled = Symbol::new(format!("{}::{}", type_name.text(), method_name.text()));
-    let signature = lower_signature_with_name(db, mangled, ast_function, type_table)?;
+    let signature =
+        lower_signature_with_name(db, mangled, ast_function, type_table, rust_type_names)?;
     let return_ty = signature.return_ty(db);
     let (body, extras) = lower_body(
         db,
@@ -498,18 +507,21 @@ pub fn lower_signature_with_name<'db>(
     name: Symbol,
     ast_function: FnDef<'db>,
     type_table: &'db scrap_tycheck::TypeTable,
+    rust_type_names: &HashSet<String>,
 ) -> MResult<ir::Signature<'db>> {
     let mut params = Vec::new();
     for arg in ast_function.args(db).iter() {
-        let param_ty = lower_type(db, &arg.ty)?;
+        let param_ty = lower_type_with_rust(db, &arg.ty, rust_type_names)?;
         params.push(param_ty);
     }
 
     let return_ty = match ast_function.ret_type(db).as_ref() {
-        Some(ty) => lower_type(db, ty)?,
+        Some(ty) => lower_type_with_rust(db, ty, rust_type_names)?,
         None => type_table
             .fn_return_type(name)
-            .map(|resolved| crate::ty_convert::resolved_to_ir(db, resolved))
+            .map(|resolved| {
+                crate::ty_convert::resolved_to_ir_with_rust(db, resolved, rust_type_names)
+            })
             .unwrap_or(ir::Ty::Void),
     };
 
@@ -566,7 +578,7 @@ fn lower_body_with_subst<'db>(
     // _1, _2, ... are function parameters
     let param_count = ast_function.args(db).len();
     for param in ast_function.args(db).iter() {
-        let param_ty = lower_type_with_subst(db, &param.ty, type_subst)?;
+        let param_ty = lower_type_with_subst_and_rust(db, &param.ty, type_subst, rust_type_names)?;
         let local_id = lowerer.allocate_named_local(param.ident.name, param_ty);
         lowerer.insert_binding(param.ident.name, local_id);
     }
@@ -591,7 +603,7 @@ fn lower_body_with_subst<'db>(
                             &lowerer.rust_type_names,
                         )
                     } else if let Some(explicit_ty) = local.ty.as_ref() {
-                        lower_type(db, explicit_ty)?
+                        lower_type_with_rust(db, explicit_ty, &lowerer.rust_type_names)?
                     } else {
                         lowerer.lookup_and_convert_local_type(local.id)
                     };

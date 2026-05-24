@@ -253,6 +253,7 @@ impl<'db> ExprLowerer<'db> {
         let mut block_lowerer = ExprLowerer::new(self.db, self.source, self.type_table);
         block_lowerer.struct_fields = self.struct_fields.clone();
         block_lowerer.enum_info = self.enum_info.clone();
+        block_lowerer.rust_type_names = self.rust_type_names.clone();
 
         // _0 = void return place
         block_lowerer.allocate_temp(ir::Ty::Void);
