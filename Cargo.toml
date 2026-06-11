@@ -54,7 +54,7 @@ inflections = "1.1.1"
 heck = "0.5.0"
 target-lexicon = "0.13"
 clap = { version = "4", features = ["derive"] }
-salsa = { version = "0.26", features = ["persistence"] }
+salsa = { version = "0.27", features = ["persistence"] }
 strum = "0.28.0"
 strum_macros = "0.28.0"
 pathdiff = "0.2.3"
@@ -95,11 +95,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # backend
-cranelift = "0.131"
-cranelift-module = "0.131"
-cranelift-jit = "0.131"
-cranelift-native = "0.131"
-cranelift-object = "0.131"
+cranelift = "0.132"
+cranelift-module = "0.132"
+cranelift-jit = "0.132"
+cranelift-native = "0.132"
+cranelift-object = "0.132"
 # Lexer
 logos = "0.16"
 
