@@ -17,11 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Rust toolchain
         run: rustup show
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
       - name: Run tests
         run: cargo test --workspace --exclude scrap_rt
 
@@ -30,11 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Rust toolchain
         run: rustup show
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
       - name: Clippy check
         run: cargo clippy --all-targets --workspace -- -D warnings
 
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Rust toolchain
         run: rustup show
       - name: Check formatting
@@ -56,7 +56,7 @@ jobs:
       RUSTC_WRAPPER: ""
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install mise
         uses: jdx/mise-action@v4
       - name: Install Rust toolchain
@@ -69,6 +69,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Check spelling
         uses: crate-ci/typos@master
