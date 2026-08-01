@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use rustc_abi::{BackendRepr, Float, Integer, Primitive};
 use rustc_hir::def::{DefKind, Res};
-use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
+use rustc_hir::def_id::{CRATE_DEF_INDEX, DefId};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypingEnv};
 use rustc_target::callconv::{ArgAbi, FnAbi, PassMode as RPassMode};
 

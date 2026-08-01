@@ -1,3 +1,7 @@
+//@ compile-fail
+//@ error: `i128` is not a supported interop type
+//@ manifest: Scrap.toml
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

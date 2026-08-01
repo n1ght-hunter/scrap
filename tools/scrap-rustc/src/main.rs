@@ -78,7 +78,9 @@ fn main() {
         let mut args: Vec<String> = std::iter::once("scrap-rustc".to_string())
             .chain(rustc_args.iter().cloned())
             .collect();
-        if !args.iter().any(|a| a == "--sysroot" || a.starts_with("--sysroot="))
+        if !args
+            .iter()
+            .any(|a| a == "--sysroot" || a.starts_with("--sysroot="))
             && let Some(sysroot) = detect_sysroot()
         {
             args.push("--sysroot".to_string());
@@ -106,7 +108,9 @@ fn main() {
             std::process::exit(status.code().unwrap_or(1));
         }
         None => {
-            eprintln!("scrap-rustc: no rustc provided (expected to run as RUSTC_WORKSPACE_WRAPPER)");
+            eprintln!(
+                "scrap-rustc: no rustc provided (expected to run as RUSTC_WORKSPACE_WRAPPER)"
+            );
             std::process::exit(1);
         }
     }
@@ -128,7 +132,10 @@ fn arg_value(args: &[String], flag: &str) -> Option<String> {
 }
 
 fn detect_sysroot() -> Option<String> {
-    let out = Command::new("rustc").args(["--print", "sysroot"]).output().ok()?;
+    let out = Command::new("rustc")
+        .args(["--print", "sysroot"])
+        .output()
+        .ok()?;
     if !out.status.success() {
         return None;
     }

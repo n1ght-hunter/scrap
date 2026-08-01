@@ -34,10 +34,6 @@ pub struct AnchorRequest<'a> {
     pub drop_wrappers: &'a [DropWrapper],
     /// Absolute path to the `scrap_rt` crate directory (depended on as an rlib).
     pub scrap_rt_crate_dir: &'a Path,
-    /// Absolute path to the `tools/scrap-rustc` driver crate directory. The
-    /// driver is built on demand and run as cargo's `RUSTC_WORKSPACE_WRAPPER` to
-    /// dump interop metadata for the anchor.
-    pub scrap_rustc_crate_dir: &'a Path,
     /// The target triple the Scrap program is being compiled for.
     pub target: &'a Triple,
     /// The pinned toolchain channel (e.g. `nightly-2026-02-10`).
@@ -91,7 +87,7 @@ pub fn build_anchor(req: &AnchorRequest) -> anyhow::Result<Option<AnchorArtifact
         }));
     }
 
-    let driver_bin = crate::driver::ensure_driver(req.scrap_rustc_crate_dir)?;
+    let driver_bin = crate::driver::driver_path()?;
 
     generate_files(req, &anchor_dir).with_context(|| {
         format!(

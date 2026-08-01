@@ -4,11 +4,6 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
-# Detached from the scrap workspace: this crate links the pinned nightly's
-# `rustc_private` internals (heavy `rustc-dev` component) and must not drag that
-# into the main compiler build.
-[workspace]
-
 [[bin]]
 name = "scrap-rustc"
 path = "src/main.rs"

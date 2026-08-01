@@ -1,3 +1,6 @@
+//@ compile-fail
+//@ error: cannot assign to data behind a `&` reference
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

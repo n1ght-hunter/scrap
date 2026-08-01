@@ -1,2 +1,7 @@
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
+
+# Artifact dependencies (rust-lang/cargo#9096), used by `scrap_interop` to depend
+# on the `scrap-rustc` binary.
+[unstable]
+bindeps = true

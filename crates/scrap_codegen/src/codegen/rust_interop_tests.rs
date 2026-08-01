@@ -30,7 +30,7 @@ struct Seed {
 /// codegen with a layout mirroring repr(Rust) `Point { x: i32, y: i64 }` (`y` at
 /// offset 0, `x` at offset 8). Returns whether codegen succeeded.
 #[salsa::tracked]
-fn build_and_compile<'db>(db: &'db dyn scrap_shared::Db, _seed: Seed) -> bool {
+fn build_and_compile(db: &dyn scrap_shared::Db, _seed: Seed) -> bool {
     let point = ir::TypeId::new(db, "rmeta_fixture::Point".to_string());
 
     // _0 = i32 return place, _1 = the Rust value.

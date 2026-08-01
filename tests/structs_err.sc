@@ -1,3 +1,6 @@
+//@ compile-fail
+//@ error: has no field named `x`
+
 struct Point {
 }
 struct Point2 {

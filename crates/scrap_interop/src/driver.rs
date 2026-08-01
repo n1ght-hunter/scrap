@@ -1,52 +1,34 @@
-//! Locating and building the `scrap-rustc` metadata driver.
+//! Locating the `scrap-rustc` metadata driver.
 //!
-//! The driver links the pinned nightly's `rustc_private`, so it lives in a
-//! detached workspace under `tools/scrap-rustc` and is built on demand (its own
-//! `rust-toolchain.toml` selects the right toolchain). We always invoke `cargo
-//! build` (cheap when up to date) rather than skipping on a present binary: the
-//! driver depends on `scrap_rmeta`, so a `SCHEMA_VERSION` bump must rebuild it
-//! to emit the new schema — otherwise a stale binary would keep emitting the old
-//! schema and `read_metadata` would reject every dump in a permanent loop. This
-//! only runs on an anchor cache miss, where a cargo no-op check is negligible.
+//! The driver is an *artifact dependency* (`-Zbindeps`): cargo builds it as part
+//! of building this crate and hands us the path through
+//! `CARGO_BIN_FILE_SCRAP_RUSTC`. That makes it a real edge in the build graph,
+//! which is what we want — the driver depends on `scrap_rmeta`, so a
+//! `SCHEMA_VERSION` bump rebuilds it automatically. The previous design shelled
+//! out to `cargo build` on an anchor cache *miss*, so a bump with a warm cache
+//! left a stale binary emitting the old schema while `read_metadata` rejected
+//! every dump it produced.
+//!
+//! It links the pinned nightly's `rustc_private`, so it stays in a detached
+//! workspace under `tools/scrap-rustc` (its own `rust-toolchain.toml` adds
+//! `rustc-dev`) and the dependency is behind the off-by-default
+//! `interop-driver` feature.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
-use anyhow::{Context, bail};
-
-fn driver_bin_name() -> &'static str {
-    if cfg!(windows) {
-        "scrap-rustc.exe"
-    } else {
-        "scrap-rustc"
-    }
+/// Path to the `scrap-rustc` binary cargo built for us.
+#[cfg(feature = "interop-driver")]
+pub(crate) fn driver_path() -> anyhow::Result<PathBuf> {
+    Ok(PathBuf::from(env!("CARGO_BIN_FILE_SCRAP_RUSTC")))
 }
 
-/// Ensure the `scrap-rustc` binary exists (building it if needed) and return its
-/// path. `crate_dir` is the `tools/scrap-rustc` directory.
-pub(crate) fn ensure_driver(crate_dir: &Path) -> anyhow::Result<PathBuf> {
-    let bin = crate_dir
-        .join("target")
-        .join("debug")
-        .join(driver_bin_name());
-
-    let status = Command::new("cargo")
-        // Run in the driver dir so its rust-toolchain.toml (pinned nightly +
-        // rustc-dev) is selected.
-        .current_dir(crate_dir)
-        .arg("build")
-        .arg("--manifest-path")
-        .arg(crate_dir.join("Cargo.toml"))
-        .status()
-        .context("failed to spawn cargo to build the scrap-rustc driver")?;
-    if !status.success() {
-        bail!("building the scrap-rustc driver failed");
-    }
-    if !bin.exists() {
-        bail!(
-            "scrap-rustc built but its binary was not found at {}",
-            bin.display()
-        );
-    }
-    Ok(bin)
+/// Without the `interop-driver` feature there is no driver to run, so an anchor
+/// build cannot proceed.
+#[cfg(not(feature = "interop-driver"))]
+pub(crate) fn driver_path() -> anyhow::Result<PathBuf> {
+    anyhow::bail!(
+        "this build of scrapc has Rust interop disabled, but the manifest declares \
+         [rust.dependencies]; rebuild with `--features interop-driver` (requires the \
+         `rustc-dev` component: `rustup component add rustc-dev`)"
+    )
 }

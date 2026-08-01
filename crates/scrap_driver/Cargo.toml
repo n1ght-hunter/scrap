@@ -34,5 +34,9 @@ indexmap = {workspace = true, features = ["serde"]}
 thin-vec.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+[features]
+default = []
+interop-driver = ["scrap_interop/interop-driver"]
+
 [lints]
 workspace = true

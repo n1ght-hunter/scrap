@@ -13,5 +13,17 @@ anyhow = { workspace = true }
 wyhash = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+# Artifact dependency: cargo builds the driver binary and exposes its path as
+# CARGO_BIN_FILE_SCRAP_RUSTC. Optional because the driver links `rustc_private`
+# and so needs the heavy `rustc-dev` component — gating it keeps that off the
+# critical path of an ordinary build (and out of rust-analyzer's).
+scrap-rustc = { path = "../../tools/scrap-rustc", artifact = "bin", optional = true }
+
+[features]
+default = []
+# Enables the anchor build. Without it `build_anchor` fails with an explanatory
+# error instead of silently taking a different path.
+interop-driver = ["dep:scrap-rustc"]
+
 [lints]
 workspace = true

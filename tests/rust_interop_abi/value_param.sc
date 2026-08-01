@@ -1,3 +1,7 @@
+//@ compile-fail
+//@ error: cannot be a by-value return of a Scrap function
+//@ manifest: Scrap.toml
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

@@ -1,3 +1,6 @@
+//@ compile-fail
+//@ error: undefined type `P`
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

@@ -258,7 +258,10 @@ mod tests {
 
     #[test]
     fn basic() {
-        let file = std::fs::read_to_string("../../tests/basic.sc").unwrap();
+        // Local fixture rather than tests/basic.sc: that file is an e2e case whose
+        // `//@` directive header changes as expectations move, which would churn
+        // this snapshot for reasons unrelated to lexing.
+        let file = std::fs::read_to_string("fixtures/basic.sc").unwrap();
 
         let lexer = Token::lexer(&file);
 

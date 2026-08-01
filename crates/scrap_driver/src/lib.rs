@@ -247,15 +247,10 @@ fn build_interop_anchor(
     let scrap_rt_crate_dir = find_repo_subdir("crates/scrap_rt").ok_or_else(|| {
         anyhow::anyhow!("could not locate the scrap_rt crate directory for the anchor build")
     })?;
-    let scrap_rustc_crate_dir = find_repo_subdir("tools/scrap-rustc").ok_or_else(|| {
-        anyhow::anyhow!("could not locate the scrap-rustc driver crate for the anchor build")
-    })?;
-
     scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
         rust_deps: &rust_deps,
         drop_wrappers,
         scrap_rt_crate_dir: &scrap_rt_crate_dir,
-        scrap_rustc_crate_dir: &scrap_rustc_crate_dir,
         target: &args.target,
         toolchain_channel: scrap_interop::PINNED_TOOLCHAIN,
         out_root: out_dir,

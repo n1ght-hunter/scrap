@@ -9,9 +9,20 @@ scrap_driver = { workspace = true }
 scrap_allocator = { workspace = true, features = ["mimalloc"] }
 workspace-hack = { version = "0.1", path = "crates/workspace-hack" }
 
+[features]
+default = []
+# Native Rust interop. Off by default because it builds the `scrap-rustc` driver,
+# which links `rustc_private` and needs the `rustc-dev` component.
+interop-driver = ["scrap_driver/interop-driver"]
+
 
 [workspace]
 members = ["crates/*", "runtime/*"]
+# `tools/*` are detached workspaces (scrap-rustc pins its own nightly with
+# rustc-dev). Excluding them explicitly is required now that scrap-rustc is an
+# artifact dependency: pulling it into the graph otherwise trips "multiple
+# workspace roots found in the same workspace".
+exclude = ["tools"]
 resolver = "3"
 
 [workspace.package]
@@ -79,7 +90,7 @@ thin-vec = "0.2"
 parking_lot = "0.12.5"
 crossbeam = "0.8"
 rustc-hash = "2.1"
-crossbeam-channel = "0.5.15"
+crossbeam-channel = "0.5.16"
 hashbrown = { version = "0.17", features = ["serde"] }
 indexmap = "2"
 

@@ -1,3 +1,7 @@
+//@ compile-fail
+//@ error: cannot construct `Secret`
+//@ manifest: Scrap.toml
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

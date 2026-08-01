@@ -1,3 +1,6 @@
+//@ run
+//@ exit: 42
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

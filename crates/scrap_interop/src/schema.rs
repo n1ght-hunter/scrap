@@ -61,6 +61,9 @@ struct RustSection {
 /// Parse the `[rust.dependencies]` table from a Scrap manifest. A missing file,
 /// missing `[rust]` section, or missing `dependencies` all yield empty deps;
 /// the `[package]` section and anything else are ignored.
+///
+/// Relative `path` dependencies are resolved against the manifest's directory and
+/// made absolute.
 pub fn parse_manifest_rust_deps(manifest: &Path) -> anyhow::Result<RustDeps> {
     if !manifest.exists() {
         return Ok(RustDeps::default());
@@ -69,9 +72,25 @@ pub fn parse_manifest_rust_deps(manifest: &Path) -> anyhow::Result<RustDeps> {
         .with_context(|| format!("failed to read manifest {}", manifest.display()))?;
     let root: ManifestRoot = toml::from_str(&text)
         .with_context(|| format!("failed to parse manifest {}", manifest.display()))?;
-    Ok(RustDeps(
-        root.rust.map(|r| r.dependencies).unwrap_or_default(),
-    ))
+    let mut deps = root.rust.map(|r| r.dependencies).unwrap_or_default();
+
+    // Path deps are rendered verbatim into the generated anchor's Cargo.toml, which
+    // lives under `target/scrap/anchor/<key>/`. A relative path would resolve against
+    // that directory rather than the manifest's, so anchor it here — otherwise every
+    // manifest would be forced to hardcode absolute, machine-specific paths.
+    let base = std::env::current_dir()
+        .unwrap_or_default()
+        .join(manifest.parent().unwrap_or(Path::new(".")));
+    for spec in deps.values_mut() {
+        if let RustDepSpec::Detailed(d) = spec
+            && let Some(p) = &d.path
+            && p.is_relative()
+        {
+            d.path = Some(base.join(p));
+        }
+    }
+
+    Ok(RustDeps(deps))
 }
 
 impl RustDepSpec {
@@ -157,7 +176,7 @@ mylib = { path = "../mylib" }
                 assert_eq!(d.features, vec!["derive".to_string()]);
                 assert_eq!(d.default_features, Some(false));
             }
-            other => panic!("expected detailed, got {other:?}"),
+            other @ RustDepSpec::Version(_) => panic!("expected detailed, got {other:?}"),
         }
     }
 

@@ -1,3 +1,7 @@
+//@ run
+//@ exit: 1
+//@ manifest: Scrap.toml
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }
