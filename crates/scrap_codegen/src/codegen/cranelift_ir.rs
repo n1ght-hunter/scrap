@@ -1296,31 +1296,55 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     Some(builder.ins().ushr(lhs, rhs))
                 }
             }
-            ir::IntrinsicOp::Eq => Some(builder.ins().icmp(IntCC::Equal, lhs, rhs)),
-            ir::IntrinsicOp::Ne => Some(builder.ins().icmp(IntCC::NotEqual, lhs, rhs)),
+            // Float comparisons use the *ordered* predicates (and `NotEqual`, which is
+            // the negation of `Equal` and so unordered-inclusive), matching Rust's
+            // `PartialOrd` on floats: every comparison but `!=` is false when either
+            // operand is NaN.
+            ir::IntrinsicOp::Eq => {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::Equal, lhs, rhs))
+                } else {
+                    Some(builder.ins().icmp(IntCC::Equal, lhs, rhs))
+                }
+            }
+            ir::IntrinsicOp::Ne => {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::NotEqual, lhs, rhs))
+                } else {
+                    Some(builder.ins().icmp(IntCC::NotEqual, lhs, rhs))
+                }
+            }
             ir::IntrinsicOp::Lt => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::LessThan, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedLessThan, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedLessThan, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Le => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::LessThanOrEqual, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedLessThanOrEqual, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedLessThanOrEqual, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Gt => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::GreaterThan, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedGreaterThan, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedGreaterThan, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Ge => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::GreaterThanOrEqual, lhs, rhs))
+                } else if signed {
                     Some(
                         builder
                             .ins()
