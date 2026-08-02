@@ -206,6 +206,7 @@ impl<'db> CodegenContext<'db> {
     /// the user's `main`. On COFF this is a custom `_start` (CRT bypassed); on
     /// ELF/Mach-O it is `main`, invoked by the platform's crt startup.
     pub fn generate_start(&mut self) -> Option<()> {
+        let frontend_config = self.module.target_config();
         let main_func_id = match self.functions.get("main").copied() {
             Some(id) => id,
             None => {
@@ -274,7 +275,7 @@ impl<'db> CodegenContext<'db> {
             builder.ins().trap(TrapCode::user(1).unwrap());
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(frontend_config);
         }
 
         self.module

@@ -1,7 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
-    directory: "/"
+    # `tools/*` are detached workspaces with their own lockfiles, so the root
+    # entry does not reach them.
+    directories:
+      - "/"
+      - "/tools/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10

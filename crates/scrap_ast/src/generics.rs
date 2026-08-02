@@ -5,7 +5,15 @@ use thin_vec::ThinVec;
 use crate::node_id::NodeId;
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, Default, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    Default,
+    salsa::SalsaValue,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 pub struct Generics {
     pub params: ThinVec<GenericParam>,
@@ -18,7 +26,7 @@ impl Generics {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct GenericParam {
     pub id: NodeId,
@@ -29,14 +37,14 @@ pub struct GenericParam {
 }
 
 #[derive(
-    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum GenericParamKind {
     Type,
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum GenericBound {
     Trait(Path),

@@ -9,7 +9,7 @@ use crate::{
 use scrap_shared::{ident::Ident, path::Path};
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Item<'db> {
     pub kind: ItemKind<'db>,
@@ -32,7 +32,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Item<'db> {
     Hash,
     PartialEq,
     Eq,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -70,7 +70,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ItemKind<'db> {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct UseTree {
     pub prefix: Path,
@@ -107,7 +107,7 @@ impl scrap_shared::pretty_print::PrettyPrint for UseTree {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum UseTreeKind {
     Simple(Option<Ident>),

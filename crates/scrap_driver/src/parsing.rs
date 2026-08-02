@@ -67,7 +67,7 @@ pub fn parse_input_files<'db>(
 pub type Modules<'db> =
     indexmap::IndexMap<scrap_shared::id::ModuleId<'db>, scrap_ast::module::Module<'db>>;
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 fn create_module<'db>(
     db: &'db dyn scrap_shared::Db,
     module_id: scrap_shared::id::ModuleId<'db>,
@@ -76,7 +76,7 @@ fn create_module<'db>(
     scrap_ast::module::Module::new(db, module_id, module_kind)
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 fn create_can<'db>(
     db: &'db dyn scrap_shared::Db,
     id: scrap_shared::NodeId,

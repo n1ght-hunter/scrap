@@ -16,6 +16,7 @@ use scrap_errors::SimpleError;
 
 #[salsa::tracked(debug)]
 struct TrackedArgs<'db> {
+    #[returns(clone)]
     pub args: args::Args,
 }
 

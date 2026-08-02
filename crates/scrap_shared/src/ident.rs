@@ -3,7 +3,7 @@ use scrap_span::Span;
 use crate::{NodeId, pretty_print::PrettyPrint};
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Ident {
     pub id: NodeId,
@@ -82,19 +82,8 @@ impl std::fmt::Display for Symbol {
     }
 }
 
-/// SAFETY: Symbol is Copy and contains only a Spur (NonZeroU32).
-/// maybe_update is equivalent to comparing two u32s and overwriting —
-/// no allocations, no pointers, no drop glue. Same safety guarantees
-/// as the blanket Update impl for primitive integer types in salsa.
+/// SAFETY: Symbol is Copy, `'static`, and contains only a Spur (NonZeroU32) —
+/// no borrows of database storage, so an instance interned in an older revision
+/// stays valid in a newer one.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for Symbol {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        let old = unsafe { *old_pointer };
-        if old != new_value {
-            unsafe { *old_pointer = new_value };
-            true
-        } else {
-            false
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for Symbol {}

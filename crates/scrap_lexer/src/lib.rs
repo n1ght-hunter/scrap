@@ -198,7 +198,7 @@ pub enum Trivia {
     Comment,
 }
 
-#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize)]
 #[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     Dummy,
@@ -216,10 +216,11 @@ impl Token {
 
 #[salsa::tracked(debug, persist)]
 pub struct LexedTokens<'db> {
+    #[returns(clone)]
     pub tokens: token_stream::TokenStream,
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn lex_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_shared::salsa::InputFile<'db>,

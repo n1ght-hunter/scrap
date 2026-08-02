@@ -6,7 +6,7 @@ use scrap_shared::ident::{Ident, Symbol};
 
 /// An `extern` block: `extern "C" { fn foo(...) -> ...; }`
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct ForeignMod {
     /// The ABI string, e.g. `"C"`
@@ -18,7 +18,7 @@ pub struct ForeignMod {
 
 /// A single foreign function declaration: `fn ExitProcess(exit_code: usize) -> !;`
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct ForeignItem {
     pub id: NodeId,

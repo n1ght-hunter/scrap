@@ -8,7 +8,7 @@ pub type AssignOp<'db> = Spanned<AssignOpKind>;
 
 /// Unary operator kinds.
 #[derive(
-    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum UnOp {
     /// The `*` operator (dereference)
@@ -20,7 +20,7 @@ pub enum UnOp {
 }
 
 #[derive(
-    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum AssocOp {
     /// A binary op.
@@ -44,7 +44,7 @@ impl scrap_shared::pretty_print::PrettyPrint for AssocOp {
 /// Assignment operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of assignment operations available in the language.
 #[derive(
-    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum AssignOpKind {
     /// The `+=` operator (addition)
@@ -89,7 +89,7 @@ impl AssignOpKind {
 /// Binary operator kinds, following Rust AST enum structure exactly.
 /// These represent the different types of binary operations available in the language.
 #[derive(
-    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Copy, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum BinOpKind {
     /// The `+` operator (addition)

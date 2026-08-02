@@ -6,7 +6,9 @@ use scrap_shared::ident::Ident;
 
 #[salsa::tracked(debug, persist)]
 pub struct FnDef<'db> {
+    #[returns(clone)]
     pub id: NodeId,
+    #[returns(clone)]
     pub ident: Ident,
     #[tracked]
     #[returns(ref)]
@@ -20,6 +22,7 @@ pub struct FnDef<'db> {
     #[tracked]
     #[returns(ref)]
     pub body: Block<'db>,
+    #[returns(clone)]
     pub span: Span,
 }
 
@@ -54,7 +57,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for FnDef<'db> {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Param {
     pub id: NodeId,

@@ -58,7 +58,7 @@ pub fn rust_layout_from_metadata(
 /// 4. Returns the raw COFF object bytes, or `None` if errors were emitted
 ///
 /// Errors are emitted through the database's diagnostic context (`db.dcx()`).
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn compile_to_object<'db>(
     db: &'db dyn scrap_shared::Db,
     ir: scrap_ir::Can<'db>,

@@ -31,11 +31,12 @@ pub struct ParsedFile<'db> {
     /// All modules defined in this file
     pub modules: Vec<scrap_ast::module::Module<'db>>,
     /// The input file (for accessing source text during lowering)
+    #[returns(clone)]
     pub file: scrap_shared::salsa::InputFile<'db>,
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum CanOrModule<'db> {
     Can(scrap_ast::Can<'db>),
@@ -73,7 +74,7 @@ impl<'db> CanOrModule<'db> {
     }
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn parse_tokens<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_shared::salsa::InputFile<'db>,

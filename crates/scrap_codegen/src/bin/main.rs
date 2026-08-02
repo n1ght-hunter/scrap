@@ -91,7 +91,7 @@ fn create_main_function(
     builder.ins().return_(&[return_code]);
 
     builder.seal_all_blocks();
-    builder.finalize();
+    builder.finalize(module.target_config());
 
     module
         .define_function(main_func_id, &mut ctx)
@@ -140,7 +140,7 @@ fn create_start_function(
 
     builder.ins().return_(&[]);
     builder.seal_all_blocks();
-    builder.finalize();
+    builder.finalize(module.target_config());
 
     module
         .define_function(start_func_id, &mut ctx)

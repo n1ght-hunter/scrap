@@ -2,7 +2,7 @@ use crate::{enumdef::VariantData, generics::Generics, node_id::NodeId};
 use scrap_shared::ident::Ident;
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct StructDef {
     pub id: NodeId,

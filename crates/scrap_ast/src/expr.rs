@@ -14,7 +14,7 @@ use scrap_shared::path::Path;
 
 /// An expression node in the AST
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Expr<'db> {
     pub id: NodeId,
@@ -36,7 +36,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Expr<'db> {
     PartialEq,
     Eq,
     EnumDiscriminants,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -92,7 +92,7 @@ pub enum ExprKind<'db> {
 
 /// A single arm of a match expression.
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Arm<'db> {
     pub pat: Pat,
@@ -102,7 +102,7 @@ pub struct Arm<'db> {
 
 /// A struct literal expression (e.g., `Point { x: 5, y: 10 }`).
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct StructExpr<'db> {
     pub path: Path,
@@ -111,7 +111,7 @@ pub struct StructExpr<'db> {
 
 /// A single field initializer in a struct literal expression.
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct ExprField<'db> {
     pub ident: Ident,

@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut, Range};
     Eq,
     Hash,
     Default,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -34,14 +34,14 @@ impl From<Span> for Range<usize> {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
-pub struct Spanned<T: salsa::Update> {
+pub struct Spanned<T: salsa::SalsaValue> {
     pub node: T,
     pub span: Span,
 }
 
-impl<T: salsa::Update> Spanned<T> {
+impl<T: salsa::SalsaValue> Spanned<T> {
     pub fn new(node: T, span: Span) -> Self {
         Self { node, span }
     }
@@ -51,7 +51,7 @@ impl<T: salsa::Update> Spanned<T> {
     }
 }
 
-impl<T: salsa::Update> Deref for Spanned<T> {
+impl<T: salsa::SalsaValue> Deref for Spanned<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -59,7 +59,7 @@ impl<T: salsa::Update> Deref for Spanned<T> {
     }
 }
 
-impl<T: salsa::Update> DerefMut for Spanned<T> {
+impl<T: salsa::SalsaValue> DerefMut for Spanned<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.node
     }

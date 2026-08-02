@@ -22,6 +22,7 @@ use super::context::{RustFieldLayout, RustLayout};
 /// Trivial salsa input so `build_and_compile` is a well-formed tracked query.
 #[salsa::input]
 struct Seed {
+    #[returns(clone)]
     val: u32,
 }
 
@@ -29,7 +30,7 @@ struct Seed {
 /// a field back at its mirrored (reordered) offset, and returns it — then drive
 /// codegen with a layout mirroring repr(Rust) `Point { x: i32, y: i64 }` (`y` at
 /// offset 0, `x` at offset 8). Returns whether codegen succeeded.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 fn build_and_compile(db: &dyn scrap_shared::Db, _seed: Seed) -> bool {
     let point = ir::TypeId::new(db, "rmeta_fixture::Point".to_string());
 

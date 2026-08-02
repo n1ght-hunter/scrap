@@ -5,7 +5,7 @@ use scrap_span::Span;
 pub use scrap_shared::NodeId;
 
 #[derive(
-    Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Visibility {
     pub kind: VisibilityKind,
@@ -27,7 +27,7 @@ impl scrap_shared::pretty_print::PrettyPrint for Visibility {
 }
 
 #[derive(
-    Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum VisibilityKind {
     Public,
@@ -40,7 +40,7 @@ pub enum VisibilityKind {
 }
 
 #[derive(
-    Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Recovered {
     No,

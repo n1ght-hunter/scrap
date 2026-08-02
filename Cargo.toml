@@ -117,7 +117,7 @@ cranelift-object = "0.134"
 logos = "0.16"
 
 # Rowan parser & formatting
-rowan = "0.16.1"
+rowan = "0.17.0"
 text-size = "1.1"
 pretty = "0.12"
 

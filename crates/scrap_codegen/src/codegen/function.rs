@@ -158,6 +158,8 @@ impl<'db> CodegenContext<'db> {
 
     /// Define a single function's body.
     fn define_function(&mut self, func: ir::Function<'db>) -> Option<()> {
+        let frontend_config = self.module.target_config();
+        let ptr = frontend_config.pointer_type();
         let sig = func.signature(self.db);
         let name = sig.name(self.db).text().to_string();
         let body = func.body(self.db);
@@ -374,7 +376,7 @@ impl<'db> CodegenContext<'db> {
                     }
                 } else if let Some((slot, _)) = stack_slots.get(&local_idx) {
                     // Stack-spilled param: store incoming value to stack slot
-                    builder.ins().stack_store(params[param_idx], *slot, 0);
+                    builder.ins().stack_store(ptr, params[param_idx], *slot, 0);
                     param_idx += 1;
                 } else if let Some(var) = variables.get(&local_idx) {
                     builder.def_var(*var, params[param_idx]);
@@ -415,6 +417,7 @@ impl<'db> CodegenContext<'db> {
                 rust_slots: &rust_slots,
                 rust_fn_abis: &self.rust_fn_abis,
                 drop_flags: &drop_flags,
+                pointer_type: ptr,
             };
 
             // Lower each basic block
@@ -437,7 +440,7 @@ impl<'db> CodegenContext<'db> {
             }
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(frontend_config);
 
             // Persist the data counter back to the context
             self.data_id_counter = data_counter.get();

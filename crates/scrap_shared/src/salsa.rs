@@ -52,7 +52,7 @@ pub struct InputPath<'db> {
     pub last_modified: std::time::SystemTime,
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn get_input_path(
     db: &dyn Db,
     path: PathBuf,
@@ -61,7 +61,7 @@ pub fn get_input_path(
     InputPath::new(db, path, last_modified)
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn load_file<'db>(db: &'db dyn Db, input_path: InputPath<'db>) -> Option<InputFile<'db>> {
     tracing::debug!("Loading file: {}", input_path.path(db).display());
     let path = input_path.path(db);

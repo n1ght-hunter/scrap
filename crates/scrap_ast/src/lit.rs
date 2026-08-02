@@ -5,7 +5,7 @@ use crate::node_id::NodeId;
 /// A literal value with its kind and actual data.
 /// This represents any literal value that appears in source code.
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Lit {
     /// Unique identifier for this literal node
@@ -38,7 +38,7 @@ impl scrap_shared::pretty_print::PrettyPrint for Lit {
 /// classified by this type as `Float`. This is different to `token::LitKind`
 /// which does *not* consider the suffix.
 #[derive(
-    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum LitKind {
     /// A boolean literal (`true`, `false`)

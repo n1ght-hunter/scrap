@@ -4,12 +4,12 @@ use scrap_shared::types::{FloatTy, FloatVal, IntTy, IntVal, Mutability, UintTy, 
 use scrap_shared::{id::ModuleId, ident::Symbol};
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct BasicBlockId(pub usize);
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct LocalId(pub usize);
 
@@ -37,6 +37,7 @@ pub struct Can<'db> {
 #[salsa::tracked(debug, persist)]
 /// A module containing a list of items (functions, structs, enums, etc.) in a single namespace.
 pub struct Module<'db> {
+    #[returns(clone)]
     pub id: ModuleId<'db>,
     #[tracked]
     #[returns(ref)]
@@ -45,7 +46,7 @@ pub struct Module<'db> {
 
 /// An item in a module: function, struct, enum, etc.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Items<'db> {
     Function(Function<'db>),
@@ -58,6 +59,7 @@ pub enum Items<'db> {
 /// The MIR for a struct
 pub struct Struct<'db> {
     /// The name of the struct.
+    #[returns(clone)]
     pub name: Symbol,
     /// The fields of the struct.
     #[tracked]
@@ -69,6 +71,7 @@ pub struct Struct<'db> {
 /// The MIR for an enum
 pub struct Enum<'db> {
     /// The name of the enum.
+    #[returns(clone)]
     pub name: Symbol,
     /// The variants of the enum.
     #[tracked]
@@ -78,7 +81,7 @@ pub struct Enum<'db> {
 
 /// An enum variant can be a unit, tuple, or struct variant.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum EnumVariant<'db> {
     /// A unit variant with no fields.
@@ -93,8 +96,10 @@ pub enum EnumVariant<'db> {
 /// An extern function declaration with its ABI and signature but no body.
 pub struct ExternFn<'db> {
     /// The ABI of the extern function (e.g. "C").
+    #[returns(clone)]
     pub abi: Symbol,
     /// The signature of the extern function.
+    #[returns(clone)]
     pub signature: Signature<'db>,
 }
 
@@ -102,25 +107,29 @@ pub struct ExternFn<'db> {
 /// The MIR for a function
 pub struct Function<'db> {
     /// The signature of the function.
+    #[returns(clone)]
     pub signature: Signature<'db>,
     /// The body of the function.
+    #[returns(clone)]
     pub body: Body<'db>,
 }
 
 #[salsa::tracked(debug, persist)]
 pub struct Signature<'db> {
     /// The name of the function.
+    #[returns(clone)]
     pub name: Symbol,
     /// The parameter types of the function.
     #[tracked]
     #[returns(ref)]
     pub params: Vec<Ty<'db>>,
     /// The return type of the function. `Ty::Void` for functions with no return value.
+    #[returns(clone)]
     pub return_ty: Ty<'db>,
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Ty<'db> {
     /// The void type, for functions that return nothing.
@@ -163,6 +172,7 @@ pub struct Body<'db> {
     #[returns(ref)]
     pub local_decls: Vec<LocalDecl<'db>>,
     /// Number of function parameters (locals _1 through _param_count).
+    #[returns(clone)]
     pub param_count: usize,
 }
 
@@ -172,19 +182,22 @@ pub struct BasicBlock<'db> {
     #[tracked]
     #[returns(ref)]
     pub statements: Vec<Statement<'db>>,
+    #[returns(clone)]
     pub terminator: Terminator<'db>,
 }
 
 #[salsa::tracked(debug, persist)]
 /// Declaration for a local variable, argument, or temporary.
 pub struct LocalDecl<'db> {
+    #[returns(clone)]
     pub name: Option<Symbol>,
+    #[returns(clone)]
     pub ty: Ty<'db>,
 }
 
 /// What to do when unwinding reaches a Call or Assert terminator.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum UnwindAction {
     /// Continue execution (abort on panic). Default for now.
@@ -197,7 +210,15 @@ pub enum UnwindAction {
 
 /// Terminators are instructions that end a basic block and transfer control.
 #[derive(
-    Debug, Clone, Default, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    salsa::SalsaValue,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 pub enum Terminator<'db> {
     Goto {
@@ -232,7 +253,7 @@ pub enum Terminator<'db> {
 
 /// Targets for a `SwitchInt` terminator: labeled value→block pairs + otherwise.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct SwitchTargets {
     /// (discriminant_value, target_block) pairs.
@@ -244,11 +265,12 @@ pub struct SwitchTargets {
 #[salsa::tracked(debug, persist)]
 /// A statement is a simple, non-control-flow-directing instruction.
 pub struct Statement<'db> {
+    #[returns(clone)]
     pub kind: StatementKind<'db>,
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum StatementKind<'db> {
     Assign(Place<'db>, Rvalue<'db>),
@@ -256,7 +278,7 @@ pub enum StatementKind<'db> {
 
 /// An `Rvalue` (right-hand value) is a computation that produces a value.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Rvalue<'db> {
     Use(Operand<'db>),
@@ -283,7 +305,7 @@ pub enum Rvalue<'db> {
 
 /// An `Operand` is an input to an `Rvalue`.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Operand<'db> {
     Place(Place<'db>),
@@ -294,7 +316,7 @@ pub enum Operand<'db> {
 /// A `Place` is a location in memory, like a local variable or a field.
 /// This is the "left-hand side" of an assignment or the base of a field access.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Place<'db> {
     /// A local variable, temporary, or argument (e.g., `x`).
@@ -313,7 +335,7 @@ pub enum Place<'db> {
 
 /// Specifies what kind of aggregate value is being constructed.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum AggregateKind<'db> {
     /// Constructing a struct, identified by its `TypeId` and field names.
@@ -324,7 +346,7 @@ pub enum AggregateKind<'db> {
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Constant {
     Void,
@@ -342,7 +364,7 @@ pub enum Constant {
 /// Checked variants (e.g. `AddWithOverflow`) return `(T, bool)` where
 /// the bool indicates overflow/error; these are paired with `Assert` terminators.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum IntrinsicOp {
     // Checked integer arithmetic — return (T, bool)
@@ -387,7 +409,7 @@ pub enum IntrinsicOp {
 
 /// Structured panic message for `Assert` terminators.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum AssertMessage {
     Overflow(IntrinsicOp),
