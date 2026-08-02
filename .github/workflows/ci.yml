@@ -62,7 +62,7 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.11
       - name: Cache anchor build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: target/scrap/anchor
           key: anchor-${{ runner.os }}-${{ hashFiles('tools/rmeta-fixture/**/*.rs', 'tools/scrap-rustc/**/*.rs', 'crates/scrap_rmeta/src/**/*.rs') }}
@@ -109,7 +109,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
       - name: Install mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@v4.2.3
       - name: Install Rust toolchain
         run: rustup show
       - name: Check workspace-hack
