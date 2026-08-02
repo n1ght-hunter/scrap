@@ -27,7 +27,7 @@ pub fn format_file(source: &str, config: &FormatterConfig) -> String {
 }
 
 /// Helper function to format a file within a tracked function context
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 fn format_file_impl(db: &dyn scrap_shared::Db, source: String, config: FormatterConfig) -> String {
     use scrap_shared::InputFile;
 

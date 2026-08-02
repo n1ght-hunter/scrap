@@ -22,7 +22,7 @@ pub use ty_convert::{resolved_to_ir, resolved_to_ir_with_rust};
 /// `struct` definitions don't reach it; the driver passes this instead so
 /// lowering can route the type to [`ir::Ty::Rust`] and resolve its fields.
 #[derive(
-    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct RustTypeLowerInfo {
     /// The type's name as used in Scrap source (matches the interned `TypeId`).
@@ -57,6 +57,7 @@ pub type MResult<T> = std::result::Result<T, Error>;
 /// Result wrapper for lowered IR
 #[salsa::tracked(debug, persist)]
 pub struct LoweredIr<'db> {
+    #[returns(clone)]
     pub can: ir::Can<'db>,
 }
 
@@ -116,7 +117,7 @@ mod tests {
     use thin_vec::ThinVec;
 
     /// Test helper that wraps the logic in a Salsa tracked function
-    #[salsa::tracked]
+    #[salsa::tracked(returns(clone))]
     fn test_lower_simple_function_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
@@ -169,7 +170,7 @@ mod tests {
         assert!(test_lower_simple_function_impl(&db));
     }
 
-    #[salsa::tracked]
+    #[salsa::tracked(returns(clone))]
     fn test_lower_function_with_params_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);
@@ -284,7 +285,7 @@ mod tests {
         assert!(test_lower_function_with_params_impl(&db));
     }
 
-    #[salsa::tracked]
+    #[salsa::tracked(returns(clone))]
     fn test_lower_type_primitives_impl(db: &dyn scrap_shared::Db) -> bool {
         let span = Span::new(0, 0);
         let node_id = NodeId::new(0, 0);

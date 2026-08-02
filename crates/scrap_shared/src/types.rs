@@ -7,7 +7,7 @@
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -87,7 +87,7 @@ impl IntTy {
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -167,7 +167,7 @@ impl UintTy {
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -216,7 +216,7 @@ impl FloatTy {
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -251,7 +251,7 @@ impl IntVal {
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -277,7 +277,9 @@ impl UintVal {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Copy, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, PartialEq, Debug, Copy, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
+)]
 pub enum FloatVal {
     F32(f32),
     F64(f64),
@@ -325,7 +327,7 @@ impl FloatVal {
 /// to track and reference specific nodes during analysis and compilation.
 /// Every AST node that can be referenced has a unique NodeId.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct NodeId {
     id: i32,
@@ -371,7 +373,7 @@ impl NodeId {
     Hash,
     Debug,
     Copy,
-    salsa::Update,
+    salsa::SalsaValue,
     serde::Serialize,
     serde::Deserialize,
 )]

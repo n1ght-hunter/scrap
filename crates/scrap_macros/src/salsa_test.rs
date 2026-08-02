@@ -30,7 +30,7 @@ pub(crate) fn salsa_test_impl(_attr: TokenStream, item: TokenStream) -> TokenStr
 
     // Generate the expanded code
     let expanded = quote! {
-        #[salsa::tracked]
+        #[salsa::tracked(returns(clone))]
         fn #wrapper_name(#fn_inputs) {
             #fn_body
         }

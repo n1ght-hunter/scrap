@@ -5,7 +5,7 @@ use crate::{field::FieldDef, generics::Generics, node_id::NodeId};
 use scrap_shared::ident::Ident;
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct EnumDef {
     pub id: NodeId,
@@ -33,7 +33,7 @@ impl scrap_shared::pretty_print::PrettyPrint for EnumDef {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Variant {
     pub id: NodeId,
@@ -73,7 +73,7 @@ impl scrap_shared::pretty_print::PrettyPrint for Variant {
 }
 
 #[derive(
-    Clone, Debug, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum VariantData {
     Struct { fields: ThinVec<FieldDef> },

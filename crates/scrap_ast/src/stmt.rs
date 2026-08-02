@@ -8,7 +8,7 @@ use crate::{expr::Expr, item::Item, local::Local, node_id::NodeId};
 /// contains an AST node with those fields. (Except for `StmtKind::Empty`,
 /// which never has attrs or tokens)
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Stmt<'db> {
     /// Unique identifier for this statement node
@@ -29,7 +29,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Stmt<'db> {
 /// Statement kinds, following Rust AST enum structure exactly.
 /// This is a subset of the full Rust StmtKind enum.
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum StmtKind<'db> {
     /// A local (let) binding (e.g., `let <pat>:<ty> = <expr>;`).

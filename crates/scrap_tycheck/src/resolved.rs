@@ -9,7 +9,7 @@ use scrap_shared::types::{FloatTy, IntTy, Mutability, UintTy};
 /// Finalized type with no inference variables.
 /// Can be stored and transferred between compilation phases.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum ResolvedTy {
     /// Void type (no value)

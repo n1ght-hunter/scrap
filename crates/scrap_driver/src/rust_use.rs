@@ -84,7 +84,7 @@ pub fn build_type_catalog(meta: &RustMetadata) -> HashMap<String, &RustType> {
 
 /// One `use rust::…` import: the local name it binds and the catalog path it
 /// refers to (segments after the leading `rust`).
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct RustUseRef {
     pub local: String,
     pub path: String,
@@ -92,7 +92,7 @@ pub struct RustUseRef {
 
 /// Scan a resolved `Can` for `use rust::<crate>::…;` items. Reads tracked
 /// fields, so it must run as a tracked query.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn scan_rust_uses<'db>(
     db: &'db dyn scrap_shared::Db,
     can: scrap_ast::Can<'db>,
@@ -125,7 +125,7 @@ pub fn scan_rust_uses<'db>(
 }
 
 /// A resolved import ready to synthesize into an IR `ExternFn`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct ResolvedImport<'db> {
     pub local: String,
     pub params: Vec<ir::Ty<'db>>,
@@ -617,7 +617,7 @@ fn synth_methods<'db>(
 
 /// Append synthesized `extern "Rust"` items to a `Can` (tracked: it creates a
 /// new `Can`). Passing the items directly mirrors `create_can`.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn rebuild_can<'db>(
     db: &'db dyn scrap_shared::Db,
     can: scrap_ast::Can<'db>,
@@ -631,7 +631,7 @@ pub fn rebuild_can<'db>(
 /// Build an IR module of `ExternFn`s for the resolved imports (tracked: it
 /// creates IR structs). `_seed` is an unused salsa-struct key (salsa requires at
 /// least one salsa-struct argument).
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn synth_extern_module<'db>(
     db: &'db dyn scrap_shared::Db,
     _seed: scrap_ast::Can<'db>,

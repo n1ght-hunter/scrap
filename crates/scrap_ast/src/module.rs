@@ -5,7 +5,7 @@ use thin_vec::ThinVec;
 use crate::item::Item;
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum Inline {
     Yes,
@@ -14,6 +14,7 @@ pub enum Inline {
 
 #[salsa::tracked(debug, persist)]
 pub struct Module<'db> {
+    #[returns(clone)]
     pub id: ModuleId<'db>,
     #[returns(ref)]
     pub kind: ModuleKind<'db>,
@@ -29,7 +30,7 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for Module<'db> {
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum ModuleKind<'db> {
     Loaded(ThinVec<Box<Item<'db>>>, Inline, Span),

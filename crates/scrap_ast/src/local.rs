@@ -5,7 +5,7 @@ use crate::{expr::Expr, node_id::NodeId, pat::Pat, typedef::Ty};
 
 /// Local represents a `let` statement, e.g., `let <pat>:<ty> = <expr>;`.
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Local<'db> {
     pub id: NodeId,
@@ -35,7 +35,7 @@ impl<'db> PrettyPrint for Local<'db> {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 /// The kind of local variable declaration.
 pub enum LocalKind<'db> {

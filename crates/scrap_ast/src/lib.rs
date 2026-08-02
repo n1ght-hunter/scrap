@@ -35,6 +35,7 @@ use thin_vec::ThinVec;
 
 #[salsa::tracked(debug, persist)]
 pub struct Can<'db> {
+    #[returns(clone)]
     pub id: NodeId,
     #[returns(ref)]
     pub name: ModuleId<'db>,

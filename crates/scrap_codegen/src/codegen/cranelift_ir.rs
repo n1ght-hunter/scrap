@@ -116,6 +116,9 @@ pub struct FuncTranslator<'a, 'db> {
     /// Droppable Rust local id → its `i8` drop-flag variable (1 = owned, 0 =
     /// moved/uninit). Drives RAII drop-at-scope-exit (Phase 6).
     pub drop_flags: &'a HashMap<usize, Variable>,
+    /// Target pointer type, needed by `stack_load`/`stack_store` on methods
+    /// that don't carry the module.
+    pub pointer_type: types::Type,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -176,7 +179,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Place::Local(local_id) => {
                 if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
                     // Stack-spilled local: store to stack
-                    builder.ins().stack_store(value, *slot, 0);
+                    builder
+                        .ins()
+                        .stack_store(self.pointer_type, value, *slot, 0);
                 } else {
                     let var = match self.variables.get(&local_id.0) {
                         Some(v) => v,
@@ -231,7 +236,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                             return None;
                         }
                     };
-                    builder.ins().stack_store(value, *slot, f.offset as i32);
+                    builder
+                        .ins()
+                        .stack_store(self.pointer_type, value, *slot, f.offset as i32);
                     return Some(());
                 }
                 // Struct/tuple field: Field(Local(x), field_idx)
@@ -256,7 +263,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Place::Deref(inner) => {
                 // Write through a pointer/reference: store value at the address held by inner
                 let ptr = self.lower_place(inner, builder)?;
-                builder.ins().store(MemFlags::new(), value, ptr, 0);
+                builder.ins().store(MemFlagsData::new(), value, ptr, 0);
                 Some(())
             }
             ir::Place::Downcast(_, _, _) => {
@@ -423,9 +430,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             // Load each arg from the args buffer (stored at 8-byte offsets)
             for (i, cl_ty) in arg_types.iter().enumerate() {
                 let offset = (i * 8) as i32;
-                let val = tramp_builder
-                    .ins()
-                    .load(*cl_ty, MemFlags::new(), args_ptr_val, offset);
+                let val =
+                    tramp_builder
+                        .ins()
+                        .load(*cl_ty, MemFlagsData::new(), args_ptr_val, offset);
                 call_args.push(val);
             }
 
@@ -433,7 +441,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             tramp_builder.ins().return_(&[]);
 
             tramp_builder.seal_all_blocks();
-            tramp_builder.finalize();
+            tramp_builder.finalize(module.target_config());
 
             module
                 .define_function(tramp_func_id, &mut tramp_ctx)
@@ -464,7 +472,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ));
 
             for (i, val) in arg_vals.iter().enumerate() {
-                builder.ins().stack_store(*val, slot, (i * 8) as i32);
+                builder
+                    .ins()
+                    .stack_store(self.pointer_type, *val, slot, (i * 8) as i32);
             }
 
             let args_ptr = builder.ins().stack_addr(types::I64, slot, 0);
@@ -619,7 +629,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     self.set_drop_flag(m.0, false, builder); // field value moved in
                 }
                 let value = self.lower_operand(operand, builder, module)?;
-                builder.ins().stack_store(value, slot, offset as i32);
+                builder
+                    .ins()
+                    .stack_store(self.pointer_type, value, slot, offset as i32);
             }
             // The constructed Rust value is now owned.
             self.set_drop_flag(local_id, true, builder);
@@ -935,7 +947,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                             arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
                         } else {
                             let ty = super::ty::scalar_to_cl(*s, ptr, self.db)?;
-                            arg_vals.push(builder.ins().stack_load(ty, slot, 0));
+                            arg_vals.push(builder.ins().stack_load(self.pointer_type, ty, slot, 0));
                         }
                     } else {
                         arg_vals.push(self.lower_operand(operand, builder, module)?);
@@ -952,8 +964,8 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     let ta = super::ty::scalar_to_cl(*a, ptr, self.db)?;
                     let tb = super::ty::scalar_to_cl(*b, ptr, self.db)?;
                     let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
-                    arg_vals.push(builder.ins().stack_load(ta, slot, 0));
-                    arg_vals.push(builder.ins().stack_load(tb, slot, boff));
+                    arg_vals.push(builder.ins().stack_load(self.pointer_type, ta, slot, 0));
+                    arg_vals.push(builder.ins().stack_load(self.pointer_type, tb, slot, boff));
                 }
                 PassMode::Indirect { .. } => {
                     // Pass a pointer to the value's memory; Cranelift copies it
@@ -989,7 +1001,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     if let ir::Place::Local(lid) = destination
                         && let Some(slot) = self.rust_slot_of_local(lid.0)
                     {
-                        builder.ins().stack_store(*v, slot, 0);
+                        builder.ins().stack_store(self.pointer_type, *v, slot, 0);
                     } else {
                         self.assign_to_place(destination, *v, builder, module)?;
                     }
@@ -1008,8 +1020,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     return None;
                 };
                 let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
-                builder.ins().stack_store(results[0], slot, 0);
-                builder.ins().stack_store(results[1], slot, boff);
+                builder
+                    .ins()
+                    .stack_store(self.pointer_type, results[0], slot, 0);
+                builder
+                    .ins()
+                    .stack_store(self.pointer_type, results[1], slot, boff);
             }
             // Indirect: the callee already wrote the value through the sret pointer.
             PassMode::Indirect { .. } => {}
@@ -1069,7 +1085,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Place::Local(local_id) => {
                 if let Some((slot, cl_ty)) = self.stack_slots.get(&local_id.0) {
                     // Stack-spilled local: load from stack
-                    return Some(builder.ins().stack_load(*cl_ty, *slot, 0));
+                    return Some(
+                        builder
+                            .ins()
+                            .stack_load(self.pointer_type, *cl_ty, *slot, 0),
+                    );
                 }
                 if let Some((slot, _)) = self.rust_slots.get(&local_id.0) {
                     // A Rust interop value is memory-backed; using it as a value
@@ -1125,7 +1145,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     };
                     return Some(match f.cl_ty {
                         // Scalar field: load it.
-                        Some(cl_ty) => builder.ins().stack_load(cl_ty, *slot, f.offset as i32),
+                        Some(cl_ty) => builder.ins().stack_load(
+                            self.pointer_type,
+                            cl_ty,
+                            *slot,
+                            f.offset as i32,
+                        ),
                         // Aggregate field: its address within the slot.
                         None => builder.ins().stack_addr(types::I64, *slot, f.offset as i32),
                     });
@@ -1153,7 +1178,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let ptr = self.lower_place(inner, builder)?;
                 // Determine the pointed-to type for the load
                 let result_ty = self.deref_result_type(inner)?;
-                Some(builder.ins().load(result_ty, MemFlags::new(), ptr, 0))
+                Some(builder.ins().load(result_ty, MemFlagsData::new(), ptr, 0))
             }
             ir::Place::Downcast(_, _, _) => {
                 // Downcast alone is not a valid read target;
@@ -1221,7 +1246,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 module.define_data(data_id, &desc).or_emit(self.db)?;
 
                 let gv = module.declare_data_in_func(data_id, builder.func);
-                let addr = builder.ins().global_value(types::I64, gv);
+                let addr = builder.ins().symbol_value(types::I64, gv);
                 Some(addr)
             }
             ir::Constant::Void => {
@@ -1580,7 +1605,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 module.define_data(data_id, &desc).or_emit(self.db)?;
 
                 let gv = module.declare_data_in_func(data_id, builder.func);
-                let msg_ptr = builder.ins().global_value(types::I64, gv);
+                let msg_ptr = builder.ins().symbol_value(types::I64, gv);
                 let msg_len = builder.ins().iconst(types::I64, msg_len_val as i64);
 
                 // Call __scrap_panic
@@ -1717,7 +1742,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
         // 2. Load GcShape address
         let gv = module.declare_data_in_func(shape_data_id, builder.func);
-        let shape_addr = builder.ins().global_value(types::I64, gv);
+        let shape_addr = builder.ins().symbol_value(types::I64, gv);
 
         // 3. Call __scrap_gc_alloc(shape_addr) → pointer to user data
         let alloc_func_id = match self.functions.get("__scrap_gc_alloc") {
@@ -1743,11 +1768,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 1,
                 1,
                 true,
-                MemFlags::new(),
+                MemFlagsData::new(),
             );
         } else {
             let value = self.lower_operand(value_op, builder, module)?;
-            builder.ins().store(MemFlags::new(), value, ptr, 0);
+            builder.ins().store(MemFlagsData::new(), value, ptr, 0);
         }
 
         Some(ptr)

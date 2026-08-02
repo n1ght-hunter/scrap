@@ -5,7 +5,7 @@ use scrap_span::Span;
 use thin_vec::ThinVec;
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Ty {
     pub id: NodeId,
@@ -20,7 +20,7 @@ impl PrettyPrint for Ty {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum TyKind {
     Path(Path),

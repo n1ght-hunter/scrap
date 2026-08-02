@@ -92,7 +92,7 @@ fn is_beside_or_below(base_path: &std::path::Path, other_path: &std::path::Path)
     is_below && base_path != other_path
 }
 
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn collect_modules<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_file: scrap_parser::ParsedFile<'db>,
@@ -150,7 +150,7 @@ pub fn collect_modules<'db>(
 /// here: rayon workers receive a freshly-cloned `ScrapDb` that is not inside
 /// any tracked-function context, and tracked-struct creation panics outside
 /// one. Calling this from a worker re-establishes the per-thread context.
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 fn lower_one_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_parser::ParsedFile<'db>,
@@ -209,7 +209,7 @@ pub fn lower_input_files_to_ir<'db>(
 /// `interop_first` holds synthesized Rust-interop extern modules; they are placed
 /// first so their imported functions are declared before any user module's bodies
 /// reference them (codegen declares + defines per module in order).
-#[salsa::tracked(persist)]
+#[salsa::tracked(persist, returns(clone))]
 pub fn create_lowered_ir<'db>(
     db: &'db dyn scrap_shared::Db,
     entry_ir: Option<scrap_ir::Module<'db>>,

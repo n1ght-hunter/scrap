@@ -55,7 +55,7 @@ impl Iterator for TokenTypeSetIter {
 }
 
 #[derive(
-    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct TokenStream {
     #[serde(with = "arc_serde")]

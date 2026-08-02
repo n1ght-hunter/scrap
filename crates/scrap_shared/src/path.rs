@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct PathSegment {
     /// The identifier portion of this path segment.
@@ -18,7 +18,7 @@ pub struct PathSegment {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Path {
     pub span: Span,
@@ -154,7 +154,7 @@ impl Path {
 /// A wrapper around Path that provides equality and hashing based only on
 /// the path text (segment names), ignoring spans and NodeIds.
 /// This is used for interning ModuleId and TypeId.
-#[derive(Debug, Clone, salsa::Update, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, salsa::SalsaValue, serde::Serialize, serde::Deserialize)]
 pub struct PathKey {
     pub path: Path,
 }

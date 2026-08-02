@@ -10,7 +10,7 @@ use rowan::GreenNode;
 use scrap_lexer::LexedTokens;
 
 /// Parse a file and return the green tree (CST)
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn parse_file<'db>(
     db: &'db dyn scrap_shared::Db,
     file: scrap_shared::salsa::InputFile<'db>,
@@ -26,7 +26,9 @@ pub fn parse_file<'db>(
 
 #[salsa::tracked(debug)]
 pub struct ParsedFile<'db> {
+    #[returns(clone)]
     pub green: GreenNode,
+    #[returns(clone)]
     pub errors: Vec<String>,
 }
 

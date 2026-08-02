@@ -4,7 +4,7 @@ use crate::{fndef::FnDef, node_id::NodeId};
 use scrap_shared::ident::Ident;
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct ImplBlock<'db> {
     pub id: NodeId,

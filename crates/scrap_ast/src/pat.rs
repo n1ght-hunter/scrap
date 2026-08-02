@@ -9,7 +9,7 @@ use scrap_shared::path::Path;
 pub use scrap_shared::Mutability;
 
 #[derive(
-    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum ByRef {
     Yes(Mutability),
@@ -17,12 +17,12 @@ pub enum ByRef {
 }
 
 #[derive(
-    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct BindingMode(pub ByRef, pub Mutability);
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub enum PatKind {
     /// A missing pattern, e.g. for an anonymous param in a bare fn like `fn f(u32)`.
@@ -46,7 +46,7 @@ pub enum PatKind {
 
 /// A field pattern in a struct pattern (e.g., `x` in `Point { x, y }`).
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct FieldPat {
     pub ident: Ident,
@@ -55,7 +55,7 @@ pub struct FieldPat {
 }
 
 #[derive(
-    Debug, Clone, Hash, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Hash, PartialEq, Eq, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct Pat {
     pub id: NodeId,

@@ -37,7 +37,7 @@ pub struct StructDef {
 
 /// One field of a [`RustTypeVis`].
 #[derive(
-    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct RustFieldVis {
     pub name: String,
@@ -52,7 +52,7 @@ pub struct RustFieldVis {
 /// construction and field access exactly as Rust's own rules would (a field must
 /// be `pub` and scalar, and the type must not be `#[non_exhaustive]`).
 #[derive(
-    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+    Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue, serde::Serialize, serde::Deserialize,
 )]
 pub struct RustTypeVis {
     /// The type's name as used in Scrap source.
