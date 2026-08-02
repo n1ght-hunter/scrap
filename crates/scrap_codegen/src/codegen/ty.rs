@@ -60,6 +60,12 @@ pub fn ir_ty_to_cl(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<Option<type
             // They have no single Cranelift type representation.
             Some(None)
         }
+        ir::Ty::Rust(_) => {
+            // Rust interop values are memory-backed (a stack slot at the mirrored
+            // layout); they have no single scalar Cranelift type. Handled like
+            // ADTs here, then given a `StackSlot` in `function.rs`.
+            Some(None)
+        }
     }
 }
 
@@ -72,6 +78,107 @@ pub fn ir_ty_to_cl_required(db: &dyn scrap_shared::Db, ty: &ir::Ty) -> Option<ty
             None
         }
     }
+}
+
+/// Map an interop ABI [`scrap_rmeta::Scalar`] to a Cranelift type. `Ptr` uses
+/// the target's pointer width (passed in by the caller). Returns `None` (and
+/// emits a diagnostic) for 128-bit scalars, which are not yet lowerable — better
+/// a clean error than silently truncating to 64 bits.
+pub(crate) fn scalar_to_cl(
+    s: scrap_rmeta::Scalar,
+    ptr: types::Type,
+    db: &dyn scrap_shared::Db,
+) -> Option<types::Type> {
+    use scrap_rmeta::Scalar;
+    match s {
+        Scalar::I8 => Some(types::I8),
+        Scalar::I16 => Some(types::I16),
+        Scalar::I32 => Some(types::I32),
+        Scalar::I64 => Some(types::I64),
+        Scalar::F32 => Some(types::F32),
+        Scalar::F64 => Some(types::F64),
+        Scalar::Ptr => Some(ptr),
+        Scalar::I128 | Scalar::F128 => {
+            emit_codegen_err(
+                db,
+                "unsupported 128-bit scalar in Rust ABI (i128/f128); not yet lowerable",
+            );
+            None
+        }
+    }
+}
+
+/// Build a Cranelift signature for a native Rust function directly from its
+/// `FnAbiInfo` (Phase 5). Handles `Ignore`/`Direct`/`Pair`; `Indirect`/`Cast`
+/// are not yet lowered and emit a diagnostic (returns `None`).
+pub fn build_cl_signature_from_abi<M: Module>(
+    module: &M,
+    abi: &scrap_rmeta::FnAbiInfo,
+    db: &dyn scrap_shared::Db,
+) -> Option<Signature> {
+    use scrap_rmeta::PassMode;
+    let mut sig = module.make_signature();
+    sig.call_conv = module.target_config().default_call_conv;
+    let ptr = module.target_config().pointer_type();
+
+    use cranelift::codegen::ir::ArgumentPurpose;
+
+    // An `sret` return is a hidden leading pointer parameter the callee writes
+    // through; the call then has no Cranelift return value.
+    if matches!(abi.ret.mode, PassMode::Indirect { .. }) {
+        sig.params
+            .push(AbiParam::special(ptr, ArgumentPurpose::StructReturn));
+    }
+
+    for arg in &abi.args {
+        match &arg.mode {
+            PassMode::Ignore => {}
+            PassMode::Direct(s) => sig.params.push(AbiParam::new(scalar_to_cl(*s, ptr, db)?)),
+            PassMode::Pair(a, b) => {
+                sig.params.push(AbiParam::new(scalar_to_cl(*a, ptr, db)?));
+                sig.params.push(AbiParam::new(scalar_to_cl(*b, ptr, db)?));
+            }
+            PassMode::Indirect { on_stack, size } => {
+                if *on_stack {
+                    sig.params.push(AbiParam::special(
+                        ptr,
+                        ArgumentPurpose::StructArgument(*size as u32),
+                    ));
+                } else {
+                    sig.params.push(AbiParam::new(ptr));
+                }
+            }
+            PassMode::Cast => {
+                emit_codegen_err(
+                    db,
+                    "unsupported Rust ABI argument mode (Cast); Direct/Pair/Indirect are lowered \
+                     (Cast is a follow-up)",
+                );
+                return None;
+            }
+        }
+    }
+
+    match &abi.ret.mode {
+        PassMode::Ignore => {}
+        PassMode::Direct(s) => sig.returns.push(AbiParam::new(scalar_to_cl(*s, ptr, db)?)),
+        PassMode::Pair(a, b) => {
+            sig.returns.push(AbiParam::new(scalar_to_cl(*a, ptr, db)?));
+            sig.returns.push(AbiParam::new(scalar_to_cl(*b, ptr, db)?));
+        }
+        // Indirect: handled by the prepended StructReturn param above (no returns).
+        PassMode::Indirect { .. } => {}
+        PassMode::Cast => {
+            emit_codegen_err(
+                db,
+                "unsupported Rust ABI return mode (Cast); Direct/Pair/Indirect are lowered \
+                 (Cast is a follow-up)",
+            );
+            return None;
+        }
+    }
+
+    Some(sig)
 }
 
 /// Build a Cranelift function signature from an IR signature.
@@ -131,6 +238,12 @@ fn expand_param_types(
             }
             Some(())
         }
+        // A Rust value is passed by pointer for now; the full `extern "Rust"`
+        // ABI lowering (Pair/Indirect/Cast) is Phase 5.
+        ir::Ty::Rust(_) => {
+            params.push(AbiParam::new(types::I64));
+            Some(())
+        }
         _ => {
             let cl_ty = ir_ty_to_cl_required(db, ty)?;
             params.push(AbiParam::new(cl_ty));
@@ -187,6 +300,12 @@ fn expand_param_types_with_layouts(
             for field_ty in fields {
                 expand_param_types_with_layouts(db, field_ty, params, struct_layouts)?;
             }
+            Some(())
+        }
+        // A Rust value is passed by pointer for now; the full `extern "Rust"`
+        // ABI lowering (Pair/Indirect/Cast) is Phase 5.
+        ir::Ty::Rust(_) => {
+            params.push(AbiParam::new(types::I64));
             Some(())
         }
         _ => {

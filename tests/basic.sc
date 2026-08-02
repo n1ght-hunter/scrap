@@ -1,3 +1,6 @@
+//@ compile-fail
+//@ error: undefined variable `asdfasd`
+
 fn foo(a: f64, b: f64) -> f64 {
     let test = asdfasd;
     let c: f64 = if a > 1.0 {

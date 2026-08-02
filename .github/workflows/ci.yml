@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 env:
   SCCACHE_GHA_ENABLED: "true"
@@ -24,6 +25,56 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.11
       - name: Run tests
         run: cargo test --workspace --exclude scrap_rt
+      - name: Check rmeta-fixture
+        # Detached from the workspace (it stands in for a third-party crate that the
+        # generated anchor depends on by path), so nothing above would compile it.
+        # Plain stable lib — no rustc-dev needed, unlike scrap-rustc.
+        run: cargo check --manifest-path tools/rmeta-fixture/Cargo.toml
+
+  e2e:
+    name: E2E (.sc programs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Run .sc end-to-end tests
+        run: bash tests/run.sh
+
+  e2e-interop:
+    name: E2E (Rust interop)
+    runs-on: ubuntu-latest
+    # Pulls the pinned nightly plus rustc-dev (a large download) and cargo-builds an
+    # anchor staticlib, so this is gated instead of running on every PR. Add the
+    # `interop` label to a PR, or dispatch the workflow, to run it there.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'interop')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Install pinned interop toolchain
+        run: rustup show
+        working-directory: tools/scrap-rustc
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Cache anchor build
+        uses: actions/cache@v4
+        with:
+          path: target/scrap/anchor
+          key: anchor-${{ runner.os }}-${{ hashFiles('tools/rmeta-fixture/**/*.rs', 'tools/scrap-rustc/**/*.rs', 'crates/scrap_rmeta/src/**/*.rs') }}
+      - name: Clippy the scrap-rustc driver
+        # Only lintable here: it links rustc_private, so it needs the rustc-dev
+        # component this job installs. `tests/run.sh --interop` compiles it as an
+        # artifact dependency, but that would not surface lints.
+        run: cargo clippy --manifest-path tools/scrap-rustc/Cargo.toml --all-targets -- -D warnings
+      - name: Run interop end-to-end tests
+        # Name filter keeps this to the interop cases; the `e2e` job covers the rest.
+        # run.sh adds `--features interop-driver`, which pulls in the driver.
+        run: bash tests/run.sh --interop rust_interop
 
   clippy:
     name: Clippy

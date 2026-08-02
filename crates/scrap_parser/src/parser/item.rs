@@ -100,9 +100,17 @@ impl<'a, 'db> super::Parser<'a, 'db> {
             segments,
             span: Span::new(use_span.start, self.token.span.end),
         };
+        // Optional rename: `use a::b::c as d;`
+        let alias = if self.eat(Token::As) {
+            let alias = self.parse_ident()?;
+            let _ = self.expect(Token::Semicolon)?;
+            Some(alias)
+        } else {
+            None
+        };
         Ok(UseTree {
             prefix: path,
-            kind: UseTreeKind::Simple(None),
+            kind: UseTreeKind::Simple(alias),
             span: Span::new(use_span.start, self.token.span.end),
         })
     }

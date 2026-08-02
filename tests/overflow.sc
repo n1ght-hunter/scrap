@@ -1,3 +1,7 @@
+//@ run
+//@ exit: 101
+//@ stdout: attempt to add with overflow
+
 fn add(a: usize, b: usize) -> usize {
     a + b
 }

@@ -1,3 +1,7 @@
+//@ run
+//@ exit: 0
+//@ stdout: Hello, World!
+
 extern "C" {
     fn __scrap_print(msg: String, len: usize);
 }

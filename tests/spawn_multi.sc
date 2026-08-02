@@ -1,3 +1,8 @@
+//@ run
+//@ exit: 0
+//@ stdout: main start
+//@ stdout: sum ok
+
 extern "C" {
     fn __scrap_print(msg: String, len: usize);
 }

@@ -15,6 +15,8 @@ scrap_span = { workspace = true }
 scrap_errors.workspace = true
 scrap_codegen.workspace = true
 scrap_diagnostics.workspace = true
+scrap_interop.workspace = true
+scrap_rmeta.workspace = true
 crossbeam-channel = { workspace = true }
 pathdiff = { workspace = true }
 cc = { workspace = true }
@@ -31,6 +33,10 @@ hashbrown.workspace = true
 indexmap = {workspace = true, features = ["serde"]}
 thin-vec.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[features]
+default = []
+interop-driver = ["scrap_interop/interop-driver"]
 
 [lints]
 workspace = true

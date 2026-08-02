@@ -1,0 +1,11 @@
+[package]
+name = "rmeta_fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone so it isn't pulled into the scrap workspace as a member.
+[workspace]
+
+[lib]
+path = "src/lib.rs"

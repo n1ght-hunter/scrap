@@ -1,3 +1,6 @@
+//@ compile-fail
+//@ error: cannot assign to immutable variable `x`
+
 extern "C" {
     fn __scrap_exit(exit_code: usize) -> !;
 }

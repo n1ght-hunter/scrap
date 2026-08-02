@@ -56,14 +56,12 @@ impl StackPool {
 
 struct LocalCache {
     stack: [Option<Stack>; 8],
-    allocated: usize,
 }
 
 impl LocalCache {
     fn new() -> Self {
         LocalCache {
             stack: [None, None, None, None, None, None, None, None],
-            allocated: 0,
         }
     }
 
@@ -75,7 +73,6 @@ impl LocalCache {
                 if s_size == size {
                     // Exact match — take it immediately.
                     let stack = self.stack[i].take().unwrap();
-                    self.allocated += 1;
                     return Some(stack);
                 }
                 if s_size > size && best_bigger.is_none_or(|(_, best)| s_size < best) {
@@ -86,7 +83,6 @@ impl LocalCache {
         // No exact match — use the smallest bigger stack if available.
         if let Some((i, _)) = best_bigger {
             let stack = self.stack[i].take().unwrap();
-            self.allocated += 1;
             return Some(stack);
         }
         None
@@ -97,7 +93,6 @@ impl LocalCache {
         for slot in self.stack.iter_mut() {
             if slot.is_none() {
                 *slot = Some(stack);
-                self.allocated -= 1;
                 return None;
             }
         }

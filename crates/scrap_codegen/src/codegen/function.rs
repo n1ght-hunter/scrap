@@ -96,15 +96,52 @@ impl<'db> CodegenContext<'db> {
                     let sig = ext.signature(self.db);
                     let name_sym = sig.name(self.db);
                     let name = name_sym.text();
-                    let cl_sig = build_cl_signature(&self.module, sig, self.db)?;
+                    // Native Rust interop functions get their Cranelift signature
+                    // from the real `FnAbiInfo` (Phase 5); others use the IR types.
+                    let cl_sig = match self.rust_fn_abis.get(name) {
+                        Some(abi) => {
+                            super::ty::build_cl_signature_from_abi(&self.module, abi, self.db)?
+                        }
+                        None => build_cl_signature(&self.module, sig, self.db)?,
+                    };
+                    // Native Rust interop: link against the real v0-mangled symbol
+                    // from metadata, keeping `name` as the call-resolution key.
+                    let link_name = self
+                        .rust_fn_symbols
+                        .get(name)
+                        .map(String::as_str)
+                        .unwrap_or(name);
                     let func_id = self
                         .module
-                        .declare_function(name, Linkage::Import, &cl_sig)
+                        .declare_function(link_name, Linkage::Import, &cl_sig)
                         .or_emit(self.db)?;
                     self.functions.insert(name.to_string(), func_id);
                 }
                 _ => {}
             }
+        }
+
+        // Declare the per-type drop wrappers as imports (once per build). Keyed
+        // in `functions` as `__scrap_drop__<TypeName>`, linked against the
+        // anchor's v0-mangled wrapper symbol.
+        let drop_syms: Vec<(String, String)> = self
+            .rust_drop_syms
+            .iter()
+            .map(|(t, s)| (t.clone(), s.clone()))
+            .collect();
+        let ptr = self.module.target_config().pointer_type();
+        for (type_name, sym) in drop_syms {
+            let key = format!("__scrap_drop__{type_name}");
+            if self.functions.contains_key(&key) {
+                continue;
+            }
+            let mut cl_sig = self.module.make_signature();
+            cl_sig.params.push(AbiParam::new(ptr));
+            let func_id = self
+                .module
+                .declare_function(&sym, Linkage::Import, &cl_sig)
+                .or_emit(self.db)?;
+            self.functions.insert(key, func_id);
         }
         Some(())
     }
@@ -133,6 +170,22 @@ impl<'db> CodegenContext<'db> {
             }
         };
 
+        // Affine use-after-move check for droppable Rust locals (soundness gate
+        // for RAII drop: a moved value must not be used — and thus dropped —
+        // twice).
+        let droppable: HashSet<usize> = body
+            .local_decls(self.db)
+            .iter()
+            .enumerate()
+            .filter(|(i, d)| {
+                *i != 0
+                    && matches!(d.ty(self.db), ir::Ty::Rust(t)
+                        if self.rust_drop_syms.contains_key(t.name(self.db).as_str()))
+            })
+            .map(|(i, _)| i)
+            .collect();
+        super::drop_check::check_use_after_move(self.db, body, &droppable, &self.rust_fn_abis);
+
         // Set up the function context
         let cl_sig =
             build_cl_signature_with_layouts(&self.module, sig, self.db, &self.struct_layouts)?;
@@ -148,6 +201,27 @@ impl<'db> CodegenContext<'db> {
             let local_decls = body.local_decls(self.db);
             let _param_count = body.param_count(self.db);
             let ir_blocks = body.blocks(self.db);
+
+            // A native Rust value passed/returned *by value* in a user Scrap
+            // function's signature has no Scrap-side ABI lowering yet: the entry
+            // prologue can't fill its param slot and a `Ty::Rust` return emits no
+            // value. Reject it cleanly (pass `&T` instead) rather than silently
+            // miscompiling. Rust functions/methods still take them by value via
+            // their own `FnAbiInfo`.
+            for (idx, decl) in local_decls.iter().enumerate().take(_param_count + 1) {
+                if let ir::Ty::Rust(tid) = decl.ty(self.db) {
+                    let what = if idx == 0 { "return" } else { "parameter" };
+                    let name = tid.name(self.db);
+                    emit_codegen_err(
+                        self.db,
+                        format!(
+                            "native Rust value `{name}` cannot be a by-value {what} of a Scrap \
+                             function yet; pass it by reference (`&{name}`) instead"
+                        ),
+                    );
+                    return None;
+                }
+            }
 
             // Create Cranelift blocks for each IR basic block
             let mut block_map = std::collections::HashMap::new();
@@ -171,6 +245,11 @@ impl<'db> CodegenContext<'db> {
             let mut enum_variant_variables: std::collections::HashMap<
                 (usize, usize, usize),
                 Variable,
+            > = std::collections::HashMap::new();
+            // Rust interop locals: memory-backed in a stack slot at the mirrored layout.
+            let mut rust_slots: std::collections::HashMap<
+                usize,
+                (StackSlot, super::context::RustLayout),
             > = std::collections::HashMap::new();
             for (i, decl) in local_decls.iter().enumerate() {
                 let ty = decl.ty(self.db);
@@ -205,6 +284,23 @@ impl<'db> CodegenContext<'db> {
                         emit_codegen_err(self.db, format!("ADT '{}' layout not found", adt_name));
                         return None;
                     }
+                } else if let ir::Ty::Rust(type_id) = &ty {
+                    // Rust interop value: a stack slot of the mirrored size/align.
+                    let path = type_id.name(self.db);
+                    if let Some(layout) = self.rust_layouts.get(path.as_str()) {
+                        let slot = builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            layout.size,
+                            layout.align_shift(),
+                        ));
+                        rust_slots.insert(i, (slot, layout.clone()));
+                    } else {
+                        emit_codegen_err(
+                            self.db,
+                            format!("Rust interop layout for '{}' not found", path),
+                        );
+                        return None;
+                    }
                 } else if referenced_locals.contains(&i) {
                     // Stack-spill: this local is referenced via & or &mut
                     let cl_ty = ir_ty_to_cl_required(self.db, &ty)?;
@@ -230,10 +326,32 @@ impl<'db> CodegenContext<'db> {
                 }
             }
 
+            // Drop flags: one `i8` per droppable Rust local (a `Ty::Rust` whose
+            // type has a registered drop wrapper), excluding the return place `_0`
+            // (returned values are moved out, never dropped here).
+            let mut drop_flags: std::collections::HashMap<usize, Variable> =
+                std::collections::HashMap::new();
+            for (i, decl) in local_decls.iter().enumerate() {
+                if i == 0 {
+                    continue;
+                }
+                if let ir::Ty::Rust(tid) = decl.ty(self.db)
+                    && self.rust_drop_syms.contains_key(tid.name(self.db).as_str())
+                {
+                    drop_flags.insert(i, builder.declare_var(types::I8));
+                }
+            }
+
             // Set up the entry block
             let entry_block = block_map[&0];
             builder.append_block_params_for_function_params(entry_block);
             builder.switch_to_block(entry_block);
+
+            // Initialize every drop flag to 0 (not-yet-owned) on entry.
+            for &flag in drop_flags.values() {
+                let zero = builder.ins().iconst(types::I8, 0);
+                builder.def_var(flag, zero);
+            }
 
             // Write function parameters to their variables (_1.._param_count)
             // Struct params are expanded into multiple Cranelift params (one per field),
@@ -294,6 +412,9 @@ impl<'db> CodegenContext<'db> {
                 enum_discriminants: &enum_discriminants,
                 enum_variant_variables: &enum_variant_variables,
                 stack_slots: &stack_slots,
+                rust_slots: &rust_slots,
+                rust_fn_abis: &self.rust_fn_abis,
+                drop_flags: &drop_flags,
             };
 
             // Lower each basic block

@@ -19,6 +19,35 @@ pub(crate) struct UnwindEntry {
     pub unwind_bytes: Vec<u8>,
 }
 
+/// Mirrored in-memory layout of a native Rust interop type, keyed by its
+/// fully-qualified path. Sourced from interop metadata: codegen places a value
+/// of this type in a stack slot of this size/align and reads/writes its fields
+/// at these byte offsets (rather than decomposing it into SSA variables).
+#[derive(Debug, Clone)]
+pub struct RustLayout {
+    pub size: u32,
+    pub align: u32,
+    pub fields: Vec<RustFieldLayout>,
+}
+
+/// One field of a [`RustLayout`].
+#[derive(Debug, Clone)]
+pub struct RustFieldLayout {
+    /// Byte offset of the field within the value.
+    pub offset: u32,
+    /// Cranelift type of the field when it is a scalar, or `None` when the field
+    /// is itself an aggregate (addressed by `base + offset`).
+    pub cl_ty: Option<types::Type>,
+}
+
+impl RustLayout {
+    /// Stack-slot alignment shift (log2 of the byte alignment) Cranelift's
+    /// `StackSlotData` expects.
+    pub fn align_shift(&self) -> u8 {
+        self.align.max(1).trailing_zeros() as u8
+    }
+}
+
 /// The main code generation context.
 pub struct CodegenContext<'db> {
     pub(crate) db: &'db dyn scrap_shared::Db,
@@ -35,6 +64,23 @@ pub struct CodegenContext<'db> {
     pub(crate) struct_layouts: HashMap<String, Vec<ir::Ty<'db>>>,
     /// Enum layout: enum name → per-variant field types (Vec of variants, each a Vec of field types).
     pub(crate) enum_layouts: HashMap<String, Vec<Vec<ir::Ty<'db>>>>,
+    /// Mirrored layouts of native Rust interop types, by fully-qualified path.
+    /// Populated from interop metadata before codegen (Phase 4); drives the
+    /// memory-backed handling of `ir::Ty::Rust` locals.
+    pub(crate) rust_layouts: HashMap<String, RustLayout>,
+    /// Native Rust interop functions: declared `extern "Rust"` name → the real
+    /// v0-mangled symbol (from interop metadata). An `extern` import whose name
+    /// is in this map is linked against the mangled symbol instead of its name.
+    pub(crate) rust_fn_symbols: HashMap<String, String>,
+    /// Native Rust interop functions: declared `extern "Rust"` name → its
+    /// per-arg/return ABI (from interop metadata). When present, the Cranelift
+    /// call signature + arg/return marshalling are built from this `FnAbiInfo`
+    /// rather than the IR types (Phase 5).
+    pub(crate) rust_fn_abis: HashMap<String, scrap_rmeta::FnAbiInfo>,
+    /// Native Rust interop types that need dropping: Scrap type name → the
+    /// mangled symbol of the anchor's drop wrapper (`drop_in_place::<T>` glue).
+    /// A `Ty::Rust` local of such a type gets RAII drop at scope exit.
+    pub(crate) rust_drop_syms: HashMap<String, String>,
     /// Monotonically increasing counter for data section names (persists across functions).
     pub(crate) data_id_counter: usize,
     /// Collected stack map entries across all compiled functions.
@@ -90,9 +136,37 @@ impl<'db> CodegenContext<'db> {
             gc_shapes: HashMap::new(),
             struct_layouts: HashMap::new(),
             enum_layouts: HashMap::new(),
+            rust_layouts: HashMap::new(),
+            rust_fn_symbols: HashMap::new(),
+            rust_fn_abis: HashMap::new(),
+            rust_drop_syms: HashMap::new(),
             data_id_counter: 0,
             stack_map_entries: Vec::new(),
         })
+    }
+
+    /// Install the mirrored Rust interop layouts (from interop metadata) used to
+    /// codegen `ir::Ty::Rust` locals. Must be called before `compile_module`.
+    pub fn set_rust_layouts(&mut self, layouts: HashMap<String, RustLayout>) {
+        self.rust_layouts = layouts;
+    }
+
+    /// Install the `extern "Rust"` name → mangled-symbol map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_fn_symbols(&mut self, symbols: HashMap<String, String>) {
+        self.rust_fn_symbols = symbols;
+    }
+
+    /// Install the `extern "Rust"` name → `FnAbiInfo` map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_fn_abis(&mut self, abis: HashMap<String, scrap_rmeta::FnAbiInfo>) {
+        self.rust_fn_abis = abis;
+    }
+
+    /// Install the droppable-type name → drop-wrapper-symbol map (from interop
+    /// metadata). Must be called before `compile_module`.
+    pub fn set_rust_drop_syms(&mut self, syms: HashMap<String, String>) {
+        self.rust_drop_syms = syms;
     }
 
     /// Compile an entire IR module (declare then define).
@@ -355,6 +429,7 @@ impl<'db> CodegenContext<'db> {
         data.extend_from_slice(&size.to_le_bytes());
         data.extend_from_slice(&align.to_le_bytes());
         data.extend_from_slice(&num_pointers.to_le_bytes());
+        data.extend_from_slice(&0u64.to_le_bytes()); // finalizer (none)
         for offset in &pointer_offsets {
             data.extend_from_slice(&offset.to_le_bytes());
         }

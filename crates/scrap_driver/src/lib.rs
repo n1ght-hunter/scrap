@@ -5,6 +5,7 @@ mod cache;
 mod link;
 mod parsing;
 mod pretty;
+mod rust_use;
 mod utils;
 
 use std::ffi::OsString;
@@ -60,6 +61,68 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     let modules = utils::collect_modules(db, entry_file, other_files.clone());
     let resolved_can = parsing::resolve_modules(db, &modules, entry_file);
 
+    let out_dir = std::path::Path::new("target/scrap");
+
+    // Phase 1.6: Rust interop. Build the anchor (when rust deps are declared) so
+    // its metadata is available before type checking, then resolve `use rust::…`
+    // imports into synthesized `extern "Rust"` bindings: AST items injected into
+    // the `Can` for tycheck, IR `ExternFn`s for codegen, and a name → mangled
+    // symbol map for linking.
+    let mut anchor = build_interop_anchor(args, out_dir, &[])?;
+    let mut can_for_check = resolved_can;
+    let mut extern_modules: Vec<scrap_ir::Module> = Vec::new();
+    let mut rust_fn_symbols = std::collections::HashMap::new();
+    let mut rust_vis: Vec<scrap_tycheck::RustTypeVis> = Vec::new();
+    let mut rust_layouts = std::collections::HashMap::new();
+    let mut rust_fn_abis = std::collections::HashMap::new();
+    let mut rust_drop_syms = std::collections::HashMap::new();
+    if let Some(meta) = anchor.as_ref().and_then(|a| a.metadata.as_ref()) {
+        let catalog = rust_use::build_catalog(meta);
+        let type_catalog = rust_use::build_type_catalog(meta);
+        let use_refs = rust_use::scan_rust_uses(db, resolved_can);
+        if !use_refs.is_empty() {
+            let outcome = rust_use::resolve_uses(db, &use_refs, &catalog, &type_catalog);
+            handle_diagnostics(db)?;
+            rust_fn_symbols = outcome.fn_symbols;
+            rust_vis = outcome.rust_vis;
+            rust_layouts = outcome.rust_layouts;
+            rust_fn_abis = outcome.rust_fn_abis;
+            if !outcome.ast_items.is_empty() {
+                can_for_check = rust_use::rebuild_can(db, resolved_can, outcome.ast_items);
+            }
+            if !outcome.imports.is_empty() {
+                extern_modules.push(rust_use::synth_extern_module(
+                    db,
+                    resolved_can,
+                    outcome.imports,
+                ));
+            }
+            // Second anchor build: generate v0-mangled drop wrappers for the
+            // droppable imported types so their `drop_in_place` glue is linked,
+            // then resolve each wrapper's symbol for codegen.
+            if !outcome.droppable.is_empty() {
+                let wrappers: Vec<scrap_interop::DropWrapper> = outcome
+                    .droppable
+                    .iter()
+                    .map(|(_, path)| scrap_interop::DropWrapper {
+                        sanitized: rust_use::sanitize_path(path),
+                        full_path: path.clone(),
+                    })
+                    .collect();
+                let anchor2 = build_interop_anchor(args, out_dir, &wrappers)?;
+                // The wrapper's symbol is its explicit export name (derived from
+                // the full path), known here without a metadata walk.
+                for (local, path) in &outcome.droppable {
+                    rust_drop_syms.insert(
+                        local.clone(),
+                        format!("__scrap_drop_in_place__{}", rust_use::sanitize_path(path)),
+                    );
+                }
+                anchor = anchor2; // link the v2 archive (it carries the drop glue)
+            }
+        }
+    }
+
     let mode = pretty::PpMode::determine_pp_mode(args);
 
     // Pretty print AST if requested
@@ -67,12 +130,13 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         && mode.needs_ast()
     {
         db.attach(|db| {
-            pretty::print(db, mode, pretty::CompilationOutput::Ast(resolved_can));
+            pretty::print(db, mode, pretty::CompilationOutput::Ast(can_for_check));
         });
     }
 
     // Phase 2: Type checking
-    let _type_table = scrap_tycheck::check_types(db, resolved_can, entry_file.file(db));
+    let _type_table =
+        scrap_tycheck::check_types(db, can_for_check, entry_file.file(db), rust_vis.clone());
     handle_diagnostics(db)?;
 
     // Phase 3: Lower to IR with type information
@@ -80,8 +144,9 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
         db,
         entry_file,
         other_files.to_vec(),
-        resolved_can,
+        can_for_check,
         entry_file.file(db),
+        rust_vis,
     );
 
     handle_diagnostics(db)?;
@@ -89,7 +154,8 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
     if let Some(mode) = mode
         && mode.needs_ir()
     {
-        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir.clone());
+        let lowered_ir =
+            utils::create_lowered_ir(db, entry_ir, other_ir.clone(), extern_modules.clone());
 
         db.attach(|db| {
             pretty::print(db, mode, pretty::CompilationOutput::Ir(lowered_ir));
@@ -98,31 +164,43 @@ fn run(args: &args::Args, db_mut: &mut scrap_shared::salsa::ScrapDb) -> anyhow::
 
     // Phase 4: Code generation (when no pretty-print mode is active)
     if mode.is_none() {
-        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir);
+        std::fs::create_dir_all(out_dir)?;
 
-        let obj_bytes =
-            scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone());
+        let lowered_ir = utils::create_lowered_ir(db, entry_ir, other_ir, extern_modules);
+
+        let obj_bytes = if anchor.is_some() {
+            scrap_codegen::compile_to_object_interop(
+                db,
+                lowered_ir.can(db),
+                args.target.clone(),
+                rust_fn_symbols,
+                rust_layouts,
+                rust_fn_abis,
+                rust_drop_syms,
+            )
+        } else {
+            scrap_codegen::compile_to_object(db, lowered_ir.can(db), args.target.clone())
+        };
         handle_diagnostics(db)?;
 
         let obj_bytes = obj_bytes.unwrap(); // safe: handle_diagnostics would have bailed
 
-        let out_dir = std::path::Path::new("target/scrap");
-        std::fs::create_dir_all(out_dir)?;
         let obj_path = out_dir.join(format!("{}.obj", args.crate_name));
         std::fs::write(&obj_path, &obj_bytes)?;
 
         let exe_path = out_dir.join(format!("{}{}", args.crate_name, exe_suffix(&args.target)));
 
-        // Find the scrap_rt runtime archive — look for it relative to the
-        // compiler binary, or in the target directory.
-        let rt_lib = find_scrap_rt_lib(&args.target);
+        let runtime_archive = match &anchor {
+            Some(a) => Some(a.archive.clone()),
+            None => find_scrap_rt_lib(&args.target),
+        };
 
         link::link_executable(
             &args.target,
             &args.crate_name,
             &obj_path,
             &exe_path,
-            rt_lib.as_deref(),
+            runtime_archive.as_deref(),
         )?;
 
         eprintln!("Compiled to {}", exe_path.display());
@@ -146,6 +224,63 @@ fn rt_lib_name(target: &target_lexicon::Triple) -> &'static str {
         target_lexicon::BinaryFormat::Coff => "scrap_rt.lib",
         _ => "libscrap_rt.a",
     }
+}
+
+/// Build the Rust-interop anchor when `[rust.dependencies]` is non-empty,
+/// returning its archive + metadata. `None` means no rust deps were declared, so
+/// the caller keeps the standalone `scrap_rt` link path.
+fn build_interop_anchor(
+    args: &args::Args,
+    out_dir: &std::path::Path,
+    drop_wrappers: &[scrap_interop::DropWrapper],
+) -> anyhow::Result<Option<scrap_interop::AnchorArtifact>> {
+    let manifest = args
+        .manifest
+        .clone()
+        .unwrap_or_else(|| std::path::PathBuf::from("Scrap.toml"));
+    let rust_deps = scrap_interop::parse_manifest_rust_deps(&manifest)?;
+
+    if rust_deps.is_empty() {
+        return Ok(None);
+    }
+
+    let scrap_rt_crate_dir = find_repo_subdir("crates/scrap_rt").ok_or_else(|| {
+        anyhow::anyhow!("could not locate the scrap_rt crate directory for the anchor build")
+    })?;
+    scrap_interop::build_anchor(&scrap_interop::AnchorRequest {
+        rust_deps: &rust_deps,
+        drop_wrappers,
+        scrap_rt_crate_dir: &scrap_rt_crate_dir,
+        target: &args.target,
+        toolchain_channel: scrap_interop::PINNED_TOOLCHAIN,
+        out_root: out_dir,
+        release: false,
+    })
+}
+
+/// Locate a repository subdirectory (e.g. `crates/scrap_rt`, `tools/scrap-rustc`)
+/// as a clean absolute path (no `\\?\` verbatim prefix, so cargo accepts it).
+/// Searches the CWD first (dev: run from the workspace root), then ancestors of
+/// the compiler binary.
+fn find_repo_subdir(rel: &str) -> Option<std::path::PathBuf> {
+    let rel = std::path::Path::new(rel);
+    if let Ok(cwd) = std::env::current_dir() {
+        let cand = cwd.join(rel);
+        if cand.join("Cargo.toml").exists() {
+            return Some(cand);
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cur = exe.parent();
+        while let Some(dir) = cur {
+            let cand = dir.join(rel);
+            if cand.join("Cargo.toml").exists() {
+                return Some(cand);
+            }
+            cur = dir.parent();
+        }
+    }
+    None
 }
 
 /// Find the `scrap_rt` static archive by searching common locations.

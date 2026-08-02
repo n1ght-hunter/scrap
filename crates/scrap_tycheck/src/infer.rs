@@ -370,6 +370,26 @@ impl<'db> TypeContext<'db> {
                     }
                     return InferTy::Adt(enum_name);
                 }
+
+                // Associated-fn call `Type::assoc(args)` — resolve the mangled
+                // `Type::assoc` function (e.g. a Rust interop `Counter::new`).
+                let mangled = Symbol::new(format!("{}::{}", enum_name.text(), variant_name.text()));
+                if let Some(sig) = self.lookup_function(mangled).cloned() {
+                    if args.len() != sig.params.len() {
+                        self.emit_arity_mismatch(sig.params.len(), args.len(), span);
+                        return InferTy::Error;
+                    }
+                    for (arg, (_, param_ty)) in args.iter().zip(sig.params.iter()) {
+                        let arg_ty = self.infer_expr(arg);
+                        self.constrain_eq_with_kind(
+                            arg_ty,
+                            param_ty.clone(),
+                            arg.span,
+                            ConstraintKind::FunctionArg,
+                        );
+                    }
+                    return sig.return_ty.clone();
+                }
             }
         }
 
@@ -650,6 +670,43 @@ impl<'db> TypeContext<'db> {
             }
         };
 
+        // Native Rust interop types follow Rust's own construction rules: every
+        // field must be `pub` and the type must not be `#[non_exhaustive]`.
+        if let Some(meta) = self.rust_type_meta(struct_name).cloned() {
+            let sn = struct_name.text();
+            if meta.non_exhaustive {
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!("`{sn}` is `#[non_exhaustive]`; construct it through a Rust function"),
+                    span,
+                );
+                return InferTy::Error;
+            }
+            if let Some(f) = meta.fields.iter().find(|f| !f.public) {
+                let fname = &f.name;
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!("field `{fname}` is private; construct `{sn}` through a Rust function"),
+                    span,
+                );
+                return InferTy::Error;
+            }
+            if let Some(f) = meta.fields.iter().find(|f| !f.scalar) {
+                let fname = &f.name;
+                self.emit_rust_visibility(
+                    format!("cannot construct `{sn}`"),
+                    "construction not allowed here".to_string(),
+                    format!(
+                        "field `{fname}` is not a scalar; construct `{sn}` through a Rust function"
+                    ),
+                    span,
+                );
+                return InferTy::Error;
+            }
+        }
+
         // Check for unknown fields (provided but not in struct def)
         let mut has_error = false;
         for field_init in fields.iter() {
@@ -747,6 +804,37 @@ impl<'db> TypeContext<'db> {
                 };
 
                 let field_name = field_ident.name;
+                // For Rust interop types, only `pub` scalar fields can be read.
+                if let Some(meta) = self.rust_type_meta(*struct_name).cloned()
+                    && let Some(f) = meta.fields.iter().find(|f| f.name == field_name.text())
+                {
+                    if !f.public {
+                        self.emit_rust_visibility(
+                            format!(
+                                "field `{}` of `{}` is private",
+                                field_name.text(),
+                                struct_name.text()
+                            ),
+                            "private field".to_string(),
+                            "only `pub` fields of a Rust interop type can be accessed".to_string(),
+                            span,
+                        );
+                        return InferTy::Error;
+                    }
+                    if !f.scalar {
+                        self.emit_rust_visibility(
+                            format!(
+                                "field `{}` of `{}` is not a scalar",
+                                field_name.text(),
+                                struct_name.text()
+                            ),
+                            "opaque field".to_string(),
+                            "a non-scalar Rust interop field can't be read directly".to_string(),
+                            span,
+                        );
+                        return InferTy::Error;
+                    }
+                }
                 if let Some((_, field_ty)) = struct_def
                     .fields
                     .iter()
@@ -837,6 +925,7 @@ impl<'db> TypeContext<'db> {
                                 InferTy::Param(sym)
                             } else if self.lookup_struct(sym).is_some()
                                 || self.lookup_enum(sym).is_some()
+                                || self.rust_type_meta(sym).is_some()
                             {
                                 InferTy::Adt(sym)
                             } else {

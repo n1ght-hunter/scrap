@@ -11,6 +11,34 @@ use std::collections::HashMap;
 use super::ResultExt;
 use super::emit_codegen_err;
 
+/// Whether an ABI type's display denotes a reference (`&T`/`&mut T`) — a thin
+/// pointer that borrows rather than moves its referent.
+fn is_reference(display: &str) -> bool {
+    display.starts_with('&')
+}
+
+/// Byte size of an interop ABI scalar (`Ptr` uses the target pointer width).
+fn scalar_bytes(s: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
+    use scrap_rmeta::Scalar;
+    match s {
+        Scalar::I8 => 1,
+        Scalar::I16 => 2,
+        Scalar::I32 => 4,
+        Scalar::I64 | Scalar::F64 => 8,
+        Scalar::F32 => 4,
+        Scalar::I128 | Scalar::F128 => 16,
+        Scalar::Ptr => ptr_bytes,
+    }
+}
+
+/// Byte offset of the second component of a `ScalarPair`, mirroring rustc's
+/// `scalar_pair_calculate_b_offset`: `size(a)` rounded up to `align(b)`.
+fn pair_b_offset(a: scrap_rmeta::Scalar, b: scrap_rmeta::Scalar, ptr_bytes: u32) -> u32 {
+    let size_a = scalar_bytes(a, ptr_bytes);
+    let align_b = scalar_bytes(b, ptr_bytes);
+    size_a.div_ceil(align_b) * align_b
+}
+
 /// Compute the (size, align, pointer_offsets) for a GC-allocated type.
 fn compute_type_layout(_db: &dyn scrap_shared::Db, ty: &ir::Ty) -> (u64, u64, Vec<u64>) {
     match ty {
@@ -80,6 +108,14 @@ pub struct FuncTranslator<'a, 'db> {
     pub enum_variant_variables: &'a HashMap<(usize, usize, usize), Variable>,
     /// IR local index → (StackSlot, Cranelift type) for stack-spilled locals (referenced via &/&mut)
     pub stack_slots: &'a HashMap<usize, (StackSlot, types::Type)>,
+    /// IR local index → (StackSlot, mirrored layout) for native Rust interop
+    /// locals, which live in memory at the exact layout rustc computed.
+    pub rust_slots: &'a HashMap<usize, (StackSlot, super::context::RustLayout)>,
+    /// `extern "Rust"` name → ABI, for marshalling native Rust calls (Phase 5).
+    pub rust_fn_abis: &'a HashMap<String, scrap_rmeta::FnAbiInfo>,
+    /// Droppable Rust local id → its `i8` drop-flag variable (1 = owned, 0 =
+    /// moved/uninit). Drives RAII drop-at-scope-exit (Phase 6).
+    pub drop_flags: &'a HashMap<usize, Variable>,
 }
 
 impl<'a, 'db> FuncTranslator<'a, 'db> {
@@ -112,6 +148,18 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let value = self.lower_rvalue(&rvalue, builder, module)?;
                 self.assign_to_place(&place, value, builder, module)?;
+
+                // RAII bookkeeping: moving a Rust value out (`let e = d;`, or
+                // `box(d)` into the GC heap) consumes it; the assigned-to local
+                // becomes owned. A borrow (`Rvalue::Ref`) is not a move.
+                if let ir::Rvalue::Use(ir::Operand::Place(ir::Place::Local(m)))
+                | ir::Rvalue::Box(_, ir::Operand::Place(ir::Place::Local(m))) = &rvalue
+                {
+                    self.set_drop_flag(m.0, false, builder);
+                }
+                if let ir::Place::Local(l) = &place {
+                    self.set_drop_flag(l.0, true, builder);
+                }
             }
         }
         Some(())
@@ -167,6 +215,23 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         }
                     };
                     builder.def_var(*var, value);
+                    return Some(());
+                }
+                // Native Rust interop field: store at the mirrored byte offset.
+                if let ir::Place::Local(local_id) = base.as_ref()
+                    && let Some((slot, layout)) = self.rust_slots.get(&local_id.0)
+                {
+                    let f = match layout.fields.get(*field_idx) {
+                        Some(f) => f,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!("rust field '_{}.{}' out of range", local_id.0, field_idx),
+                            );
+                            return None;
+                        }
+                    };
+                    builder.ins().stack_store(value, *slot, f.offset as i32);
                     return Some(());
                 }
                 // Struct/tuple field: Field(Local(x), field_idx)
@@ -233,6 +298,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 match place {
                     ir::Place::Local(local_id) => {
                         if let Some((slot, _)) = self.stack_slots.get(&local_id.0) {
+                            Some(builder.ins().stack_addr(types::I64, *slot, 0))
+                        } else if let Some((slot, _)) = self.rust_slots.get(&local_id.0) {
+                            // A Rust interop value already lives in memory.
                             Some(builder.ins().stack_addr(types::I64, *slot, 0))
                         } else {
                             emit_codegen_err(
@@ -532,6 +600,32 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
         };
 
+        // Native Rust interop value: store each field into the slot at its
+        // mirrored byte offset (field-by-field construction, §5 of the plan).
+        if let Some((slot, layout)) = self.rust_slots.get(&local_id) {
+            let slot = *slot;
+            for (field_idx, operand) in fields.iter().enumerate() {
+                let offset = match layout.fields.get(field_idx) {
+                    Some(f) => f.offset,
+                    None => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("rust field '_{}.{}' out of range", local_id, field_idx),
+                        );
+                        return None;
+                    }
+                };
+                if let ir::Operand::Place(ir::Place::Local(m)) = operand {
+                    self.set_drop_flag(m.0, false, builder); // field value moved in
+                }
+                let value = self.lower_operand(operand, builder, module)?;
+                builder.ins().stack_store(value, slot, offset as i32);
+            }
+            // The constructed Rust value is now owned.
+            self.set_drop_flag(local_id, true, builder);
+            return Some(());
+        }
+
         match kind {
             ir::AggregateKind::EnumVariant(_, variant_idx) => {
                 // Set discriminant to variant_idx
@@ -718,6 +812,218 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         }
     }
 
+    /// The stack slot backing a Rust-interop local, if `lid` is one.
+    fn rust_slot_of_local(&self, lid: usize) -> Option<StackSlot> {
+        self.rust_slots.get(&lid).map(|(slot, _)| *slot)
+    }
+
+    /// Set a droppable local's drop flag (`1` = owned, `0` = moved/uninit).
+    /// No-op if the local isn't droppable.
+    fn set_drop_flag(&self, lid: usize, owned: bool, builder: &mut FunctionBuilder) {
+        if let Some(&flag) = self.drop_flags.get(&lid) {
+            let v = builder.ins().iconst(types::I8, if owned { 1 } else { 0 });
+            builder.def_var(flag, v);
+        }
+    }
+
+    /// Mark drop flags for a `Terminator::Call`: the destination local becomes
+    /// owned; an argument passed **by value** is consumed (moved). An argument
+    /// whose ABI type is a reference (`&self`/`&T`) is a borrow, not a move, so
+    /// its flag is left set.
+    fn update_drop_flags_for_call(
+        &self,
+        args: &[ir::Operand<'db>],
+        destination: &ir::Place<'db>,
+        abi: Option<&scrap_rmeta::FnAbiInfo>,
+        builder: &mut FunctionBuilder,
+    ) {
+        for (i, a) in args.iter().enumerate() {
+            if let ir::Operand::Place(ir::Place::Local(m)) = a {
+                let by_ref = abi
+                    .and_then(|abi| abi.args.get(i))
+                    .is_some_and(|arg| is_reference(&arg.ty.display));
+                if !by_ref {
+                    self.set_drop_flag(m.0, false, builder);
+                }
+            }
+        }
+        if let ir::Place::Local(l) = destination {
+            self.set_drop_flag(l.0, true, builder);
+        }
+    }
+
+    /// Before a `Return`, drop every still-owned droppable local by calling its
+    /// drop wrapper (`__scrap_drop__<T>`) under its flag.
+    fn emit_drops_before_return(&self, builder: &mut FunctionBuilder, module: &mut ObjectModule) {
+        let ptr = module.target_config().pointer_type();
+        // Deterministic order (HashMap iteration isn't); drops are independent.
+        let mut locals: Vec<usize> = self.drop_flags.keys().copied().collect();
+        locals.sort_unstable();
+        for lid in locals {
+            let flag = self.drop_flags[&lid];
+            let ir::Ty::Rust(tid) = self.local_decls[lid].ty(self.db) else {
+                continue;
+            };
+            let key = format!("__scrap_drop__{}", tid.name(self.db));
+            let Some(&fid) = self.functions.get(&key) else {
+                continue;
+            };
+            let Some((slot, _)) = self.rust_slots.get(&lid) else {
+                continue;
+            };
+            let cond = builder.use_var(flag);
+            let drop_block = builder.create_block();
+            let cont = builder.create_block();
+            builder.ins().brif(cond, drop_block, &[], cont, &[]);
+            builder.switch_to_block(drop_block);
+            let addr = builder.ins().stack_addr(ptr, *slot, 0);
+            let fref = module.declare_func_in_func(fid, builder.func);
+            builder.ins().call(fref, &[addr]);
+            builder.ins().jump(cont, &[]);
+            builder.switch_to_block(cont);
+        }
+    }
+
+    /// Marshal a call to a native Rust function per its `FnAbiInfo` (Phase 5):
+    /// `Direct` → one register value, `Pair` → two register values loaded from /
+    /// stored to the value's stack slot at the ScalarPair offsets, `Ignore` →
+    /// nothing. `Indirect`/`Cast` are not yet supported (diagnostic).
+    fn lower_rust_abi_call(
+        &self,
+        abi: &scrap_rmeta::FnAbiInfo,
+        func_ref: cranelift::codegen::ir::FuncRef,
+        args: &[ir::Operand<'db>],
+        destination: &ir::Place<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<()> {
+        use scrap_rmeta::PassMode;
+        let ptr = module.target_config().pointer_type();
+        let ptr_bytes = ptr.bytes();
+
+        let mut arg_vals = Vec::new();
+
+        // `sret`: pass a pointer to the destination's slot as the leading arg;
+        // the callee writes the return value through it.
+        let indirect_ret = matches!(abi.ret.mode, PassMode::Indirect { .. });
+        if indirect_ret {
+            let Some(slot) = (match destination {
+                ir::Place::Local(lid) => self.rust_slot_of_local(lid.0),
+                _ => None,
+            }) else {
+                emit_codegen_err(
+                    self.db,
+                    "Rust ABI `Indirect` return must target a memory-backed Rust value",
+                );
+                return None;
+            };
+            arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+        }
+
+        for (arg_abi, operand) in abi.args.iter().zip(args.iter()) {
+            let operand_slot = match operand {
+                ir::Operand::Place(ir::Place::Local(lid)) => self.rust_slot_of_local(lid.0),
+                _ => None,
+            };
+            match &arg_abi.mode {
+                PassMode::Ignore => {}
+                PassMode::Direct(s) => {
+                    if let Some(slot) = operand_slot {
+                        if is_reference(&arg_abi.ty.display) {
+                            // `&self`/`&T`: a thin reference — pass a pointer to
+                            // the value's slot (a borrow), not its loaded content.
+                            arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+                        } else {
+                            let ty = super::ty::scalar_to_cl(*s, ptr, self.db)?;
+                            arg_vals.push(builder.ins().stack_load(ty, slot, 0));
+                        }
+                    } else {
+                        arg_vals.push(self.lower_operand(operand, builder, module)?);
+                    }
+                }
+                PassMode::Pair(a, b) => {
+                    let Some(slot) = operand_slot else {
+                        emit_codegen_err(
+                            self.db,
+                            "Rust ABI `Pair` argument must be a memory-backed value",
+                        );
+                        return None;
+                    };
+                    let ta = super::ty::scalar_to_cl(*a, ptr, self.db)?;
+                    let tb = super::ty::scalar_to_cl(*b, ptr, self.db)?;
+                    let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
+                    arg_vals.push(builder.ins().stack_load(ta, slot, 0));
+                    arg_vals.push(builder.ins().stack_load(tb, slot, boff));
+                }
+                PassMode::Indirect { .. } => {
+                    // Pass a pointer to the value's memory; Cranelift copies it
+                    // for a `StructArgument` param.
+                    let Some(slot) = operand_slot else {
+                        emit_codegen_err(
+                            self.db,
+                            "Rust ABI `Indirect` argument must be a memory-backed value",
+                        );
+                        return None;
+                    };
+                    arg_vals.push(builder.ins().stack_addr(ptr, slot, 0));
+                }
+                PassMode::Cast => {
+                    emit_codegen_err(
+                        self.db,
+                        "unsupported Rust ABI argument mode (Cast); Phase 5 follow-up",
+                    );
+                    return None;
+                }
+            }
+        }
+
+        let call = builder.ins().call(func_ref, &arg_vals);
+        let results = builder.inst_results(call).to_vec();
+
+        match &abi.ret.mode {
+            PassMode::Ignore => {}
+            PassMode::Direct(_) => {
+                if let Some(v) = results.first() {
+                    // A single-scalar Rust value (e.g. a one-field struct) lands
+                    // in its slot at offset 0; otherwise bind the scalar normally.
+                    if let ir::Place::Local(lid) = destination
+                        && let Some(slot) = self.rust_slot_of_local(lid.0)
+                    {
+                        builder.ins().stack_store(*v, slot, 0);
+                    } else {
+                        self.assign_to_place(destination, *v, builder, module)?;
+                    }
+                }
+            }
+            PassMode::Pair(a, b) => {
+                let dest_slot = match destination {
+                    ir::Place::Local(lid) => self.rust_slot_of_local(lid.0),
+                    _ => None,
+                };
+                let Some(slot) = dest_slot else {
+                    emit_codegen_err(
+                        self.db,
+                        "Rust ABI `Pair` return must target a memory-backed Rust value",
+                    );
+                    return None;
+                };
+                let boff = pair_b_offset(*a, *b, ptr_bytes) as i32;
+                builder.ins().stack_store(results[0], slot, 0);
+                builder.ins().stack_store(results[1], slot, boff);
+            }
+            // Indirect: the callee already wrote the value through the sret pointer.
+            PassMode::Indirect { .. } => {}
+            PassMode::Cast => {
+                emit_codegen_err(
+                    self.db,
+                    "unsupported Rust ABI return mode (Cast); Phase 5 follow-up",
+                );
+                return None;
+            }
+        }
+        Some(())
+    }
+
     /// Lower an operand for use as a function call argument.
     /// If the operand is a struct (ADT), expand it into individual field values.
     fn lower_operand_expanding_structs(
@@ -765,6 +1071,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     // Stack-spilled local: load from stack
                     return Some(builder.ins().stack_load(*cl_ty, *slot, 0));
                 }
+                if let Some((slot, _)) = self.rust_slots.get(&local_id.0) {
+                    // A Rust interop value is memory-backed; using it as a value
+                    // yields its address (it is passed/handled by pointer).
+                    return Some(builder.ins().stack_addr(types::I64, *slot, 0));
+                }
                 let var = match self.variables.get(&local_id.0) {
                     Some(v) => v,
                     None => {
@@ -797,6 +1108,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                         }
                     };
                     return Some(builder.use_var(*var));
+                }
+                // Native Rust interop field read: load at the mirrored byte offset.
+                if let ir::Place::Local(local_id) = base.as_ref()
+                    && let Some((slot, layout)) = self.rust_slots.get(&local_id.0)
+                {
+                    let f = match layout.fields.get(*field_idx) {
+                        Some(f) => f,
+                        None => {
+                            emit_codegen_err(
+                                self.db,
+                                format!("rust field '_{}.{}' out of range", local_id.0, field_idx),
+                            );
+                            return None;
+                        }
+                    };
+                    return Some(match f.cl_ty {
+                        // Scalar field: load it.
+                        Some(cl_ty) => builder.ins().stack_load(cl_ty, *slot, f.offset as i32),
+                        // Aggregate field: its address within the slot.
+                        None => builder.ins().stack_addr(types::I64, *slot, f.offset as i32),
+                    });
                 }
                 // Struct/tuple field read: Field(Local(x), field_idx)
                 if let ir::Place::Local(local_id) = base.as_ref() {
@@ -964,31 +1296,55 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                     Some(builder.ins().ushr(lhs, rhs))
                 }
             }
-            ir::IntrinsicOp::Eq => Some(builder.ins().icmp(IntCC::Equal, lhs, rhs)),
-            ir::IntrinsicOp::Ne => Some(builder.ins().icmp(IntCC::NotEqual, lhs, rhs)),
+            // Float comparisons use the *ordered* predicates (and `NotEqual`, which is
+            // the negation of `Equal` and so unordered-inclusive), matching Rust's
+            // `PartialOrd` on floats: every comparison but `!=` is false when either
+            // operand is NaN.
+            ir::IntrinsicOp::Eq => {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::Equal, lhs, rhs))
+                } else {
+                    Some(builder.ins().icmp(IntCC::Equal, lhs, rhs))
+                }
+            }
+            ir::IntrinsicOp::Ne => {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::NotEqual, lhs, rhs))
+                } else {
+                    Some(builder.ins().icmp(IntCC::NotEqual, lhs, rhs))
+                }
+            }
             ir::IntrinsicOp::Lt => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::LessThan, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedLessThan, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedLessThan, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Le => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::LessThanOrEqual, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedLessThanOrEqual, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedLessThanOrEqual, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Gt => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::GreaterThan, lhs, rhs))
+                } else if signed {
                     Some(builder.ins().icmp(IntCC::SignedGreaterThan, lhs, rhs))
                 } else {
                     Some(builder.ins().icmp(IntCC::UnsignedGreaterThan, lhs, rhs))
                 }
             }
             ir::IntrinsicOp::Ge => {
-                if signed {
+                if is_float {
+                    Some(builder.ins().fcmp(FloatCC::GreaterThanOrEqual, lhs, rhs))
+                } else if signed {
                     Some(
                         builder
                             .ins()
@@ -1046,6 +1402,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
     ) -> Option<()> {
         match term {
             ir::Terminator::Return => {
+                self.emit_drops_before_return(builder, module);
                 if self.returns_void {
                     builder.ins().return_(&[]);
                 } else {
@@ -1117,16 +1474,17 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 target,
                 unwind: _,
             } => {
-                let func_id = match func {
+                let (func_id, rust_abi) = match func {
                     ir::Operand::FunctionRef(fid) => {
                         let name = fid.text(self.db);
-                        match self.functions.get(name).copied() {
+                        let id = match self.functions.get(name).copied() {
                             Some(id) => id,
                             None => {
                                 emit_codegen_err(self.db, format!("function '{name}' not found"));
                                 return None;
                             }
-                        }
+                        };
+                        (id, self.rust_fn_abis.get(name).cloned())
                     }
                     _ => {
                         emit_codegen_err(self.db, "indirect function call is not supported");
@@ -1136,18 +1494,27 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
 
                 let func_ref = module.declare_func_in_func(func_id, builder.func);
 
-                let mut arg_vals = Vec::new();
-                for a in args.iter() {
-                    self.lower_operand_expanding_structs(a, builder, module, &mut arg_vals)?;
+                if let Some(ref abi) = rust_abi {
+                    self.lower_rust_abi_call(abi, func_ref, args, destination, builder, module)?;
+                } else {
+                    let mut arg_vals = Vec::new();
+                    for a in args.iter() {
+                        self.lower_operand_expanding_structs(a, builder, module, &mut arg_vals)?;
+                    }
+
+                    let call = builder.ins().call(func_ref, &arg_vals);
+
+                    let results = builder.inst_results(call);
+                    if !results.is_empty() {
+                        let result_val = results[0];
+                        self.assign_to_place(destination, result_val, builder, module)?;
+                    }
                 }
 
-                let call = builder.ins().call(func_ref, &arg_vals);
-
-                let results = builder.inst_results(call);
-                if !results.is_empty() {
-                    let result_val = results[0];
-                    self.assign_to_place(destination, result_val, builder, module)?;
-                }
+                // RAII bookkeeping: the result is now owned; by-value Rust args
+                // were moved out (reference args are borrows). Emitted in this
+                // block, before the jump below.
+                self.update_drop_flags_for_call(args, destination, rust_abi.as_ref(), builder);
 
                 if let Some(target_bb) = target {
                     let target_block = match self.block_map.get(&target_bb.0) {
@@ -1276,20 +1643,55 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         builder: &mut FunctionBuilder,
         module: &mut ObjectModule,
     ) -> Option<Value> {
-        // 1. Get or create GcShape for inner_ty
+        // A native Rust value is opaque to the GC (num_pointers = 0) and carries
+        // a finalizer (its drop wrapper); its bytes are copied into the heap.
+        // Its size/align come from the operand's stack slot.
+        let rust_info: Option<(u64, u64)> = if let ir::Ty::Rust(_) = inner_ty {
+            let slot = match value_op {
+                ir::Operand::Place(ir::Place::Local(l)) => self.rust_slots.get(&l.0),
+                _ => None,
+            };
+            match slot {
+                Some((_, layout)) => Some((layout.size as u64, layout.align as u64)),
+                None => {
+                    emit_codegen_err(
+                        self.db,
+                        "box of a Rust value requires a memory-backed operand",
+                    );
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+
+        // 1. Get or create GcShape for inner_ty. Layout:
+        //    [size: u64, align: u64, num_pointers: u64, finalizer: u64, offsets…]
         let shape_data_id = {
             let key = format!("{:?}", inner_ty);
             let mut shapes = self.gc_shapes.borrow_mut();
             if let Some(&id) = shapes.get(&key) {
                 id
             } else {
-                // Compute the shape inline (mirrors CodegenContext::compute_type_layout)
-                let (size, align, pointer_offsets) = compute_type_layout(self.db, inner_ty);
+                let (size, align, pointer_offsets, drop_func) = if let ir::Ty::Rust(tid) = inner_ty
+                {
+                    let (size, align) = rust_info.unwrap();
+                    let name = tid.name(self.db);
+                    let drop_func = self
+                        .functions
+                        .get(&format!("__scrap_drop__{name}"))
+                        .copied();
+                    (size, align, Vec::<u64>::new(), drop_func)
+                } else {
+                    let (s, a, offs) = compute_type_layout(self.db, inner_ty);
+                    (s, a, offs, None)
+                };
                 let num_pointers = pointer_offsets.len() as u64;
                 let mut data = Vec::new();
                 data.extend_from_slice(&size.to_le_bytes());
                 data.extend_from_slice(&align.to_le_bytes());
                 data.extend_from_slice(&num_pointers.to_le_bytes());
+                data.extend_from_slice(&0u64.to_le_bytes()); // finalizer (relocated below)
                 for offset in &pointer_offsets {
                     data.extend_from_slice(&offset.to_le_bytes());
                 }
@@ -1301,6 +1703,11 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 let mut desc = DataDescription::new();
                 desc.define(data.into_boxed_slice());
                 desc.set_align(8);
+                // Point the finalizer field (offset 24) at the drop wrapper.
+                if let Some(fid) = drop_func {
+                    let fref = module.declare_func_in_data(fid, &mut desc);
+                    desc.write_function_addr(24, fref);
+                }
                 module.define_data(data_id, &desc).or_emit(self.db)?;
 
                 shapes.insert(key, data_id);
@@ -1324,13 +1731,25 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         let call_inst = builder.ins().call(alloc_ref, &[shape_addr]);
         let ptr = builder.inst_results(call_inst)[0];
 
-        // 4. Lower the value operand
-        let value = self.lower_operand(value_op, builder, module)?;
+        // 4. Store the value into the allocation.
+        if let Some((size, _align)) = rust_info {
+            // A Rust value lives in a stack slot — copy its bytes into the heap.
+            let src = self.lower_operand(value_op, builder, module)?;
+            builder.emit_small_memory_copy(
+                module.target_config(),
+                ptr,
+                src,
+                size,
+                1,
+                1,
+                true,
+                MemFlags::new(),
+            );
+        } else {
+            let value = self.lower_operand(value_op, builder, module)?;
+            builder.ins().store(MemFlags::new(), value, ptr, 0);
+        }
 
-        // 5. Store value at the allocated pointer
-        builder.ins().store(MemFlags::new(), value, ptr, 0);
-
-        // 6. Return the pointer
         Some(ptr)
     }
 

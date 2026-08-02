@@ -1,0 +1,6 @@
+[package]
+name = "rust_interop_abi"
+version = "0.1.0"
+
+[rust.dependencies]
+rmeta_fixture = { path = "../../tools/rmeta-fixture" }

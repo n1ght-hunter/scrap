@@ -29,7 +29,7 @@ mod table;
 mod types;
 mod unify;
 
-pub use context::TypeContext;
+pub use context::{RustFieldVis, RustTypeVis, TypeContext};
 pub use resolved::ResolvedTy;
 use scrap_shared::InputFile;
 pub use table::TypeTable;
@@ -50,12 +50,17 @@ pub fn check_types<'db>(
     db: &'db dyn scrap_shared::Db,
     can: Can<'db>,
     file: InputFile<'db>,
+    rust_types: Vec<RustTypeVis>,
 ) -> TypeTable {
     let mut ctx = TypeContext::new(
         db,
         file.content(db),
         file.path(db).to_str().unwrap_or("<unknown>"),
     );
+
+    for vis in rust_types {
+        ctx.register_rust_type(vis);
+    }
 
     ctx.check_can(can);
 

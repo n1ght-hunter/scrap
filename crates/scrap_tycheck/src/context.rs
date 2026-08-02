@@ -35,6 +35,34 @@ pub struct StructDef {
     pub fields: Vec<(Symbol, InferTy)>,
 }
 
+/// One field of a [`RustTypeVis`].
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct RustFieldVis {
+    pub name: String,
+    /// Whether the field is `pub` (gates field access + construction).
+    pub public: bool,
+    /// Whether the field is a scalar primitive. A non-scalar (opaque) field can
+    /// neither be read directly from Scrap nor used in field-by-field construction.
+    pub scalar: bool,
+}
+
+/// Visibility facts about a native Rust interop type, used to gate field-by-field
+/// construction and field access exactly as Rust's own rules would (a field must
+/// be `pub` and scalar, and the type must not be `#[non_exhaustive]`).
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, salsa::Update, serde::Serialize, serde::Deserialize,
+)]
+pub struct RustTypeVis {
+    /// The type's name as used in Scrap source.
+    pub name: String,
+    /// Fields in declaration order.
+    pub fields: Vec<RustFieldVis>,
+    /// Whether the type is `#[non_exhaustive]` (forbids construction).
+    pub non_exhaustive: bool,
+}
+
 /// An enum variant's data for type checking.
 #[derive(Debug, Clone)]
 pub enum EnumVariantDef {
@@ -91,6 +119,10 @@ pub struct TypeContext<'db> {
     /// Enum definitions in scope
     enums: HashMap<Symbol, EnumDef>,
 
+    /// Visibility facts for native Rust interop types, keyed by type name. Drives
+    /// construction/field-access gating; empty for non-interop compilations.
+    rust_struct_meta: HashMap<Symbol, RustTypeVis>,
+
     /// Current function's return type (for checking return statements)
     current_return_ty: Option<InferTy>,
 
@@ -132,6 +164,7 @@ impl<'db> TypeContext<'db> {
             functions: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
+            rust_struct_meta: HashMap::new(),
             current_return_ty: None,
             type_params: Vec::new(),
             constraints: Vec::new(),
@@ -359,6 +392,16 @@ impl<'db> TypeContext<'db> {
     /// Look up an enum definition.
     pub fn lookup_enum(&self, name: Symbol) -> Option<&EnumDef> {
         self.enums.get(&name)
+    }
+
+    /// Register visibility facts for a native Rust interop type.
+    pub fn register_rust_type(&mut self, vis: RustTypeVis) {
+        self.rust_struct_meta.insert(Symbol::new(&vis.name), vis);
+    }
+
+    /// Look up the visibility facts of a Rust interop type by name.
+    pub fn rust_type_meta(&self, name: Symbol) -> Option<&RustTypeVis> {
+        self.rust_struct_meta.get(&name)
     }
 
     /// Add an equality constraint between two types.
@@ -711,6 +754,27 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Emit an error for a missing field in a struct initializer.
+    /// Emit a Rust-interop visibility violation (private-field construction,
+    /// `#[non_exhaustive]` construction, or private-field access).
+    pub fn emit_rust_visibility(
+        &self,
+        title: String,
+        label: String,
+        note: String,
+        span: Span,
+    ) -> ErrorGuaranteed {
+        self.db.dcx().emit_err(
+            Level::ERROR
+                .primary_title(title)
+                .element(
+                    Snippet::source(self.source)
+                        .path(self.file_name)
+                        .annotation(AnnotationKind::Primary.span(span.range()).label(label)),
+                )
+                .element(Level::NOTE.message(note)),
+        )
+    }
+
     pub fn emit_missing_struct_field(
         &self,
         struct_name: &str,
