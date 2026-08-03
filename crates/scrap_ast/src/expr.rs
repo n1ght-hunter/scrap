@@ -70,6 +70,9 @@ pub enum ExprKind<'db> {
     Struct(Box<StructExpr<'db>>),
     /// Field access (e.g., `p.x`)
     Field(Box<Expr<'db>>, Ident),
+    /// Indexing (e.g., `base[index]`). v1 only resolves for GC-pointer bases (`*T`); this is the
+    /// same node shape an `Index`/`IndexMut` trait desugar would use once traits exist.
+    Index(Box<Expr<'db>>, Box<Expr<'db>>),
     /// Match expression: `match expr { pat => expr, ... }`
     Match(Box<Expr<'db>>, Vec<Arm<'db>>),
     /// Method call: `receiver.method(args)`
@@ -215,6 +218,12 @@ impl<'db> scrap_shared::pretty_print::PrettyPrint for ExprKind<'db> {
                 base.pretty_print_indent(f, indent)?;
                 write!(f, ".")?;
                 field_name.pretty_print(f)
+            }
+            ExprKind::Index(base, index) => {
+                base.pretty_print_indent(f, indent)?;
+                write!(f, "[")?;
+                index.pretty_print_indent(f, indent)?;
+                write!(f, "]")
             }
             ExprKind::Match(scrutinee, arms) => {
                 write!(f, "match ")?;

@@ -68,6 +68,11 @@ impl ObjHeader {
     }
 }
 
+// Codegen loads `element_count` at a hardcoded offset from the data pointer
+// (see `lower_array_len` in scrap_codegen's cranelift_ir.rs); these must move together.
+const _: () = assert!(std::mem::size_of::<ObjHeader>() == 40);
+const _: () = assert!(std::mem::offset_of!(ObjHeader, element_count) == 24);
+
 unsafe extern "C" {
     static __scrap_stackmap_count: u64;
     static __scrap_stackmap_index: u8; // start of IndexEntry array

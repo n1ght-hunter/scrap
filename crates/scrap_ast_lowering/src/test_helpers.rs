@@ -309,6 +309,22 @@ pub fn create_array_expr<'db>(
     }
 }
 
+/// Create an index expression: base[index]
+pub fn create_index_expr<'db>(
+    _db: &'db dyn scrap_shared::Db,
+    base: Expr<'db>,
+    index: Expr<'db>,
+) -> Expr<'db> {
+    let span = test_span();
+    let node_id = test_node_id();
+
+    Expr {
+        id: node_id,
+        kind: ExprKind::Index(Box::new(base), Box::new(index)),
+        span,
+    }
+}
+
 /// Create a function call expression
 pub fn create_call_expr<'db>(
     _db: &'db dyn scrap_shared::Db,

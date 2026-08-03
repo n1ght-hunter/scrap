@@ -297,6 +297,10 @@ pub enum Rvalue<'db> {
     /// Heap-allocate a GC-managed array and return a pointer to the first element.
     /// `AllocArray(element_ty, count)` — count is a runtime operand of type usize.
     AllocArray(Ty<'db>, Operand<'db>),
+    /// Read the element count from the GC header of the allocation `operand` points at. Only
+    /// valid when `operand` is a `*T` allocation base (from `alloc_array` or `box`) — used to
+    /// bounds-check `Place::Index`.
+    ArrayLen(Operand<'db>),
     /// Read the discriminant (tag) of an enum value.
     Discriminant(Place<'db>),
     /// Take a reference to a place: `&place` or `&mut place`.
@@ -329,6 +333,9 @@ pub enum Place<'db> {
     Field(Box<Place<'db>>, usize, Option<Symbol>),
     /// Dereference a GC reference: `*place`.
     Deref(Box<Place<'db>>),
+    /// Index a GC-managed array: `place[index]`. `index` must already be bounds-checked by the
+    /// time this is lowered — see the `Assert` emitted alongside `Rvalue::ArrayLen` in lowering.
+    Index(Box<Place<'db>>, Box<Operand<'db>>),
     /// Project an enum place to a specific variant.
     /// `(_1 as Some)` = `Place::Downcast(Local(1), 1, Some("Some"))`
     Downcast(Box<Place<'db>>, usize, Option<Symbol>),
@@ -419,4 +426,5 @@ pub enum AssertMessage {
     DivisionByZero,
     RemainderByZero,
     ShiftOverflow,
+    BoundsCheck,
 }

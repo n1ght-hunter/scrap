@@ -54,6 +54,21 @@ impl<'a, 'db> crate::parser::Parser<'a, 'db> {
                 continue;
             }
 
+            // Postfix: indexing (`base[index]`), same precedence tier as field access
+            if self.check(Token::LBracket) {
+                self.bump();
+                let index = self.parse_expr()?;
+                let start = lhs.span.start;
+                let end = self.token.span.end;
+                self.expect(Token::RBracket)?;
+                lhs = Expr {
+                    id: self.state.new_node_id(),
+                    kind: ExprKind::Index(Box::new(lhs), Box::new(index)),
+                    span: Span::new(start, end),
+                };
+                continue;
+            }
+
             let Some(op) = AssocOp::from_token(&self.token.node) else {
                 break;
             };
