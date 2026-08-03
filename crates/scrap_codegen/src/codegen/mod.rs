@@ -7,6 +7,8 @@ pub mod function;
 pub mod ty;
 
 #[cfg(test)]
+mod index_tests;
+#[cfg(test)]
 mod rust_interop_tests;
 
 pub use context::CodegenContext;

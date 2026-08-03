@@ -8,6 +8,7 @@ mod binary;
 mod block;
 mod call;
 mod control;
+mod index;
 mod lit;
 mod match_expr;
 mod method_call;
@@ -45,6 +46,7 @@ impl<'db> ExprLowerer<'db> {
             ExprKind::Field(base, field_ident) => {
                 self.lower_field_access(base, field_ident, expr.id)
             }
+            ExprKind::Index(base, index) => self.lower_index(base, index, expr.id),
             ExprKind::Match(scrutinee, arms) => self.lower_match(scrutinee, arms),
             ExprKind::MethodCall(receiver, method, args) => {
                 self.lower_method_call(receiver, method, args, expr.id)

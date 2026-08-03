@@ -53,6 +53,11 @@ impl<'db> ExprLowerer<'db> {
                 };
                 Ok(ir::Place::Deref(Box::new(inner_place)))
             }
+            ExprKind::Index(base, index) => {
+                // arr[i] as a place — bounds-checked, shared with the rvalue read path
+                // so the check can never be skipped on either side.
+                self.lower_index_place(base, index)
+            }
             _ => Err(BuilderError::LowerExpressionError),
         }
     }

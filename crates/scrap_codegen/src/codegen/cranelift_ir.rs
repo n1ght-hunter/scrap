@@ -173,7 +173,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         place: &ir::Place<'db>,
         value: Value,
         builder: &mut FunctionBuilder,
-        _module: &mut ObjectModule,
+        module: &mut ObjectModule,
     ) -> Option<()> {
         match place {
             ir::Place::Local(local_id) => {
@@ -262,7 +262,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::Deref(inner) => {
                 // Write through a pointer/reference: store value at the address held by inner
-                let ptr = self.lower_place(inner, builder)?;
+                let ptr = self.lower_place(inner, builder, module)?;
                 builder.ins().store(MemFlagsData::new(), value, ptr, 0);
                 Some(())
             }
@@ -271,6 +271,13 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 // it should always be wrapped in Field(Downcast(...), ...)
                 emit_codegen_err(self.db, "downcast alone is not a valid assignment target");
                 None
+            }
+            ir::Place::Index(base, idx) => {
+                // Bounds are checked by the Assert the lowering pass emits before this
+                // statement; here we only need the checked address to store into.
+                let addr = self.index_address(base, idx, builder, module)?;
+                builder.ins().store(MemFlagsData::new(), value, addr, 0);
+                Some(())
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
@@ -300,6 +307,10 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             ir::Rvalue::Box(inner_ty, value_op) => {
                 self.lower_box_alloc(inner_ty, value_op, builder, module)
             }
+            ir::Rvalue::AllocArray(element_ty, count_op) => {
+                self.lower_alloc_array(element_ty, count_op, builder, module)
+            }
+            ir::Rvalue::ArrayLen(operand) => self.lower_array_len(operand, builder, module),
             ir::Rvalue::Ref(_mutability, place) => {
                 // Take the address of a place
                 match place {
@@ -812,7 +823,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         module: &mut ObjectModule,
     ) -> Option<Value> {
         match operand {
-            ir::Operand::Place(place) => self.lower_place(place, builder),
+            ir::Operand::Place(place) => self.lower_place(place, builder, module),
             ir::Operand::Constant(c) => self.lower_constant(c, builder, module),
             ir::Operand::FunctionRef(_) => {
                 emit_codegen_err(
@@ -1080,7 +1091,12 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         Some(())
     }
 
-    fn lower_place(&self, place: &ir::Place<'db>, builder: &mut FunctionBuilder) -> Option<Value> {
+    fn lower_place(
+        &self,
+        place: &ir::Place<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
         match place {
             ir::Place::Local(local_id) => {
                 if let Some((slot, cl_ty)) = self.stack_slots.get(&local_id.0) {
@@ -1175,9 +1191,9 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             ir::Place::Deref(inner) => {
                 // Read through a GC reference: load value from the address held by inner
-                let ptr = self.lower_place(inner, builder)?;
+                let ptr = self.lower_place(inner, builder, module)?;
                 // Determine the pointed-to type for the load
-                let result_ty = self.deref_result_type(inner)?;
+                let result_ty = self.pointee_cl_type(inner)?;
                 Some(builder.ins().load(result_ty, MemFlagsData::new(), ptr, 0))
             }
             ir::Place::Downcast(_, _, _) => {
@@ -1185,6 +1201,13 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 // it should always be wrapped in Field(Downcast(...), ...)
                 emit_codegen_err(self.db, "downcast alone is not a valid read target");
                 None
+            }
+            ir::Place::Index(base, idx) => {
+                // Bounds are checked by the Assert the lowering pass emits before this
+                // read; here we only need the checked address to load from.
+                let addr = self.index_address(base, idx, builder, module)?;
+                let result_ty = self.pointee_cl_type(base)?;
+                Some(builder.ins().load(result_ty, MemFlagsData::new(), addr, 0))
             }
             ir::Place::__Phantom(_) => unreachable!(),
         }
@@ -1644,6 +1667,7 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
                 "attempt to calculate remainder with zero divisor\n"
             }
             ir::AssertMessage::ShiftOverflow => "attempt to shift with overflow\n",
+            ir::AssertMessage::BoundsCheck => "index out of bounds\n",
         }
     }
 
@@ -1778,10 +1802,97 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
         Some(ptr)
     }
 
-    /// Determine the Cranelift type of a dereferenced place.
-    /// Given Place::Deref(inner), looks at the inner local's type to figure out what
-    /// the reference points to (e.g., `&mut i32` → `I32`).
-    fn deref_result_type(&self, inner_place: &ir::Place<'db>) -> Option<types::Type> {
+    /// Lower a `Rvalue::AllocArray(element_ty, count)`: allocate a GC-managed array.
+    /// Returns pointer to zero-initialized element data.
+    fn lower_alloc_array(
+        &self,
+        element_ty: &ir::Ty<'db>,
+        count_op: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
+        if !matches!(
+            element_ty,
+            ir::Ty::Bool
+                | ir::Ty::Int(_)
+                | ir::Ty::Uint(_)
+                | ir::Ty::Float(_)
+                | ir::Ty::Ref(_, _)
+                | ir::Ty::Ptr(_)
+        ) {
+            emit_codegen_err(
+                self.db,
+                format!("alloc_array: unsupported element type {element_ty:?}"),
+            );
+            return None;
+        }
+
+        // 1. Get or create GcShape for element_ty. Layout matches `lower_box_alloc`:
+        //    [size: u64, align: u64, num_pointers: u64, finalizer: u64, offsets…]
+        // Keyed separately from `box`'s shapes (`array:` prefix): the two lowerings
+        // write different finalizer fields for the same `element_ty`, and sharing
+        // the cache would let whichever ran first silently hand its shape to the
+        // other (a box losing its drop wrapper, or an array inheriting one that
+        // would run once instead of per element).
+        let shape_data_id = {
+            let key = format!("array:{:?}", element_ty);
+            let mut shapes = self.gc_shapes.borrow_mut();
+            if let Some(&id) = shapes.get(&key) {
+                id
+            } else {
+                let (size, align, pointer_offsets) = compute_type_layout(self.db, element_ty);
+                let num_pointers = pointer_offsets.len() as u64;
+                let mut data = Vec::new();
+                data.extend_from_slice(&size.to_le_bytes());
+                data.extend_from_slice(&align.to_le_bytes());
+                data.extend_from_slice(&num_pointers.to_le_bytes());
+                data.extend_from_slice(&0u64.to_le_bytes()); // finalizer: array elements are not dropped
+                for offset in &pointer_offsets {
+                    data.extend_from_slice(&offset.to_le_bytes());
+                }
+
+                let name = format!(".Lgcshape.{}", shapes.len());
+                let data_id = module
+                    .declare_data(&name, Linkage::Local, false, false)
+                    .or_emit(self.db)?;
+                let mut desc = DataDescription::new();
+                desc.define(data.into_boxed_slice());
+                desc.set_align(8);
+                module.define_data(data_id, &desc).or_emit(self.db)?;
+
+                shapes.insert(key, data_id);
+                data_id
+            }
+        };
+
+        // 2. Load GcShape address
+        let gv = module.declare_data_in_func(shape_data_id, builder.func);
+        let shape_addr = builder.ins().symbol_value(types::I64, gv);
+
+        // 3. Lower the count operand
+        let count = self.lower_operand(count_op, builder, module)?;
+
+        // 4. Call __scrap_gc_alloc_array(shape_addr, count) → pointer
+        let alloc_func_id = match self.functions.get("__scrap_gc_alloc_array") {
+            Some(&id) => id,
+            None => {
+                emit_codegen_err(self.db, "__scrap_gc_alloc_array not declared");
+                return None;
+            }
+        };
+        let alloc_ref = module.declare_func_in_func(alloc_func_id, builder.func);
+        let call_inst = builder.ins().call(alloc_ref, &[shape_addr, count]);
+        let ptr = builder.inst_results(call_inst)[0];
+
+        Some(ptr)
+    }
+
+    /// Determine the Cranelift type of a `*T`/`&T` place's pointee.
+    /// Given the place holding the pointer/reference, looks at its local's type to
+    /// figure out what it points to (e.g., `&mut i32` → `I32`). Shared by
+    /// `Place::Deref` (pointee of the dereferenced place) and `Place::Index`
+    /// (pointee of the indexed base — the two share exactly the same lookup).
+    fn pointee_cl_type(&self, inner_place: &ir::Place<'db>) -> Option<types::Type> {
         use super::ty::ir_ty_to_cl_required;
 
         match inner_place {
@@ -1798,6 +1909,82 @@ impl<'a, 'db> FuncTranslator<'a, 'db> {
             }
             _ => Some(types::I64), // fallback
         }
+    }
+
+    /// The pointee type of a `*T` place, for computing an index stride.
+    /// Tycheck only allows indexing on `*T` (never `&T`), so the base local's
+    /// declared type is always `Ty::Ptr`; a struct/tuple/native-Rust element
+    /// falls back to the `compute_type_layout` default (8, 8) rather than a real
+    /// size, since those aggregates aren't laid out here — this only matters if
+    /// element `size_of` diverges from the layout stub, which today it can't
+    /// (arrays of aggregates aren't reachable yet).
+    fn place_pointee_ty(&self, place: &ir::Place<'db>) -> Option<ir::Ty<'db>> {
+        match place {
+            ir::Place::Local(local_id) => {
+                let decl = self.local_decls.get(local_id.0)?;
+                match decl.ty(self.db) {
+                    ir::Ty::Ptr(elem) => Some((*elem).clone()),
+                    other => {
+                        emit_codegen_err(
+                            self.db,
+                            format!("cannot index into a value of type '{other:?}'"),
+                        );
+                        None
+                    }
+                }
+            }
+            _ => {
+                emit_codegen_err(self.db, "index base must be a local");
+                None
+            }
+        }
+    }
+
+    /// Compute the address of `base[idx]`: `base_ptr + idx * elem_size`.
+    /// Callers must have already emitted the bounds check — this does not check.
+    fn index_address(
+        &self,
+        base: &ir::Place<'db>,
+        idx: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
+        let base_ptr = self.lower_place(base, builder, module)?;
+        let idx_val = self.lower_operand(idx, builder, module)?;
+
+        let idx_bits = builder.func.dfg.value_type(idx_val).bits();
+        let idx_val = match idx_bits.cmp(&self.pointer_type.bits()) {
+            std::cmp::Ordering::Less => builder.ins().uextend(self.pointer_type, idx_val),
+            std::cmp::Ordering::Greater => builder.ins().ireduce(self.pointer_type, idx_val),
+            std::cmp::Ordering::Equal => idx_val,
+        };
+
+        let elem_ty = self.place_pointee_ty(base)?;
+        let (stride, _, _) = compute_type_layout(self.db, &elem_ty);
+
+        let offset = builder.ins().imul_imm_u(idx_val, stride as i64);
+        Some(builder.ins().iadd(base_ptr, offset))
+    }
+
+    /// Read `element_count` from the GC object header behind a `*T` allocation base.
+    /// `-16` is the offset from the data pointer back to `ObjHeader::element_count`
+    /// (header layout: `mark 1 + pad 7 + size 8 + shape 8 + element_count 8 + next 8`
+    /// = 40 bytes, `element_count` at header-relative offset 24; `24 - 40 = -16`).
+    /// Mirrors `scrap_rt`'s `#[repr(C)] ObjHeader`, guarded there by compile-time
+    /// size/offset assertions so a field reorder breaks the build instead of
+    /// miscompiling every index.
+    fn lower_array_len(
+        &self,
+        op: &ir::Operand<'db>,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+    ) -> Option<Value> {
+        let ptr = self.lower_operand(op, builder, module)?;
+        Some(
+            builder
+                .ins()
+                .load(types::I64, MemFlagsData::new(), ptr, -16),
+        )
     }
 
     /// Check if an operand refers to a signed integer type.

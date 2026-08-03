@@ -230,6 +230,7 @@ fn place_proj_uses(place: &ir::Place) -> Vec<usize> {
         ir::Place::Field(b, _, _) | ir::Place::Deref(b) | ir::Place::Downcast(b, _, _) => {
             base_local(b).into_iter().collect()
         }
+        ir::Place::Index(b, idx) => base_local(b).into_iter().chain(operand_use(idx)).collect(),
         ir::Place::__Phantom(_) => Vec::new(),
     }
 }
@@ -241,6 +242,7 @@ fn base_local(place: &ir::Place) -> Option<usize> {
         ir::Place::Field(b, _, _) | ir::Place::Deref(b) | ir::Place::Downcast(b, _, _) => {
             base_local(b)
         }
+        ir::Place::Index(b, _) => base_local(b),
         ir::Place::__Phantom(_) => None,
     }
 }
@@ -261,7 +263,8 @@ fn rvalue_uses(rv: &ir::Rvalue) -> Vec<usize> {
         }
     };
     match rv {
-        ir::Rvalue::Use(o) | ir::Rvalue::Box(_, o) => add(o),
+        ir::Rvalue::Use(o) | ir::Rvalue::Box(_, o) | ir::Rvalue::AllocArray(_, o) => add(o),
+        ir::Rvalue::ArrayLen(o) => add(o),
         ir::Rvalue::Intrinsic(_, ops) | ir::Rvalue::Array(ops) | ir::Rvalue::Aggregate(_, ops) => {
             ops.iter().for_each(&mut add)
         }

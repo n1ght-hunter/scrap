@@ -375,6 +375,18 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 self.print_type(ty);
                 write!(self.output, ")").unwrap();
             }
+            Rvalue::AllocArray(ty, count_op) => {
+                write!(self.output, "alloc_array(").unwrap();
+                self.print_type(ty);
+                write!(self.output, ", ").unwrap();
+                self.print_operand(count_op);
+                write!(self.output, ")").unwrap();
+            }
+            Rvalue::ArrayLen(op) => {
+                write!(self.output, "array_len(").unwrap();
+                self.print_operand(op);
+                write!(self.output, ")").unwrap();
+            }
             Rvalue::Discriminant(place) => {
                 write!(self.output, "discriminant(").unwrap();
                 self.print_place(place);
@@ -429,6 +441,12 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
                 write!(self.output, "(*").unwrap();
                 self.print_place(inner);
                 write!(self.output, ")").unwrap();
+            }
+            Place::Index(base, index) => {
+                self.print_place(base);
+                write!(self.output, "[").unwrap();
+                self.print_operand(index);
+                write!(self.output, "]").unwrap();
             }
             Place::Downcast(base, _variant_idx, variant_name) => {
                 write!(self.output, "(").unwrap();
@@ -602,6 +620,7 @@ impl<'a, 'db> IrPrinter<'a, 'db> {
             AssertMessage::DivisionByZero => "attempt to divide by zero",
             AssertMessage::RemainderByZero => "attempt to calculate remainder with zero divisor",
             AssertMessage::ShiftOverflow => "attempt to shift with overflow",
+            AssertMessage::BoundsCheck => "index out of bounds",
         }
     }
 

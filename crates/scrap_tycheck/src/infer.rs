@@ -56,6 +56,8 @@ impl<'db> TypeContext<'db> {
                 self.infer_field_access(base, field_ident, expr.span)
             }
 
+            ExprKind::Index(base, index) => self.infer_index(base, index, expr.span),
+
             ExprKind::Match(scrutinee, arms) => self.infer_match(scrutinee, arms, expr.span),
 
             ExprKind::MethodCall(receiver, method, args) => {
@@ -260,6 +262,51 @@ impl<'db> TypeContext<'db> {
         }
     }
 
+    /// Infer the type of an index expression (`base[index]`).
+    ///
+    /// Only GC pointers (`*T`) are indexable in v1 — the bounds check codegen emits reads the
+    /// element count from the object header, which only exists behind an allocation base. A `&T`
+    /// borrows a single value with no header of its own, so it is rejected rather than silently
+    /// treated as one-element-indexable.
+    fn infer_index(&mut self, base: &Expr<'db>, index: &Expr<'db>, _span: Span) -> InferTy {
+        let index_ty = self.infer_expr(index);
+        self.constrain_eq(index_ty, InferTy::Uint(UintTy::Usize), index.span);
+
+        let base_ty = self.infer_expr(base);
+        let resolved_base = self.resolve(&base_ty);
+        match &resolved_base {
+            InferTy::Ptr(pointee) => (**pointee).clone(),
+            InferTy::Var(_) => {
+                let elem = self.fresh_ty_var();
+                let expected_ptr = InferTy::Ptr(Box::new(elem.clone()));
+                self.constrain_eq(base_ty, expected_ptr, base.span);
+                elem
+            }
+            InferTy::Error => InferTy::Error,
+            InferTy::Ref(_, _) => {
+                self.emit_error(
+                    "cannot index through a `&` reference; only `*_` GC pointers are indexable (try `*expr` to access the single value it refers to)",
+                    base.span,
+                );
+                InferTy::Error
+            }
+            InferTy::Adt(name) if self.rust_type_meta(*name).is_some() => {
+                self.emit_error(
+                    &format!(
+                        "`{}` is a native Rust type and cannot be indexed yet; indexing requires trait support, which is not implemented",
+                        name.text()
+                    ),
+                    base.span,
+                );
+                InferTy::Error
+            }
+            _ => {
+                self.emit_type_mismatch("*_", &self.ty_to_string(&resolved_base), base.span);
+                InferTy::Error
+            }
+        }
+    }
+
     /// Infer the type of an address-of expression (`&expr` or `&mut expr`).
     fn infer_addr_of(&mut self, mutability: Mutability, inner: &Expr<'db>, span: Span) -> InferTy {
         let inner_ty = self.infer_expr(inner);
@@ -306,6 +353,20 @@ impl<'db> TypeContext<'db> {
                     }
                     let arg_ty = self.infer_expr(&args[0]);
                     return InferTy::Ptr(Box::new(arg_ty));
+                }
+
+                // Built-in: alloc_array(count) -> *T
+                // Element type T is inferred from context (e.g. let arr: *i32 = alloc_array(10))
+                if name.text() == "alloc_array" {
+                    if args.len() != 1 {
+                        self.emit_arity_mismatch(1, args.len(), span);
+                        return InferTy::Error;
+                    }
+                    let count_ty = self.infer_expr(&args[0]);
+                    self.constrain_eq(count_ty, InferTy::Uint(UintTy::Usize), args[0].span);
+                    let elem_ty = self.fresh_ty_var();
+                    self.record_pending_alloc_array_elem(elem_ty.clone(), span);
+                    return InferTy::Ptr(Box::new(elem_ty));
                 }
 
                 if let Some(sig) = self.lookup_function(name).cloned() {
@@ -572,6 +633,11 @@ impl<'db> TypeContext<'db> {
             }
             ExprKind::Field(base, _) => {
                 // For `p.x = 5`, check the root variable's mutability
+                self.check_assign_mutability(base);
+            }
+            ExprKind::Index(base, _) => {
+                // `arr[i] = v` writes through the `*T` base, same rule as `*arr = v`:
+                // check the pointer-holding variable's own mutability.
                 self.check_assign_mutability(base);
             }
             ExprKind::Unary(UnOp::Deref, inner) => {
