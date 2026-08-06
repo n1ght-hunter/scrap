@@ -62,7 +62,7 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.11
       - name: Cache anchor build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: target/scrap/anchor
           key: anchor-${{ runner.os }}-${{ hashFiles('tools/rmeta-fixture/**/*.rs', 'tools/scrap-rustc/**/*.rs', 'crates/scrap_rmeta/src/**/*.rs') }}
